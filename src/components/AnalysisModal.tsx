@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
-import { X, ArrowRight, ArrowLeft } from "lucide-react";
+import { X, ArrowRight, ArrowLeft, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CountrySelect } from "@/components/onboarding/CountrySelect";
 import { RadioCard } from "@/components/onboarding/RadioCard";
 import { IncomeSlider } from "@/components/onboarding/IncomeSlider";
 import { StepProgress } from "@/components/onboarding/StepProgress";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import type { Json } from "@/integrations/supabase/types";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 
 interface AnalysisModalProps {
@@ -21,6 +24,13 @@ interface FormData {
   savings: string;
   name: string;
   email: string;
+}
+
+interface AIRecommendation {
+  visa_type: string;
+  title: string;
+  description: string;
+  confidence: number;
 }
 
 const situationOptions = [
@@ -42,9 +52,66 @@ const savingsOptions = [
   { id: "high", label: "Más de 30.000€" },
 ];
 
+// Map activity IDs to readable labels for database
+const activityLabels: Record<string, string> = {
+  remote: "Trabajo remoto para empresa extranjera",
+  student: "Soy estudiante",
+  entrepreneur: "Quiero emprender",
+  employment: "Busco empleo en España",
+};
+
+// Map situation IDs to readable labels for database
+const situationLabels: Record<string, string> = {
+  origin: "En mi país de origen",
+  tourist: "En España como turista",
+  student: "En España con estudios",
+};
+
+// Map savings IDs to database values
+const savingsLabels: Record<string, string> = {
+  low: "<10k",
+  medium: "10k-30k",
+  high: ">30k",
+};
+
+// AI Recommendation Logic
+const generateRecommendation = (formData: FormData): AIRecommendation => {
+  // Rule 1: Remote worker with income > 2646
+  if (formData.activity === "remote" && formData.monthlyIncome > 2646) {
+    return {
+      visa_type: "digital_nomad",
+      title: "Visado de Nómada Digital",
+      description: "Con tus ingresos de trabajo remoto, calificas perfectamente para el visado de nómada digital en España. Este visado te permite residir legalmente mientras trabajas para empresas extranjeras.",
+      confidence: 95,
+    };
+  }
+
+  // Rule 2: Student with savings > 10k
+  if (formData.activity === "student" && (formData.savings === "medium" || formData.savings === "high")) {
+    return {
+      visa_type: "student",
+      title: "Estancia por Estudios",
+      description: "Tu perfil de estudiante con ahorros demostrables te posiciona bien para obtener una estancia por estudios en España. Este visado te permite estudiar y trabajar a tiempo parcial.",
+      confidence: 90,
+    };
+  }
+
+  // Rule 3: Default - personalized consultation
+  return {
+    visa_type: "consultation",
+    title: "Consulta Inicial Personalizada",
+    description: "Tu situación requiere un análisis más detallado. Te recomendamos una consulta personalizada con nuestros expertos para explorar las mejores opciones migratorias para tu perfil.",
+    confidence: 75,
+  };
+};
+
 export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
+  const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [recommendation, setRecommendation] = useState<AIRecommendation | null>(null);
   const [formData, setFormData] = useState<FormData>({
     nationality: "",
     currentSituation: "",
@@ -61,8 +128,9 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     } else if (currentStep === totalSteps && !isAnalyzing) {
-      // Start analyzing
+      // Start analyzing and submitting
       setIsAnalyzing(true);
+      handleSubmit();
     }
   };
 
@@ -72,33 +140,83 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
     }
   };
 
-  const handleFinish = () => {
-    // Here you would submit the data
-    console.log("Form submitted:", formData);
-    onClose();
-    // Reset form
-    setCurrentStep(1);
-    setIsAnalyzing(false);
-    setFormData({
-      nationality: "",
-      currentSituation: "",
-      activity: "",
-      monthlyIncome: 3000,
-      savings: "",
-      name: "",
-      email: "",
-    });
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    
+    // Generate AI recommendation
+    const aiRecommendation = generateRecommendation(formData);
+    setRecommendation(aiRecommendation);
+
+    // Prepare data for Supabase
+    const submissionData = {
+      full_name: formData.name.trim(),
+      email: formData.email.trim().toLowerCase(),
+      nationality: formData.nationality,
+      current_location: situationLabels[formData.currentSituation],
+      professional_profile: activityLabels[formData.activity],
+      monthly_income: formData.monthlyIncome,
+      savings_range: savingsLabels[formData.savings],
+      ai_recommendation: JSON.parse(JSON.stringify(aiRecommendation)) as Json,
+    };
+
+    // Wait at least 3 seconds for the loading animation
+    const minWait = new Promise(resolve => setTimeout(resolve, 3000));
+
+    try {
+      const [_, dbResult] = await Promise.all([
+        minWait,
+        supabase.from("onboarding_submissions").insert([submissionData])
+      ]);
+
+      if (dbResult.error) {
+        throw dbResult.error;
+      }
+
+      // Success - show success screen
+      setIsAnalyzing(false);
+      setShowSuccess(true);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al guardar tus datos",
+        description: "Por favor, intenta de nuevo más tarde.",
+      });
+      setIsAnalyzing(false);
+      setIsSubmitting(false);
+    }
   };
 
-  // Auto-finish after 3 seconds of analyzing
-  useEffect(() => {
-    if (isAnalyzing) {
-      const timer = setTimeout(() => {
-        setIsAnalyzing(false);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [isAnalyzing]);
+  const handleClose = () => {
+    onClose();
+    // Reset form after closing
+    setTimeout(() => {
+      setCurrentStep(1);
+      setIsAnalyzing(false);
+      setIsSubmitting(false);
+      setShowSuccess(false);
+      setRecommendation(null);
+      setFormData({
+        nationality: "",
+        currentSituation: "",
+        activity: "",
+        monthlyIncome: 3000,
+        savings: "",
+        name: "",
+        email: "",
+      });
+    }, 300);
+  };
+
+  const handleViewRoadmap = () => {
+    // For now, just close the modal
+    // Later this will navigate to the dashboard
+    handleClose();
+    toast({
+      title: "¡Gracias por tu interés!",
+      description: "Pronto tendrás acceso a tu hoja de ruta completa.",
+    });
+  };
 
   const canProceed = () => {
     switch (currentStep) {
@@ -111,7 +229,7 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
       case 4:
         return formData.savings.length > 0;
       case 5:
-        return formData.name.trim().length > 0 && formData.email.trim().length > 0;
+        return formData.name.trim().length > 0 && formData.email.trim().length > 0 && isValidEmail(formData.email);
       default:
         return false;
     }
@@ -121,24 +239,82 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  const getButtonText = () => {
-    if (currentStep === 5) {
-      if (isAnalyzing) {
-        return "Analizando...";
-      }
-      return "Finalizar";
-    }
-    return "Continuar";
-  };
-
   if (!isOpen) return null;
+
+  // Success Screen
+  if (showSuccess && recommendation) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-foreground/60 backdrop-blur-sm animate-fade-in"
+          onClick={handleClose}
+        />
+
+        {/* Modal */}
+        <div className="relative w-full max-w-xl bg-background rounded-2xl shadow-float animate-scale-in overflow-hidden">
+          <div className="p-8 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                <CheckCircle className="w-10 h-10 text-primary" />
+              </div>
+            </div>
+            
+            <h2 className="text-2xl font-semibold tracking-tight mb-2">
+              Análisis Completado
+            </h2>
+            <p className="text-muted-foreground mb-8">
+              Hemos analizado tu perfil y encontramos la mejor opción para ti.
+            </p>
+
+            {/* Recommendation Card */}
+            <div className="bg-secondary/50 rounded-xl p-6 mb-8 text-left">
+              <div className="flex items-center gap-2 mb-3">
+                <img src={isotipoAlbus} alt="" className="w-5 h-5" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  Tu mejor opción
+                </span>
+              </div>
+              <h3 className="text-xl font-semibold mb-3">
+                {recommendation.title}
+              </h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                {recommendation.description}
+              </p>
+              <div className="mt-4 flex items-center gap-2">
+                <div className="h-2 flex-1 bg-secondary rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-primary rounded-full transition-all duration-500"
+                    style={{ width: `${recommendation.confidence}%` }}
+                  />
+                </div>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {recommendation.confidence}% match
+                </span>
+              </div>
+            </div>
+
+            <Button
+              variant="hero"
+              size="lg"
+              className="w-full gap-2"
+              onClick={handleViewRoadmap}
+            >
+              Ver mi hoja de ruta completa
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-foreground/60 backdrop-blur-sm animate-fade-in"
-        onClick={onClose}
+        onClick={handleClose}
       />
 
       {/* Modal */}
@@ -149,7 +325,7 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
             <StepProgress currentStep={currentStep} totalSteps={totalSteps} />
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="ml-4 p-2 rounded-lg hover:bg-secondary transition-colors"
             aria-label="Cerrar"
           >
@@ -330,7 +506,7 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
         <div className="flex items-center justify-between p-6 pt-4 border-t border-border bg-secondary/30">
           <Button
             variant="ghost"
-            onClick={currentStep === 1 ? onClose : handleBack}
+            onClick={currentStep === 1 ? handleClose : handleBack}
             className="gap-2"
             disabled={isAnalyzing}
           >
@@ -343,16 +519,6 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
               <img src={isotipoAlbus} alt="" className="w-4 h-4 animate-spin" />
               Analizando...
             </Button>
-          ) : currentStep === 5 && !isAnalyzing ? (
-            <Button
-              variant="hero"
-              onClick={handleFinish}
-              disabled={!canProceed() || !isValidEmail(formData.email)}
-              className="gap-2 min-w-[140px]"
-            >
-              Finalizar
-              <ArrowRight className="w-4 h-4" />
-            </Button>
           ) : (
             <Button
               variant="hero"
@@ -360,7 +526,7 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
               disabled={!canProceed()}
               className="gap-2 min-w-[140px]"
             >
-              {getButtonText()}
+              {currentStep === 5 ? "Finalizar" : "Continuar"}
               <ArrowRight className="w-4 h-4" />
             </Button>
           )}
