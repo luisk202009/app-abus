@@ -1,54 +1,67 @@
-import { useState } from "react";
-import { X, ArrowRight, ArrowLeft, Check, User, MapPin, Briefcase, Calendar } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CountrySelect } from "@/components/onboarding/CountrySelect";
+import { RadioCard } from "@/components/onboarding/RadioCard";
+import { IncomeSlider } from "@/components/onboarding/IncomeSlider";
+import { StepProgress } from "@/components/onboarding/StepProgress";
 
 interface AnalysisModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type ProfileType = "nomada" | "estudiante" | "emprendedor" | "empleado" | null;
-
 interface FormData {
-  profileType: ProfileType;
-  currentCountry: string;
-  timeline: string;
-  hasIncome: boolean | null;
+  nationality: string;
+  currentSituation: string;
+  activity: string;
+  monthlyIncome: number;
+  savings: string;
+  name: string;
+  email: string;
 }
 
-const steps = [
-  { id: 1, title: "Tu perfil", icon: User },
-  { id: 2, title: "Ubicación", icon: MapPin },
-  { id: 3, title: "Situación", icon: Briefcase },
-  { id: 4, title: "Timeline", icon: Calendar },
+const situationOptions = [
+  { id: "origin", label: "En mi país de origen" },
+  { id: "tourist", label: "En España como turista" },
+  { id: "student", label: "En España con estudios" },
 ];
 
-const profileOptions = [
-  { id: "nomada", label: "Nómada Digital", description: "Trabajo remoto desde cualquier lugar" },
-  { id: "estudiante", label: "Estudiante", description: "Estudios en España" },
-  { id: "emprendedor", label: "Emprendedor", description: "Montar un negocio" },
-  { id: "empleado", label: "Empleado", description: "Oferta de trabajo en España" },
+const activityOptions = [
+  { id: "remote", label: "Trabajo remoto para empresa extranjera" },
+  { id: "student", label: "Soy estudiante" },
+  { id: "entrepreneur", label: "Quiero emprender" },
+  { id: "employment", label: "Busco empleo en España" },
 ];
 
-const timelineOptions = [
-  { id: "urgente", label: "Lo antes posible", description: "En los próximos 1-2 meses" },
-  { id: "pronto", label: "Este año", description: "En los próximos 3-6 meses" },
-  { id: "planificando", label: "Planificando", description: "Todavía sin fecha definida" },
+const savingsOptions = [
+  { id: "low", label: "Menos de 10.000€" },
+  { id: "medium", label: "Entre 10.000€ y 30.000€" },
+  { id: "high", label: "Más de 30.000€" },
 ];
 
 export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
   const [currentStep, setCurrentStep] = useState(1);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [formData, setFormData] = useState<FormData>({
-    profileType: null,
-    currentCountry: "",
-    timeline: "",
-    hasIncome: null,
+    nationality: "",
+    currentSituation: "",
+    activity: "",
+    monthlyIncome: 3000,
+    savings: "",
+    name: "",
+    email: "",
   });
 
+  const totalSteps = 5;
+
   const handleNext = () => {
-    if (currentStep < 4) {
+    if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
+    } else if (currentStep === totalSteps && !isAnalyzing) {
+      // Start analyzing
+      setIsAnalyzing(true);
     }
   };
 
@@ -58,27 +71,63 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
     }
   };
 
-  const handleProfileSelect = (profile: ProfileType) => {
-    setFormData({ ...formData, profileType: profile });
+  const handleFinish = () => {
+    // Here you would submit the data
+    console.log("Form submitted:", formData);
+    onClose();
+    // Reset form
+    setCurrentStep(1);
+    setIsAnalyzing(false);
+    setFormData({
+      nationality: "",
+      currentSituation: "",
+      activity: "",
+      monthlyIncome: 3000,
+      savings: "",
+      name: "",
+      email: "",
+    });
   };
 
-  const handleTimelineSelect = (timeline: string) => {
-    setFormData({ ...formData, timeline });
-  };
+  // Auto-finish after 3 seconds of analyzing
+  useEffect(() => {
+    if (isAnalyzing) {
+      const timer = setTimeout(() => {
+        setIsAnalyzing(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isAnalyzing]);
 
   const canProceed = () => {
     switch (currentStep) {
       case 1:
-        return formData.profileType !== null;
+        return formData.nationality.length > 0;
       case 2:
-        return formData.currentCountry.length > 0;
+        return formData.currentSituation.length > 0;
       case 3:
-        return formData.hasIncome !== null;
+        return formData.activity.length > 0;
       case 4:
-        return formData.timeline.length > 0;
+        return formData.savings.length > 0;
+      case 5:
+        return formData.name.trim().length > 0 && formData.email.trim().length > 0;
       default:
         return false;
     }
+  };
+
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const getButtonText = () => {
+    if (currentStep === 5) {
+      if (isAnalyzing) {
+        return "Analizando...";
+      }
+      return "Finalizar";
+    }
+    return "Continuar";
   };
 
   if (!isOpen) return null;
@@ -86,207 +135,231 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-foreground/50 backdrop-blur-sm animate-fade-in"
+      <div
+        className="absolute inset-0 bg-foreground/60 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
-      <div className="relative w-full max-w-lg bg-background rounded-xl shadow-float animate-scale-in overflow-hidden">
+      <div className="relative w-full max-w-xl bg-background rounded-2xl shadow-float animate-scale-in overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border">
-          <div>
-            <h2 className="text-xl font-semibold">Análisis de tu caso</h2>
-            <p className="text-sm text-muted-foreground mt-1">Paso {currentStep} de 4</p>
+        <div className="flex items-center justify-between p-6 pb-4">
+          <div className="flex-1">
+            <StepProgress currentStep={currentStep} totalSteps={totalSteps} />
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors"
-            aria-label="Close modal"
+            className="ml-4 p-2 rounded-lg hover:bg-secondary transition-colors"
+            aria-label="Cerrar"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Progress bar */}
-        <div className="px-6 pt-6">
-          <div className="flex items-center gap-2">
-            {steps.map((step, index) => (
-              <div key={step.id} className="flex-1 flex items-center gap-2">
-                <div
-                  className={cn(
-                    "w-full h-1.5 rounded-full transition-colors duration-300",
-                    currentStep >= step.id ? "bg-primary" : "bg-gray-200"
-                  )}
+        {/* Content */}
+        <div className="px-6 pb-6 min-h-[380px]">
+          {/* Step 1: Nacionalidad */}
+          {currentStep === 1 && (
+            <div className="space-y-6 animate-slide-up">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Identidad</h2>
+                <p className="text-muted-foreground mt-2">
+                  Tu nacionalidad determina qué visados puedes solicitar.
+                </p>
+              </div>
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-muted-foreground">
+                  Nacionalidad
+                </label>
+                <CountrySelect
+                  value={formData.nationality}
+                  onChange={(value) => setFormData({ ...formData, nationality: value })}
                 />
               </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between mt-3">
-            {steps.map((step) => {
-              const Icon = step.icon;
-              return (
-                <div
-                  key={step.id}
-                  className={cn(
-                    "flex items-center gap-1.5 text-xs font-medium transition-colors",
-                    currentStep >= step.id ? "text-foreground" : "text-muted-foreground"
-                  )}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{step.title}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 min-h-[280px]">
-          {currentStep === 1 && (
-            <div className="space-y-4 animate-slide-up">
-              <h3 className="font-semibold text-lg mb-4">¿Cuál es tu situación?</h3>
-              <div className="grid gap-3">
-                {profileOptions.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => handleProfileSelect(option.id as ProfileType)}
-                    className={cn(
-                      "flex items-start gap-4 p-4 rounded-lg border-2 text-left transition-all",
-                      formData.profileType === option.id
-                        ? "border-primary bg-secondary"
-                        : "border-border hover:border-gray-300"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 transition-colors",
-                      formData.profileType === option.id
-                        ? "border-primary bg-primary"
-                        : "border-gray-300"
-                    )}>
-                      {formData.profileType === option.id && (
-                        <Check className="w-3 h-3 text-primary-foreground" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium">{option.label}</p>
-                      <p className="text-sm text-muted-foreground">{option.description}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
+          {/* Step 2: Situación */}
           {currentStep === 2 && (
-            <div className="space-y-4 animate-slide-up">
-              <h3 className="font-semibold text-lg mb-4">¿Dónde vives actualmente?</h3>
-              <input
-                type="text"
-                placeholder="Escribe tu país"
-                value={formData.currentCountry}
-                onChange={(e) => setFormData({ ...formData, currentCountry: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg border-2 border-border bg-background focus:border-primary focus:outline-none transition-colors text-base"
-              />
-              <p className="text-sm text-muted-foreground">
-                Tu nacionalidad afecta directamente los visados disponibles para ti.
-              </p>
-            </div>
-          )}
-
-          {currentStep === 3 && (
-            <div className="space-y-4 animate-slide-up">
-              <h3 className="font-semibold text-lg mb-4">¿Tienes ingresos demostrables?</h3>
-              <div className="grid gap-3">
-                {[
-                  { value: true, label: "Sí", description: "Ingresos regulares de al menos €2,500/mes" },
-                  { value: false, label: "No o no estoy seguro", description: "Menos de €2,500/mes o ingresos irregulares" },
-                ].map((option) => (
-                  <button
-                    key={String(option.value)}
-                    onClick={() => setFormData({ ...formData, hasIncome: option.value })}
-                    className={cn(
-                      "flex items-start gap-4 p-4 rounded-lg border-2 text-left transition-all",
-                      formData.hasIncome === option.value
-                        ? "border-primary bg-secondary"
-                        : "border-border hover:border-gray-300"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 transition-colors",
-                      formData.hasIncome === option.value
-                        ? "border-primary bg-primary"
-                        : "border-gray-300"
-                    )}>
-                      {formData.hasIncome === option.value && (
-                        <Check className="w-3 h-3 text-primary-foreground" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium">{option.label}</p>
-                      <p className="text-sm text-muted-foreground">{option.description}</p>
-                    </div>
-                  </button>
-                ))}
+            <div className="space-y-6 animate-slide-up">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Situación</h2>
+                <p className="text-muted-foreground mt-2">
+                  ¿Dónde te encuentras ahora mismo?
+                </p>
               </div>
-            </div>
-          )}
-
-          {currentStep === 4 && (
-            <div className="space-y-4 animate-slide-up">
-              <h3 className="font-semibold text-lg mb-4">¿Cuándo planeas mudarte?</h3>
-              <div className="grid gap-3">
-                {timelineOptions.map((option) => (
-                  <button
+              <div className="space-y-3">
+                {situationOptions.map((option) => (
+                  <RadioCard
                     key={option.id}
-                    onClick={() => handleTimelineSelect(option.id)}
-                    className={cn(
-                      "flex items-start gap-4 p-4 rounded-lg border-2 text-left transition-all",
-                      formData.timeline === option.id
-                        ? "border-primary bg-secondary"
-                        : "border-border hover:border-gray-300"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 transition-colors",
-                      formData.timeline === option.id
-                        ? "border-primary bg-primary"
-                        : "border-gray-300"
-                    )}>
-                      {formData.timeline === option.id && (
-                        <Check className="w-3 h-3 text-primary-foreground" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium">{option.label}</p>
-                      <p className="text-sm text-muted-foreground">{option.description}</p>
-                    </div>
-                  </button>
+                    label={option.label}
+                    selected={formData.currentSituation === option.id}
+                    onClick={() => setFormData({ ...formData, currentSituation: option.id })}
+                  />
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Step 3: Actividad */}
+          {currentStep === 3 && (
+            <div className="space-y-6 animate-slide-up">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Actividad</h2>
+                <p className="text-muted-foreground mt-2">
+                  ¿A qué te dedicas o piensas dedicarte?
+                </p>
+              </div>
+              <div className="space-y-3">
+                {activityOptions.map((option) => (
+                  <RadioCard
+                    key={option.id}
+                    label={option.label}
+                    selected={formData.activity === option.id}
+                    onClick={() => setFormData({ ...formData, activity: option.id })}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Economía */}
+          {currentStep === 4 && (
+            <div className="space-y-8 animate-slide-up">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Economía</h2>
+                <p className="text-muted-foreground mt-2">
+                  Estos datos nos ayudan a determinar qué visados son viables para ti.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">
+                  Ingresos mensuales aproximados
+                </label>
+                <IncomeSlider
+                  value={formData.monthlyIncome}
+                  onChange={(value) => setFormData({ ...formData, monthlyIncome: value })}
+                />
+              </div>
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-muted-foreground">
+                  Ahorros demostrables
+                </label>
+                {savingsOptions.map((option) => (
+                  <RadioCard
+                    key={option.id}
+                    label={option.label}
+                    selected={formData.savings === option.id}
+                    onClick={() => setFormData({ ...formData, savings: option.id })}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Contacto */}
+          {currentStep === 5 && !isAnalyzing && (
+            <div className="space-y-6 animate-slide-up">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Contacto</h2>
+                <p className="text-muted-foreground mt-2">
+                  Te enviaremos tu análisis personalizado por email.
+                </p>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Tu nombre"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-4 py-4 rounded-xl border-2 border-border bg-background focus:border-primary focus:outline-none transition-colors text-base placeholder:text-muted-foreground/60"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className={cn(
+                      "w-full px-4 py-4 rounded-xl border-2 bg-background focus:outline-none transition-colors text-base placeholder:text-muted-foreground/60",
+                      formData.email && !isValidEmail(formData.email)
+                        ? "border-destructive focus:border-destructive"
+                        : "border-border focus:border-primary"
+                    )}
+                  />
+                  {formData.email && !isValidEmail(formData.email) && (
+                    <p className="text-sm text-destructive">
+                      Por favor, introduce un email válido
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Analyzing State */}
+          {currentStep === 5 && isAnalyzing && (
+            <div className="flex flex-col items-center justify-center h-[300px] animate-fade-in">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full border-4 border-secondary" />
+                <Loader2 className="absolute inset-0 w-16 h-16 text-primary animate-spin" />
+              </div>
+              <p className="mt-6 text-lg font-medium text-center">
+                Albus está analizando tu perfil legal...
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground text-center">
+                Evaluando opciones de visado para {formData.nationality}
+              </p>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-border bg-secondary/50">
+        <div className="flex items-center justify-between p-6 pt-4 border-t border-border bg-secondary/30">
           <Button
             variant="ghost"
             onClick={currentStep === 1 ? onClose : handleBack}
             className="gap-2"
+            disabled={isAnalyzing}
           >
             <ArrowLeft className="w-4 h-4" />
             {currentStep === 1 ? "Cancelar" : "Atrás"}
           </Button>
-          <Button
-            variant="hero"
-            onClick={handleNext}
-            disabled={!canProceed()}
-            className="gap-2"
-          >
-            {currentStep === 4 ? "Ver mi análisis" : "Continuar"}
-            <ArrowRight className="w-4 h-4" />
-          </Button>
+          
+          {isAnalyzing ? (
+            <Button variant="hero" disabled className="gap-2 min-w-[140px]">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Analizando...
+            </Button>
+          ) : currentStep === 5 && !isAnalyzing ? (
+            <Button
+              variant="hero"
+              onClick={handleFinish}
+              disabled={!canProceed() || !isValidEmail(formData.email)}
+              className="gap-2 min-w-[140px]"
+            >
+              Finalizar
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          ) : (
+            <Button
+              variant="hero"
+              onClick={handleNext}
+              disabled={!canProceed()}
+              className="gap-2 min-w-[140px]"
+            >
+              {getButtonText()}
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>
