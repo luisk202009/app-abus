@@ -5,6 +5,7 @@ import { RoadmapTimeline } from "@/components/dashboard/RoadmapTimeline";
 import { TaskList } from "@/components/dashboard/TaskList";
 import { AuthBanner } from "@/components/dashboard/AuthBanner";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -193,11 +194,29 @@ const Dashboard = () => {
 
   const handleNavItemClick = (id: string) => {
     setActiveNavItem(id);
-    if (id !== "roadmap") {
+    if (id !== "roadmap" && id !== "documents") {
       toast({
         title: "Próximamente",
         description: "Esta sección estará disponible pronto.",
       });
+    }
+  };
+
+  // Render the active section content
+  const renderContent = () => {
+    switch (activeNavItem) {
+      case "documents":
+        return <DocumentsSection visaType={userData.visaType} isPremium={false} />;
+      case "roadmap":
+      default:
+        return (
+          <>
+            {/* Roadmap Timeline */}
+            <RoadmapTimeline currentStep={1} />
+            {/* Task List */}
+            <TaskList tasks={tasks} onTaskToggle={handleTaskToggle} />
+          </>
+        );
     }
   };
 
@@ -245,11 +264,8 @@ const Dashboard = () => {
             </p>
           </div>
 
-          {/* Roadmap Timeline */}
-          <RoadmapTimeline currentStep={1} />
-
-          {/* Task List */}
-          <TaskList tasks={tasks} onTaskToggle={handleTaskToggle} />
+          {/* Dynamic Content */}
+          {renderContent()}
         </div>
       </main>
 
