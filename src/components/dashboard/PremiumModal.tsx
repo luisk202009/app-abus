@@ -1,4 +1,4 @@
-import { Crown, X, Check, Shield, Sparkles, FileCheck } from "lucide-react";
+import { Crown, Shield, Sparkles, FileCheck, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,7 @@ interface PremiumModalProps {
 const premiumFeatures = [
   { icon: Shield, label: "Almacenamiento seguro de documentos" },
   { icon: FileCheck, label: "Revisión automática de documentos" },
+  { icon: FileText, label: "Genera tus formularios de tasa 790 listos para imprimir" },
   { icon: Sparkles, label: "Asistente IA personalizado" },
 ];
 
@@ -39,11 +40,10 @@ export const PremiumModal = ({ isOpen, onClose }: PremiumModalProps) => {
             </div>
           </div>
           <DialogTitle className="text-xl font-semibold">
-            Función Premium
+            Desbloquea el Almacenamiento Seguro
           </DialogTitle>
-          <DialogDescription className="text-base">
-            Organiza y valida tus documentos con Albus Pro. Suscríbete para
-            desbloquear el almacenamiento seguro y la revisión automática.
+          <DialogDescription className="text-base mt-2">
+            Con Albus Pro, puedes organizar tus documentos, recibir revisiones automáticas y generar tus formularios de tasa 790 listos para imprimir.
           </DialogDescription>
         </DialogHeader>
 
@@ -53,7 +53,7 @@ export const PremiumModal = ({ isOpen, onClose }: PremiumModalProps) => {
               key={feature.label}
               className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg"
             >
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                 <feature.icon className="w-4 h-4 text-primary" />
               </div>
               <span className="text-sm font-medium">{feature.label}</span>
@@ -63,15 +63,14 @@ export const PremiumModal = ({ isOpen, onClose }: PremiumModalProps) => {
 
         <div className="mt-6 space-y-3">
           <Button
-            className="w-full gap-2"
+            className="w-full gap-2 h-12 text-base"
             onClick={handleViewPlans}
           >
-            <Crown className="w-4 h-4" />
-            Ver Planes Pro
+            Ver planes Pro
           </Button>
           <Button
             variant="ghost"
-            className="w-full"
+            className="w-full text-muted-foreground"
             onClick={onClose}
           >
             Quizás más tarde
