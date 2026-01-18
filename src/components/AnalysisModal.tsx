@@ -114,6 +114,7 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [recommendation, setRecommendation] = useState<AIRecommendation | null>(null);
+  const [leadId, setLeadId] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     nationality: "",
     currentSituation: "",
@@ -167,11 +168,16 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
     try {
       const [_, dbResult] = await Promise.all([
         minWait,
-        supabase.from("onboarding_submissions").insert([submissionData])
+        supabase.from("onboarding_submissions").insert([submissionData]).select("id").single()
       ]);
 
       if (dbResult.error) {
         throw dbResult.error;
+      }
+
+      // Store the lead ID for linking after signup
+      if (dbResult.data?.id) {
+        setLeadId(dbResult.data.id);
       }
 
       // Success - show success screen
@@ -198,6 +204,7 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
       setIsSubmitting(false);
       setShowSuccess(false);
       setRecommendation(null);
+      setLeadId(null);
       setFormData({
         nationality: "",
         currentSituation: "",
@@ -215,8 +222,10 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
     navigate("/dashboard", {
       state: {
         name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
         visaType: recommendation?.visa_type || "consultation",
         visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
+        leadId: leadId,
       },
     });
     handleClose();
