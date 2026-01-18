@@ -14,7 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      onboarding_submissions: {
+        Row: {
+          ai_recommendation: Json | null
+          created_at: string
+          current_location: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          monthly_income: number | null
+          nationality: string | null
+          professional_profile: string | null
+          savings_range: string | null
+          stripe_customer_id: string | null
+        }
+        Insert: {
+          ai_recommendation?: Json | null
+          created_at?: string
+          current_location?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          monthly_income?: number | null
+          nationality?: string | null
+          professional_profile?: string | null
+          savings_range?: string | null
+          stripe_customer_id?: string | null
+        }
+        Update: {
+          ai_recommendation?: Json | null
+          created_at?: string
+          current_location?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          monthly_income?: number | null
+          nationality?: string | null
+          professional_profile?: string | null
+          savings_range?: string | null
+          stripe_customer_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
