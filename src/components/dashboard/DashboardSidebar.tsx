@@ -1,5 +1,6 @@
-import { Home, FolderOpen, User, MessageCircle } from "lucide-react";
+import { Home, FolderOpen, User, MessageCircle, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import albusLogo from "@/assets/albus-logo.png";
 
 interface NavItem {
@@ -18,9 +19,16 @@ const navItems: NavItem[] = [
 interface DashboardSidebarProps {
   activeItem: string;
   onItemClick: (id: string) => void;
+  onRegister?: () => void;
+  isLoggedIn?: boolean;
 }
 
-export const DashboardSidebar = ({ activeItem, onItemClick }: DashboardSidebarProps) => {
+export const DashboardSidebar = ({
+  activeItem,
+  onItemClick,
+  onRegister,
+  isLoggedIn = false,
+}: DashboardSidebarProps) => {
   return (
     <aside className="w-64 min-h-screen bg-background border-r border-border flex flex-col">
       {/* Logo */}
@@ -49,6 +57,20 @@ export const DashboardSidebar = ({ activeItem, onItemClick }: DashboardSidebarPr
           ))}
         </ul>
       </nav>
+
+      {/* Register Button (if not logged in) */}
+      {!isLoggedIn && onRegister && (
+        <div className="p-4 border-t border-border">
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={onRegister}
+          >
+            <LogIn className="w-4 h-4" />
+            Registrarse
+          </Button>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="p-4 border-t border-border">
