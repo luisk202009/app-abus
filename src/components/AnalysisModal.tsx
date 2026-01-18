@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { X, ArrowRight, ArrowLeft, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -106,6 +107,7 @@ const generateRecommendation = (formData: FormData): AIRecommendation => {
 };
 
 export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -209,13 +211,15 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
   };
 
   const handleViewRoadmap = () => {
-    // For now, just close the modal
-    // Later this will navigate to the dashboard
-    handleClose();
-    toast({
-      title: "¡Gracias por tu interés!",
-      description: "Pronto tendrás acceso a tu hoja de ruta completa.",
+    // Navigate to dashboard with user data
+    navigate("/dashboard", {
+      state: {
+        name: formData.name.trim(),
+        visaType: recommendation?.visa_type || "consultation",
+        visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
+      },
     });
+    handleClose();
   };
 
   const canProceed = () => {
