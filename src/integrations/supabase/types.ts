@@ -27,6 +27,7 @@ export type Database = {
           professional_profile: string | null
           savings_range: string | null
           stripe_customer_id: string | null
+          user_id: string | null
         }
         Insert: {
           ai_recommendation?: Json | null
@@ -40,6 +41,7 @@ export type Database = {
           professional_profile?: string | null
           savings_range?: string | null
           stripe_customer_id?: string | null
+          user_id?: string | null
         }
         Update: {
           ai_recommendation?: Json | null
@@ -53,6 +55,7 @@ export type Database = {
           professional_profile?: string | null
           savings_range?: string | null
           stripe_customer_id?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
