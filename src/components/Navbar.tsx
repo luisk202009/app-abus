@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Menu, X, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import albusLogo from "@/assets/albus-logo.png";
 
 export const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -10,8 +11,8 @@ export const Navbar = () => {
       <div className="container mx-auto">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <a href="/" className="flex items-center gap-2">
-            <span className="text-xl md:text-2xl font-bold tracking-tight">Albus</span>
+          <a href="/" className="flex items-center">
+            <img src={albusLogo} alt="Albus" className="h-6 md:h-7" />
           </a>
 
           {/* Desktop Navigation */}

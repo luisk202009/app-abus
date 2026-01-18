@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { X, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
+import { X, ArrowRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CountrySelect } from "@/components/onboarding/CountrySelect";
 import { RadioCard } from "@/components/onboarding/RadioCard";
 import { IncomeSlider } from "@/components/onboarding/IncomeSlider";
 import { StepProgress } from "@/components/onboarding/StepProgress";
+import isotipoAlbus from "@/assets/isotipo-albus.png";
 
 interface AnalysisModalProps {
   isOpen: boolean;
@@ -309,8 +310,11 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
           {currentStep === 5 && isAnalyzing && (
             <div className="flex flex-col items-center justify-center h-[300px] animate-fade-in">
               <div className="relative">
-                <div className="w-16 h-16 rounded-full border-4 border-secondary" />
-                <Loader2 className="absolute inset-0 w-16 h-16 text-primary animate-spin" />
+                <img 
+                  src={isotipoAlbus} 
+                  alt="Albus" 
+                  className="w-16 h-16 animate-pulse"
+                />
               </div>
               <p className="mt-6 text-lg font-medium text-center">
                 Albus está analizando tu perfil legal...
@@ -336,7 +340,7 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
           
           {isAnalyzing ? (
             <Button variant="hero" disabled className="gap-2 min-w-[140px]">
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <img src={isotipoAlbus} alt="" className="w-4 h-4 animate-spin" />
               Analizando...
             </Button>
           ) : currentStep === 5 && !isAnalyzing ? (
