@@ -61,6 +61,7 @@ const Dashboard = () => {
   
   const [activeNavItem, setActiveNavItem] = useState("roadmap");
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [userData, setUserData] = useState<UserData>({
@@ -159,24 +160,45 @@ const Dashboard = () => {
   };
 
   const handleTaskToggle = async (taskId: string) => {
+    // Optimistic UI update
+    const previousTasks = [...tasks];
+    const task = tasks.find((t) => t.id === taskId);
+    const newStatus = task?.completed ? false : true;
+
     setTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task
+      prev.map((t) =>
+        t.id === taskId ? { ...t, completed: newStatus } : t
       )
     );
 
-    // If logged in, update in Supabase
-    if (user) {
-      const task = tasks.find((t) => t.id === taskId);
-      if (task) {
-        try {
-          await supabase
-            .from("user_tasks")
-            .update({ status: task.completed ? "pending" : "completed" })
-            .eq("id", taskId);
-        } catch (error) {
-          console.error("Error updating task:", error);
+    // If logged in, persist to Supabase
+    if (user && task) {
+      setIsSaving(true);
+      try {
+        const { error } = await supabase
+          .from("user_tasks")
+          .update({ status: newStatus ? "completed" : "pending" })
+          .eq("id", taskId);
+
+        if (error) {
+          // Rollback on error
+          setTasks(previousTasks);
+          toast({
+            variant: "destructive",
+            title: "Error al actualizar",
+            description: "No se pudo guardar el cambio. Intenta de nuevo.",
+          });
         }
+      } catch (error) {
+        console.error("Error updating task:", error);
+        setTasks(previousTasks);
+        toast({
+          variant: "destructive",
+          title: "Error al actualizar",
+          description: "No se pudo guardar el cambio. Intenta de nuevo.",
+        });
+      } finally {
+        setIsSaving(false);
       }
     }
   };
@@ -214,7 +236,7 @@ const Dashboard = () => {
             {/* Roadmap Timeline */}
             <RoadmapTimeline currentStep={1} />
             {/* Task List */}
-            <TaskList tasks={tasks} onTaskToggle={handleTaskToggle} />
+            <TaskList tasks={tasks} onTaskToggle={handleTaskToggle} isSaving={isSaving} />
           </>
         );
     }

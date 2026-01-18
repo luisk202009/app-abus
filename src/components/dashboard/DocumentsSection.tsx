@@ -8,10 +8,12 @@ import {
   Briefcase,
   Home,
   CreditCard,
-  Lock,
+  CheckCircle,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumModal } from "./PremiumModal";
+import isotipoAlbus from "@/assets/isotipo-albus.png";
 
 interface Document {
   id: string;
@@ -19,6 +21,7 @@ interface Document {
   description: string;
   icon: React.ElementType;
   required: boolean;
+  status: "pending" | "uploaded";
 }
 
 interface DocumentsSectionProps {
@@ -35,13 +38,15 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
       description: "Vigente por al menos 1 año",
       icon: FileText,
       required: true,
+      status: "pending",
     },
     {
       id: "criminal_record",
-      name: "Antecedentes Penales",
+      name: "Certificado de Antecedentes",
       description: "Apostillados del país de origen",
       icon: Shield,
       required: true,
+      status: "pending",
     },
     {
       id: "health_insurance",
@@ -49,6 +54,15 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
       description: "Cobertura mínima en España",
       icon: Stethoscope,
       required: true,
+      status: "pending",
+    },
+    {
+      id: "financial_proof",
+      name: "Prueba de Fondos",
+      description: "Extractos bancarios recientes",
+      icon: CreditCard,
+      required: true,
+      status: "pending",
     },
   ];
 
@@ -61,13 +75,7 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
         description: "Con empresa extranjera",
         icon: Briefcase,
         required: true,
-      },
-      {
-        id: "income_proof",
-        name: "Prueba de Ingresos",
-        description: "Últimos 3 meses de nóminas",
-        icon: CreditCard,
-        required: true,
+        status: "pending",
       },
       {
         id: "accommodation",
@@ -75,6 +83,7 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
         description: "Contrato o reserva en España",
         icon: Home,
         required: false,
+        status: "pending",
       },
     ];
   }
@@ -88,13 +97,7 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
         description: "De universidad española",
         icon: GraduationCap,
         required: true,
-      },
-      {
-        id: "financial_proof",
-        name: "Solvencia Económica",
-        description: "Extractos bancarios",
-        icon: CreditCard,
-        required: true,
+        status: "pending",
       },
       {
         id: "accommodation",
@@ -102,6 +105,7 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
         description: "Contrato o reserva",
         icon: Home,
         required: false,
+        status: "pending",
       },
     ];
   }
@@ -115,15 +119,34 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
       description: "Tamaño carnet, fondo blanco",
       icon: FileText,
       required: true,
+      status: "pending",
     },
     {
       id: "form",
-      name: "Formulario de Solicitud",
+      name: "Formulario Tasa 790",
       description: "Se generará automáticamente",
       icon: FileText,
       required: true,
+      status: "pending",
     },
   ];
+};
+
+const StatusBadge = ({ status }: { status: "pending" | "uploaded" }) => {
+  if (status === "uploaded") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700">
+        <CheckCircle className="w-3 h-3" />
+        Subido
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-secondary text-muted-foreground">
+      <Clock className="w-3 h-3" />
+      Pendiente
+    </span>
+  );
 };
 
 export const DocumentsSection = ({
@@ -133,15 +156,23 @@ export const DocumentsSection = ({
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const documents = getDocumentsByVisaType(visaType);
 
-  const handleDocumentClick = () => {
+  const handleUploadClick = () => {
     if (!isPremium) {
       setShowPremiumModal(true);
     }
     // Future: Open upload dialog for premium users
   };
 
+  const pendingCount = documents.filter((d) => d.status === "pending").length;
+  const uploadedCount = documents.filter((d) => d.status === "uploaded").length;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Watermark */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none">
+        <img src={isotipoAlbus} alt="" className="w-64 h-64" />
+      </div>
+
       {/* Header */}
       <div className="space-y-2">
         <h2 className="text-xl font-semibold tracking-tight">
@@ -152,62 +183,71 @@ export const DocumentsSection = ({
         </p>
       </div>
 
-      {/* Info Banner */}
-      {!isPremium && (
-        <div className="bg-secondary/50 border border-border rounded-xl p-4 flex items-start gap-3">
-          <Lock className="w-5 h-5 text-muted-foreground mt-0.5" />
-          <div>
-            <p className="text-sm font-medium">Plan Gratuito</p>
-            <p className="text-sm text-muted-foreground">
-              Actualiza a Pro para subir y validar documentos automáticamente.
-            </p>
-          </div>
+      {/* Stats */}
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-secondary" />
+          <span className="text-sm text-muted-foreground">
+            {pendingCount} pendientes
+          </span>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-green-500" />
+          <span className="text-sm text-muted-foreground">
+            {uploadedCount} subidos
+          </span>
+        </div>
+      </div>
 
       {/* Documents Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {documents.map((doc) => (
-          <button
+          <div
             key={doc.id}
-            onClick={handleDocumentClick}
             className={cn(
-              "group relative bg-background border border-border rounded-xl p-5 text-left transition-all duration-200",
-              "hover:border-primary/50 hover:shadow-sm",
-              !isPremium && "cursor-pointer"
+              "group relative bg-background border border-border rounded-xl p-5 transition-all duration-200",
+              "hover:border-primary/30 hover:shadow-sm"
             )}
           >
-            {/* Lock indicator for free plan */}
-            {!isPremium && (
-              <div className="absolute top-3 right-3">
-                <Lock className="w-4 h-4 text-muted-foreground" />
+            <div className="flex items-start justify-between gap-4">
+              {/* Left: Icon and content */}
+              <div className="flex items-start gap-4 flex-1 min-w-0">
+                {/* Icon */}
+                <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
+                  <doc.icon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+
+                {/* Content */}
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-medium truncate">{doc.name}</h3>
+                    {doc.required && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium uppercase tracking-wide">
+                        Req.
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {doc.description}
+                  </p>
+                  <StatusBadge status={doc.status} />
+                </div>
               </div>
-            )}
 
-            {/* Icon */}
-            <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors">
-              <doc.icon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-            </div>
-
-            {/* Content */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h3 className="font-medium">{doc.name}</h3>
-                {doc.required && (
-                  <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded">
-                    Requerido
-                  </span>
+              {/* Right: Upload button */}
+              <button
+                onClick={handleUploadClick}
+                className={cn(
+                  "shrink-0 w-10 h-10 rounded-lg border border-border flex items-center justify-center transition-all duration-200",
+                  "hover:bg-primary hover:border-primary hover:text-primary-foreground",
+                  "text-muted-foreground"
                 )}
-              </div>
-              <p className="text-sm text-muted-foreground">{doc.description}</p>
+                title="Subir documento"
+              >
+                <Upload className="w-4 h-4" />
+              </button>
             </div>
-
-            {/* Upload indicator */}
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground group-hover:text-primary transition-colors">
-              <Upload className="w-4 h-4" />
-              <span>Subir documento</span>
-            </div>
-          </button>
+          </div>
         ))}
       </div>
 
