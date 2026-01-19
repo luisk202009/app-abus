@@ -27,6 +27,8 @@ interface Document {
 interface DocumentsSectionProps {
   visaType: string;
   isPremium?: boolean;
+  onCheckout?: () => Promise<void>;
+  isCheckoutLoading?: boolean;
 }
 
 // Documents based on visa type
@@ -152,6 +154,8 @@ const StatusBadge = ({ status }: { status: "pending" | "uploaded" }) => {
 export const DocumentsSection = ({
   visaType,
   isPremium = false,
+  onCheckout,
+  isCheckoutLoading = false,
 }: DocumentsSectionProps) => {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const documents = getDocumentsByVisaType(visaType);
@@ -255,6 +259,8 @@ export const DocumentsSection = ({
       <PremiumModal
         isOpen={showPremiumModal}
         onClose={() => setShowPremiumModal(false)}
+        onCheckout={onCheckout}
+        isCheckoutLoading={isCheckoutLoading}
       />
     </div>
   );

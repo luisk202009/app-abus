@@ -9,6 +9,7 @@ import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 
 interface UserData {
@@ -58,6 +59,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
+  const { isPremium, handleCheckout, isCheckoutLoading } = useSubscription();
   
   const [activeNavItem, setActiveNavItem] = useState("roadmap");
   const [isLoading, setIsLoading] = useState(true);
@@ -228,7 +230,14 @@ const Dashboard = () => {
   const renderContent = () => {
     switch (activeNavItem) {
       case "documents":
-        return <DocumentsSection visaType={userData.visaType} isPremium={false} />;
+        return (
+          <DocumentsSection 
+            visaType={userData.visaType} 
+            isPremium={isPremium}
+            onCheckout={handleCheckout}
+            isCheckoutLoading={isCheckoutLoading}
+          />
+        );
       case "roadmap":
       default:
         return (
@@ -265,13 +274,15 @@ const Dashboard = () => {
         onItemClick={handleNavItemClick}
         onRegister={handleRegister}
         isLoggedIn={!!user}
+        isPremium={isPremium}
+        userName={userData.name}
       />
 
       {/* Main Content */}
       <main className="flex-1 p-8">
         <div className="max-w-4xl mx-auto space-y-6">
-          {/* Auth Banner */}
-          {!user && <AuthBanner onRegister={handleRegister} />}
+          {/* Auth Banner - hide for logged in users AND premium users */}
+          {!user && !isPremium && <AuthBanner onRegister={handleRegister} />}
 
           {/* Header */}
           <div className="space-y-2">

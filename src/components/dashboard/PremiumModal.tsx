@@ -1,4 +1,4 @@
-import { Crown, Shield, Sparkles, FileCheck, FileText } from "lucide-react";
+import { Crown, Shield, Sparkles, FileCheck, FileText, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,8 @@ import isotipoAlbus from "@/assets/isotipo-albus.png";
 interface PremiumModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onCheckout?: () => Promise<void>;
+  isCheckoutLoading?: boolean;
 }
 
 const premiumFeatures = [
@@ -21,10 +23,18 @@ const premiumFeatures = [
   { icon: Sparkles, label: "Asistente IA personalizado" },
 ];
 
-export const PremiumModal = ({ isOpen, onClose }: PremiumModalProps) => {
-  const handleViewPlans = () => {
-    // Future: Navigate to pricing page or open Stripe checkout
-    onClose();
+export const PremiumModal = ({ 
+  isOpen, 
+  onClose, 
+  onCheckout,
+  isCheckoutLoading = false 
+}: PremiumModalProps) => {
+  const handleViewPlans = async () => {
+    if (onCheckout) {
+      await onCheckout();
+    } else {
+      onClose();
+    }
   };
 
   return (
@@ -65,13 +75,22 @@ export const PremiumModal = ({ isOpen, onClose }: PremiumModalProps) => {
           <Button
             className="w-full gap-2 h-12 text-base"
             onClick={handleViewPlans}
+            disabled={isCheckoutLoading}
           >
-            Ver planes Pro
+            {isCheckoutLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Procesando...
+              </>
+            ) : (
+              "Ver planes Pro"
+            )}
           </Button>
           <Button
             variant="ghost"
             className="w-full text-muted-foreground"
             onClick={onClose}
+            disabled={isCheckoutLoading}
           >
             Quizás más tarde
           </Button>
