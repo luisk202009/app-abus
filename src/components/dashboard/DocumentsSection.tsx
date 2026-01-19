@@ -10,9 +10,17 @@ import {
   CreditCard,
   CheckCircle,
   Clock,
+  Sparkles,
+  Download,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumModal } from "./PremiumModal";
+import { Button } from "@/components/ui/button";
+import { generateTasa790PDF } from "@/lib/generateTasa790";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 
 interface Document {
@@ -158,6 +166,9 @@ export const DocumentsSection = ({
   isCheckoutLoading = false,
 }: DocumentsSectionProps) => {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const { user } = useAuth();
+  const { toast } = useToast();
   const documents = getDocumentsByVisaType(visaType);
 
   const handleUploadClick = () => {
@@ -165,6 +176,60 @@ export const DocumentsSection = ({
       setShowPremiumModal(true);
     }
     // Future: Open upload dialog for premium users
+  };
+
+  const handleGenerateTasa790 = async () => {
+    if (!isPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Necesitas iniciar sesión para generar el documento.",
+      });
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+
+    try {
+      // Fetch user data from onboarding_submissions
+      const { data, error } = await supabase
+        .from("onboarding_submissions")
+        .select("full_name, nationality, current_location, email, professional_profile")
+        .eq("user_id", user.id)
+        .single();
+
+      if (error || !data) {
+        throw new Error("No se encontraron tus datos");
+      }
+
+      // Generate the PDF
+      generateTasa790PDF({
+        fullName: data.full_name || "",
+        nationality: data.nationality || "",
+        currentLocation: data.current_location || "",
+        email: data.email || user.email || "",
+        professionalProfile: data.professional_profile || "",
+      });
+
+      toast({
+        title: "¡Documento generado!",
+        description: "Tu formulario Tasa 790-012 se ha descargado.",
+      });
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo generar el documento. Intenta de nuevo.",
+      });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const pendingCount = documents.filter((d) => d.status === "pending").length;
@@ -187,6 +252,60 @@ export const DocumentsSection = ({
         </p>
       </div>
 
+      {/* Generate Tasa 790 Card */}
+      <div
+        className={cn(
+          "bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-xl p-5 transition-all duration-200",
+          isPremium && "hover:border-primary/40 hover:shadow-md cursor-pointer"
+        )}
+        onClick={isPremium ? handleGenerateTasa790 : () => setShowPremiumModal(true)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Sparkles className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold">Generar Tasa 790-012</h3>
+                <span className="text-[10px] px-1.5 py-0.5 bg-primary text-primary-foreground rounded font-semibold uppercase tracking-wide">
+                  Pro
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Formulario pre-llenado con tus datos, listo para imprimir
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="default"
+            size="sm"
+            className="gap-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isPremium) {
+                handleGenerateTasa790();
+              } else {
+                setShowPremiumModal(true);
+              }
+            }}
+            disabled={isGeneratingPDF}
+          >
+            {isGeneratingPDF ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generando...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                Descargar PDF
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
       {/* Stats */}
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
@@ -196,7 +315,7 @@ export const DocumentsSection = ({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-green-500" />
+          <div className="w-3 h-3 rounded-full bg-emerald-500" />
           <span className="text-sm text-muted-foreground">
             {uploadedCount} subidos
           </span>
