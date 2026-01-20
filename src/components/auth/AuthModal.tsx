@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
@@ -39,6 +39,13 @@ export const AuthModal = ({
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Reset email when defaultEmail changes
+  useEffect(() => {
+    if (defaultEmail) {
+      setEmail(defaultEmail);
+    }
+  }, [defaultEmail]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -46,7 +53,33 @@ export const AuthModal = ({
     try {
       if (mode === "signup") {
         const { error } = await signUp(email, password);
-        if (error) throw error;
+        
+        // Check for duplicate email error
+        if (error) {
+          const errorMessage = error.message?.toLowerCase() || "";
+          
+          if (
+            errorMessage.includes("already registered") ||
+            errorMessage.includes("already exists") ||
+            errorMessage.includes("user already registered")
+          ) {
+            toast({
+              title: "Ya tienes una cuenta",
+              description: "Redirigiéndote al inicio de sesión...",
+            });
+            
+            // Switch to login mode after a short delay
+            setTimeout(() => {
+              setMode("login");
+              setPassword("");
+            }, 1500);
+            
+            setIsLoading(false);
+            return;
+          }
+          
+          throw error;
+        }
 
         // Link the lead to the new user if leadId exists
         if (leadId) {
@@ -61,9 +94,12 @@ export const AuthModal = ({
         }
 
         toast({
-          title: "Cuenta creada",
-          description: "Revisa tu email para confirmar tu cuenta.",
+          title: "¡Registro completado con éxito!",
+          description: "Tus datos han sido guardados. Revisa tu email para confirmar tu cuenta.",
         });
+
+        onSuccess?.();
+        onClose();
       } else {
         const { error } = await signIn(email, password);
         if (error) throw error;
@@ -72,10 +108,10 @@ export const AuthModal = ({
           title: "¡Bienvenido de vuelta!",
           description: "Has iniciado sesión correctamente.",
         });
-      }
 
-      onSuccess?.();
-      onClose();
+        onSuccess?.();
+        onClose();
+      }
     } catch (error: any) {
       console.error("Auth error:", error);
       toast({

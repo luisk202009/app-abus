@@ -6,6 +6,7 @@ import { TaskList } from "@/components/dashboard/TaskList";
 import { AuthBanner } from "@/components/dashboard/AuthBanner";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
+import { SupportModal } from "@/components/dashboard/SupportModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -66,6 +67,7 @@ const Dashboard = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
   const [userData, setUserData] = useState<UserData>({
     name: "Usuario",
     email: "",
@@ -103,14 +105,14 @@ const Dashboard = () => {
           .from("onboarding_submissions")
           .select("*")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
         if (submission) {
-          const recommendation = submission.ai_recommendation as { type?: string; title?: string } | null;
+          const recommendation = submission.ai_recommendation as { type?: string; title?: string; visa_type?: string } | null;
           setUserData({
             name: submission.full_name || user.email?.split("@")[0] || "Usuario",
             email: submission.email || user.email || "",
-            visaType: recommendation?.type || "consultation",
+            visaType: recommendation?.visa_type || recommendation?.type || "consultation",
             visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
             leadId: submission.id,
           });
@@ -218,6 +220,12 @@ const Dashboard = () => {
 
   const handleNavItemClick = (id: string) => {
     setActiveNavItem(id);
+    
+    if (id === "support") {
+      setShowSupportModal(true);
+      return;
+    }
+    
     if (id !== "roadmap" && id !== "documents") {
       toast({
         title: "Próximamente",
@@ -309,6 +317,13 @@ const Dashboard = () => {
         defaultEmail={userData.email}
         leadId={userData.leadId}
         onSuccess={handleAuthSuccess}
+      />
+
+      {/* Support Modal */}
+      <SupportModal
+        isOpen={showSupportModal}
+        onClose={() => setShowSupportModal(false)}
+        userEmail={userData.email}
       />
     </div>
   );

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Check, Loader2, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TaskDetailModal } from "./TaskDetailModal";
 
 interface Task {
   id: string;
@@ -31,8 +32,12 @@ const getCategoryColor = (category: string): string => {
 export const TaskList = ({ tasks, onTaskToggle, isSaving }: TaskListProps) => {
   const [animatingTasks, setAnimatingTasks] = useState<Set<string>>(new Set());
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
-  const handleToggle = async (taskId: string) => {
+  const handleToggle = async (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
     // Add animation
     setAnimatingTasks((prev) => new Set(prev).add(taskId));
     setSavingTaskId(taskId);
@@ -51,103 +56,129 @@ export const TaskList = ({ tasks, onTaskToggle, isSaving }: TaskListProps) => {
     }, 300);
   };
 
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setShowDetailModal(true);
+  };
+
+  const handleInfoClick = (task: Task, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedTask(task);
+    setShowDetailModal(true);
+  };
+
   const completedCount = tasks.filter((t) => t.completed).length;
   const totalCount = tasks.length;
   const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   return (
-    <div className="bg-background rounded-xl border border-border p-6">
-      {/* Header with progress */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">Próximas Tareas</h3>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">
-            {completedCount}/{totalCount} completadas
-          </span>
-          {isSaving && (
-            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-          )}
+    <>
+      <div className="bg-background rounded-xl border border-border p-6">
+        {/* Header with progress */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Próximas Tareas</h3>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">
+              {completedCount}/{totalCount} completadas
+            </span>
+            {isSaving && (
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Progress bar */}
-      <div className="h-1.5 bg-secondary rounded-full overflow-hidden mb-5">
-        <div
-          className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
-          style={{ width: `${progressPercent}%` }}
-        />
-      </div>
+        {/* Progress bar */}
+        <div className="h-1.5 bg-secondary rounded-full overflow-hidden mb-5">
+          <div
+            className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
 
-      {tasks.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          No tienes tareas pendientes. ¡Buen trabajo!
-        </p>
-      ) : (
-        <ul className="space-y-3">
-          {tasks.map((task) => {
-            const isAnimating = animatingTasks.has(task.id);
-            const isSavingThis = savingTaskId === task.id;
+        {tasks.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No tienes tareas pendientes. ¡Buen trabajo!
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {tasks.map((task) => {
+              const isAnimating = animatingTasks.has(task.id);
+              const isSavingThis = savingTaskId === task.id;
 
-            return (
-              <li
-                key={task.id}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg border transition-all duration-300 cursor-pointer",
-                  task.completed
-                    ? "border-border/50 bg-secondary/30"
-                    : "border-border hover:bg-secondary/50",
-                  isAnimating && "scale-[0.99]"
-                )}
-                onClick={() => handleToggle(task.id)}
-              >
-                {/* Checkbox */}
-                <button
+              return (
+                <li
+                  key={task.id}
                   className={cn(
-                    "flex items-center justify-center w-5 h-5 rounded border-2 transition-all duration-300 shrink-0",
+                    "flex items-center gap-3 p-3 rounded-lg border transition-all duration-300 cursor-pointer group",
                     task.completed
-                      ? "bg-primary border-primary scale-100"
-                      : "border-border hover:border-primary",
-                    isAnimating && !task.completed && "scale-110 border-primary"
+                      ? "border-border/50 bg-secondary/30"
+                      : "border-border hover:bg-secondary/50",
+                    isAnimating && "scale-[0.99]"
                   )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggle(task.id);
-                  }}
+                  onClick={() => handleTaskClick(task)}
                 >
-                  {task.completed && (
-                    <Check className="w-3 h-3 text-primary-foreground animate-scale-in" />
-                  )}
-                  {isSavingThis && !task.completed && (
-                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
-                  )}
-                </button>
+                  {/* Checkbox */}
+                  <button
+                    className={cn(
+                      "flex items-center justify-center w-5 h-5 rounded border-2 transition-all duration-300 shrink-0",
+                      task.completed
+                        ? "bg-primary border-primary scale-100"
+                        : "border-border hover:border-primary",
+                      isAnimating && !task.completed && "scale-110 border-primary"
+                    )}
+                    onClick={(e) => handleToggle(task.id, e)}
+                  >
+                    {task.completed && (
+                      <Check className="w-3 h-3 text-primary-foreground animate-scale-in" />
+                    )}
+                    {isSavingThis && !task.completed && (
+                      <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                    )}
+                  </button>
 
-                {/* Task content */}
-                <span
-                  className={cn(
-                    "flex-1 text-sm font-medium transition-all duration-300",
-                    task.completed && "line-through text-muted-foreground/60",
-                    isAnimating && task.completed && "opacity-70"
-                  )}
-                >
-                  {task.title}
-                </span>
+                  {/* Task content */}
+                  <span
+                    className={cn(
+                      "flex-1 text-sm font-medium transition-all duration-300",
+                      task.completed && "line-through text-muted-foreground/60",
+                      isAnimating && task.completed && "opacity-70"
+                    )}
+                  >
+                    {task.title}
+                  </span>
 
-                {/* Category tag */}
-                <span
-                  className={cn(
-                    "px-2 py-0.5 text-xs font-medium rounded-full transition-opacity duration-300",
-                    getCategoryColor(task.category),
-                    task.completed && "opacity-50"
-                  )}
-                >
-                  {task.category}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+                  {/* Info icon */}
+                  <button
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-secondary transition-all"
+                    onClick={(e) => handleInfoClick(task, e)}
+                    title="Ver detalles"
+                  >
+                    <Info className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                  </button>
+
+                  {/* Category tag */}
+                  <span
+                    className={cn(
+                      "px-2 py-0.5 text-xs font-medium rounded-full transition-opacity duration-300",
+                      getCategoryColor(task.category),
+                      task.completed && "opacity-50"
+                    )}
+                  >
+                    {task.category}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* Task Detail Modal */}
+      <TaskDetailModal
+        isOpen={showDetailModal}
+        onClose={() => setShowDetailModal(false)}
+        task={selectedTask}
+      />
+    </>
   );
 };

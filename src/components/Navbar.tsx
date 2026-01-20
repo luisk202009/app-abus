@@ -6,7 +6,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { AuthModal } from "@/components/auth/AuthModal";
 import albusLogo from "@/assets/albus-logo.png";
 
-export const Navbar = () => {
+interface NavbarProps {
+  onOpenModal?: () => void;
+}
+
+export const Navbar = ({ onOpenModal }: NavbarProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { user } = useAuth();
@@ -18,6 +22,21 @@ export const Navbar = () => {
     } else {
       setShowAuthModal(true);
     }
+  };
+
+  const handleStartFree = () => {
+    if (onOpenModal) {
+      onOpenModal();
+    }
+    setIsMenuOpen(false);
+  };
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+    setIsMenuOpen(false);
   };
 
   return (
@@ -32,12 +51,18 @@ export const Navbar = () => {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-8">
-              <a href="#recursos" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              <button
+                onClick={() => scrollToSection("recursos")}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
                 Recursos
-              </a>
-              <a href="#precios" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              </button>
+              <button
+                onClick={() => scrollToSection("precios")}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
                 Precios
-              </a>
+              </button>
               <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
                 <span>Próximamente: Portugal</span>
                 <span className="ml-1 px-2 py-0.5 text-xs bg-secondary rounded-full">Soon</span>
@@ -50,7 +75,7 @@ export const Navbar = () => {
                 {user ? "Ir a mi Dashboard" : "Entrar"}
               </Button>
               {!user && (
-                <Button variant="hero" size="default">
+                <Button variant="hero" size="default" onClick={handleStartFree}>
                   Empezar Gratis
                   <ChevronRight className="w-4 h-4" />
                 </Button>
@@ -71,12 +96,18 @@ export const Navbar = () => {
           {isMenuOpen && (
             <div className="md:hidden py-6 border-t border-border animate-fade-in">
               <div className="flex flex-col gap-4">
-                <a href="#recursos" className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2">
+                <button
+                  onClick={() => scrollToSection("recursos")}
+                  className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2 text-left"
+                >
                   Recursos
-                </a>
-                <a href="#precios" className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2">
+                </button>
+                <button
+                  onClick={() => scrollToSection("precios")}
+                  className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2 text-left"
+                >
                   Precios
-                </a>
+                </button>
                 <div className="flex items-center gap-2 text-base font-medium text-muted-foreground py-2">
                   <span>Próximamente: Portugal</span>
                   <span className="px-2 py-0.5 text-xs bg-secondary rounded-full">Soon</span>
@@ -91,7 +122,7 @@ export const Navbar = () => {
                     {user ? "Ir a mi Dashboard" : "Entrar"}
                   </Button>
                   {!user && (
-                    <Button variant="hero" size="lg" className="w-full">
+                    <Button variant="hero" size="lg" className="w-full" onClick={handleStartFree}>
                       Empezar Gratis
                       <ChevronRight className="w-4 h-4" />
                     </Button>

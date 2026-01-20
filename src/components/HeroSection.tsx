@@ -6,6 +6,13 @@ interface HeroSectionProps {
 }
 
 export const HeroSection = ({ onAnalyzeClick }: HeroSectionProps) => {
+  const scrollToHowItWorks = () => {
+    const element = document.getElementById("como-funciona");
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-20 pb-16 overflow-hidden">
       {/* Abstract background pattern */}
@@ -60,7 +67,12 @@ export const HeroSection = ({ onAnalyzeClick }: HeroSectionProps) => {
               Analizar mi caso gratis
               <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
             </Button>
-            <Button variant="ghost" size="lg" className="w-full sm:w-auto text-muted-foreground">
+            <Button 
+              variant="ghost" 
+              size="lg" 
+              className="w-full sm:w-auto text-muted-foreground"
+              onClick={scrollToHowItWorks}
+            >
               Ver cómo funciona
             </Button>
           </div>
