@@ -1,4 +1,4 @@
-import { Home, FolderOpen, User, MessageCircle, LogIn, Crown } from "lucide-react";
+import { Home, FolderOpen, User, MessageCircle, LogIn, Crown, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import albusLogo from "@/assets/albus-logo.png";
@@ -12,6 +12,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: "roadmap", label: "Mi Ruta", icon: <Home className="w-5 h-5" /> },
   { id: "documents", label: "Documentos", icon: <FolderOpen className="w-5 h-5" /> },
+  { id: "resources", label: "Recursos", icon: <BookOpen className="w-5 h-5" /> },
   { id: "profile", label: "Perfil", icon: <User className="w-5 h-5" /> },
   { id: "support", label: "Soporte", icon: <MessageCircle className="w-5 h-5" /> },
 ];

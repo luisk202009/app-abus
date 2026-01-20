@@ -4,15 +4,25 @@ import { Menu, X, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { DestinosDropdown } from "@/components/DestinosDropdown";
+import { WaitlistModal } from "@/components/WaitlistModal";
 import albusLogo from "@/assets/albus-logo.png";
 
 interface NavbarProps {
   onOpenModal?: () => void;
 }
 
+interface Country {
+  id: string;
+  name: string;
+  flag: string;
+  active: boolean;
+}
+
 export const Navbar = ({ onOpenModal }: NavbarProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [waitlistCountry, setWaitlistCountry] = useState<Country | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -39,6 +49,16 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
     setIsMenuOpen(false);
   };
 
+  const handleCountrySelect = (country: Country) => {
+    if (country.active) {
+      // Spain is active, scroll to hero or do nothing
+      scrollToSection("hero");
+    } else {
+      // Show coming soon page
+      navigate(`/destinos/${country.id}`);
+    }
+  };
+
   return (
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
@@ -51,6 +71,7 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-8">
+              <DestinosDropdown onCountrySelect={handleCountrySelect} />
               <button
                 onClick={() => scrollToSection("recursos")}
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -63,10 +84,6 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
               >
                 Precios
               </button>
-              <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
-                <span>Próximamente: Portugal</span>
-                <span className="ml-1 px-2 py-0.5 text-xs bg-secondary rounded-full">Soon</span>
-              </div>
             </div>
 
             {/* Desktop CTA */}
@@ -96,6 +113,12 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
           {isMenuOpen && (
             <div className="md:hidden py-6 border-t border-border animate-fade-in">
               <div className="flex flex-col gap-4">
+                <div className="py-2">
+                  <DestinosDropdown onCountrySelect={(country) => {
+                    setIsMenuOpen(false);
+                    handleCountrySelect(country);
+                  }} />
+                </div>
                 <button
                   onClick={() => scrollToSection("recursos")}
                   className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2 text-left"
@@ -108,10 +131,6 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
                 >
                   Precios
                 </button>
-                <div className="flex items-center gap-2 text-base font-medium text-muted-foreground py-2">
-                  <span>Próximamente: Portugal</span>
-                  <span className="px-2 py-0.5 text-xs bg-secondary rounded-full">Soon</span>
-                </div>
                 <div className="flex flex-col gap-3 pt-4 border-t border-border">
                   <Button
                     variant="outline"
@@ -140,6 +159,15 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
         onClose={() => setShowAuthModal(false)}
         onSuccess={() => navigate("/dashboard")}
       />
+
+      {/* Waitlist Modal */}
+      {waitlistCountry && (
+        <WaitlistModal
+          isOpen={!!waitlistCountry}
+          onClose={() => setWaitlistCountry(null)}
+          country={waitlistCountry}
+        />
+      )}
     </>
   );
 };
