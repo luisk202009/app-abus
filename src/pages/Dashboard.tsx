@@ -6,6 +6,7 @@ import { TaskList } from "@/components/dashboard/TaskList";
 import { AuthBanner } from "@/components/dashboard/AuthBanner";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
+import { ResourcesSection } from "@/components/dashboard/ResourcesSection";
 import { SupportModal } from "@/components/dashboard/SupportModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -241,6 +242,14 @@ const Dashboard = () => {
         return (
           <DocumentsSection 
             visaType={userData.visaType} 
+            isPremium={isPremium}
+            onCheckout={handleCheckout}
+            isCheckoutLoading={isCheckoutLoading}
+          />
+        );
+      case "resources":
+        return (
+          <ResourcesSection
             isPremium={isPremium}
             onCheckout={handleCheckout}
             isCheckoutLoading={isCheckoutLoading}
