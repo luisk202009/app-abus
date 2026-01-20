@@ -1,4 +1,5 @@
 import { ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 export const Footer = () => {
@@ -32,11 +33,18 @@ export const Footer = () => {
           <div>
             <h4 className="font-semibold mb-4">Legal</h4>
             <ul className="space-y-3 text-gray-400">
-              <li><a href="#" className="hover:text-primary-foreground transition-colors">Privacidad</a></li>
-              <li><a href="#" className="hover:text-primary-foreground transition-colors">Términos</a></li>
+              <li><Link to="/privacidad" className="hover:text-primary-foreground transition-colors">Privacidad</Link></li>
+              <li><Link to="/terminos" className="hover:text-primary-foreground transition-colors">Términos</Link></li>
               <li><a href="#" className="hover:text-primary-foreground transition-colors">Cookies</a></li>
             </ul>
           </div>
+        </div>
+
+        {/* Legal Disclaimer */}
+        <div className="mb-8 p-4 border border-gray-700 rounded-lg bg-gray-900/50">
+          <p className="text-gray-400 text-sm text-center">
+            Albus es una plataforma tecnológica de asistencia. No proporcionamos asesoramiento legal ni somos un despacho de abogados.
+          </p>
         </div>
 
         <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between gap-4">
