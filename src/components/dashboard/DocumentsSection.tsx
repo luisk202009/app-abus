@@ -171,11 +171,22 @@ export const DocumentsSection = ({
   const { toast } = useToast();
   const documents = getDocumentsByVisaType(visaType);
 
-  const handleUploadClick = () => {
+  const handleUploadClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // For non-premium users, only show the premium modal
+    // Do NOT trigger any upload functionality
     if (!isPremium) {
       setShowPremiumModal(true);
+      return;
     }
+    
     // Future: Open upload dialog for premium users
+    toast({
+      title: "Subir documento",
+      description: "La funcionalidad de subida estará disponible pronto.",
+    });
   };
 
   const handleGenerateTasa790 = async () => {
@@ -359,13 +370,14 @@ export const DocumentsSection = ({
 
               {/* Right: Upload button */}
               <button
+                type="button"
                 onClick={handleUploadClick}
                 className={cn(
                   "shrink-0 w-10 h-10 rounded-lg border border-border flex items-center justify-center transition-all duration-200",
                   "hover:bg-primary hover:border-primary hover:text-primary-foreground",
                   "text-muted-foreground"
                 )}
-                title="Subir documento"
+                title={isPremium ? "Subir documento" : "Función Pro"}
               >
                 <Upload className="w-4 h-4" />
               </button>
