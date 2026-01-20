@@ -60,18 +60,45 @@ serve(async (req) => {
 
         if (userId) {
           // Update subscription status to 'pro'
-          const { error } = await supabaseAdmin
+          const { data: updatedUser, error } = await supabaseAdmin
             .from("onboarding_submissions")
             .update({ 
               subscription_status: "pro",
               stripe_customer_id: customerId 
             })
-            .eq("user_id", userId);
+            .eq("user_id", userId)
+            .select("full_name, email, professional_profile")
+            .maybeSingle();
 
           if (error) {
             console.error("Error updating subscription status:", error);
           } else {
             console.log("Successfully updated user to pro status");
+            
+            // Send welcome email
+            if (updatedUser?.email) {
+              try {
+                const emailResponse = await fetch(
+                  `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-welcome-email`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+                    },
+                    body: JSON.stringify({
+                      name: updatedUser.full_name || "Usuario",
+                      email: updatedUser.email,
+                      visaType: updatedUser.professional_profile,
+                    }),
+                  }
+                );
+                const emailResult = await emailResponse.json();
+                console.log("Welcome email sent:", emailResult);
+              } catch (emailError) {
+                console.error("Error sending welcome email:", emailError);
+              }
+            }
           }
         }
         break;
