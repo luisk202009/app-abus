@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import albusLogoWhite from "@/assets/albus-logo-white.png";
 
 export const Footer = () => {
   return (
@@ -9,7 +10,7 @@ export const Footer = () => {
         <div className="grid md:grid-cols-4 gap-12 mb-12">
           {/* Brand */}
           <div className="md:col-span-2">
-            <h3 className="text-2xl font-bold mb-4">Albus</h3>
+            <img src={albusLogoWhite} alt="Albus" className="h-7 mb-4" />
             <p className="text-gray-400 max-w-md mb-6">
               Tu asistente inteligente para migrar a España. Simplificamos la burocracia para que tú puedas enfocarte en tu nueva vida.
             </p>
