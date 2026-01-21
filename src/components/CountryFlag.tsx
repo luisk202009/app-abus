@@ -4,24 +4,28 @@ interface CountryFlagProps {
   className?: string;
 }
 
+// Usar tamaños exactos disponibles en flagcdn.com
 const sizeMap = {
-  sm: { width: 20, height: 15 },
-  md: { width: 32, height: 24 },
-  lg: { width: 80, height: 60 },
+  sm: { width: 20, height: 15, cdnWidth: 40 },
+  md: { width: 32, height: 24, cdnWidth: 80 },
+  lg: { width: 80, height: 60, cdnWidth: 160 },
 };
 
 export const CountryFlag = ({ code, size = "md", className = "" }: CountryFlagProps) => {
-  const { width, height } = sizeMap[size];
-  const flagUrl = `https://flagcdn.com/w${width * 2}/${code.toLowerCase()}.png`;
+  const { width, height, cdnWidth } = sizeMap[size];
+  const flagUrl = `https://flagcdn.com/w${cdnWidth}/${code.toLowerCase()}.png`;
 
   return (
     <img
       src={flagUrl}
-      alt={`${code.toUpperCase()} flag`}
+      alt={`Bandera de ${code.toUpperCase()}`}
       width={width}
       height={height}
-      className={`inline-block object-cover rounded-sm ${className}`}
+      className={`inline-block object-cover rounded-sm border border-border/30 shadow-sm ${className}`}
       loading="lazy"
+      onError={(e) => {
+        e.currentTarget.style.display = 'none';
+      }}
     />
   );
 };
