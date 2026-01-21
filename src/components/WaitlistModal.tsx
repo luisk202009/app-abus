@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Bell } from "lucide-react";
+import { CountryFlag } from "@/components/CountryFlag";
 
 interface WaitlistModalProps {
   isOpen: boolean;
@@ -14,7 +15,7 @@ interface WaitlistModalProps {
   country: {
     id: string;
     name: string;
-    flag: string;
+    code: string;
   };
 }
 
@@ -72,7 +73,7 @@ export const WaitlistModal = ({ isOpen, onClose, country }: WaitlistModalProps) 
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 text-xl">
-            <span className="text-3xl">{country.flag}</span>
+            <CountryFlag code={country.code} size="md" />
             Próximamente: {country.name}
           </DialogTitle>
         </DialogHeader>

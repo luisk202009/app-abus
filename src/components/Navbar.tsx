@@ -15,7 +15,7 @@ interface NavbarProps {
 interface Country {
   id: string;
   name: string;
-  flag: string;
+  code: string;
   active: boolean;
 }
 

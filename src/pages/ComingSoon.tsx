@@ -5,29 +5,30 @@ import { Footer } from "@/components/Footer";
 import { WaitlistModal } from "@/components/WaitlistModal";
 import { Button } from "@/components/ui/button";
 import { Bell, ArrowLeft, MapPin, Briefcase, Sun, Building2 } from "lucide-react";
+import { CountryFlag } from "@/components/CountryFlag";
 
-const countryData: Record<string, { name: string; flag: string; description: string; highlights: string[] }> = {
+const countryData: Record<string, { name: string; code: string; description: string; highlights: string[] }> = {
   malta: {
     name: "Malta",
-    flag: "🇲🇹",
+    code: "mt",
     description: "Isla mediterránea con un ecosistema startup vibrante y beneficios fiscales atractivos para nómadas digitales.",
     highlights: ["Visa de Nómada Digital", "Inglés oficial", "Clima mediterráneo", "Hub cripto europeo"],
   },
   dubai: {
     name: "Dubái",
-    flag: "🇦🇪",
+    code: "ae",
     description: "Centro de negocios global con 0% impuesto sobre la renta y una calidad de vida excepcional.",
     highlights: ["Visa de Freelancer", "0% impuestos", "Infraestructura de clase mundial", "Hub de innovación"],
   },
   usa: {
     name: "USA",
-    flag: "🇺🇸",
+    code: "us",
     description: "El mercado más grande del mundo con oportunidades ilimitadas para emprendedores y profesionales.",
     highlights: ["Visa O-1", "Visa EB-1", "Mercado tech líder", "Networking global"],
   },
   canada: {
     name: "Canadá",
-    flag: "🇨🇦",
+    code: "ca",
     description: "Calidad de vida excepcional con programas de inmigración muy accesibles para profesionales cualificados.",
     highlights: ["Express Entry", "Startup Visa", "Alta calidad de vida", "Sistema de salud público"],
   },
@@ -87,7 +88,7 @@ const ComingSoon = () => {
             
             {/* Content */}
             <div className="relative z-20 text-center">
-              <span className="text-6xl md:text-8xl mb-6 block">{country.flag}</span>
+              <CountryFlag code={country.code} size="lg" className="mb-6" />
               <h1 className="text-4xl md:text-5xl font-bold mb-4">
                 {country.name}
               </h1>
@@ -127,7 +128,7 @@ const ComingSoon = () => {
       <WaitlistModal
         isOpen={showWaitlist}
         onClose={() => setShowWaitlist(false)}
-        country={{ id: countryId || "", name: country.name, flag: country.flag }}
+        country={{ id: countryId || "", name: country.name, code: country.code }}
       />
     </div>
   );
