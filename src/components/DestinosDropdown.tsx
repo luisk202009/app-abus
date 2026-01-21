@@ -6,20 +6,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { CountryFlag } from "@/components/CountryFlag";
 
 interface Country {
   id: string;
   name: string;
-  flag: string;
+  code: string;
   active: boolean;
 }
 
 const countries: Country[] = [
-  { id: "spain", name: "España", flag: "🇪🇸", active: true },
-  { id: "malta", name: "Malta", flag: "🇲🇹", active: false },
-  { id: "dubai", name: "Dubái", flag: "🇦🇪", active: false },
-  { id: "usa", name: "USA", flag: "🇺🇸", active: false },
-  { id: "canada", name: "Canadá", flag: "🇨🇦", active: false },
+  { id: "spain", name: "España", code: "es", active: true },
+  { id: "malta", name: "Malta", code: "mt", active: false },
+  { id: "dubai", name: "Dubái", code: "ae", active: false },
+  { id: "usa", name: "USA", code: "us", active: false },
+  { id: "canada", name: "Canadá", code: "ca", active: false },
 ];
 
 interface DestinosDropdownProps {
@@ -49,7 +50,7 @@ export const DestinosDropdown = ({ onCountrySelect }: DestinosDropdownProps) => 
             className="flex items-center justify-between gap-3 cursor-pointer"
           >
             <span className="flex items-center gap-2">
-              <span>{country.flag}</span>
+              <CountryFlag code={country.code} size="sm" />
               <span>{country.name}</span>
             </span>
             {country.active ? (
