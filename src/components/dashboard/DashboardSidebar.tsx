@@ -1,4 +1,5 @@
-import { Home, FolderOpen, User, MessageCircle, LogIn, Crown, BookOpen } from "lucide-react";
+import { Home, FolderOpen, User, MessageCircle, LogIn, Crown, BookOpen, Settings } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import albusLogo from "@/assets/albus-logo.png";
@@ -24,7 +25,10 @@ interface DashboardSidebarProps {
   isLoggedIn?: boolean;
   isPremium?: boolean;
   userName?: string;
+  userEmail?: string;
 }
+
+const ADMIN_EMAIL = "l@albus.com.co";
 
 export const DashboardSidebar = ({
   activeItem,
@@ -33,7 +37,11 @@ export const DashboardSidebar = ({
   isLoggedIn = false,
   isPremium = false,
   userName,
+  userEmail,
 }: DashboardSidebarProps) => {
+  const navigate = useNavigate();
+  const isAdmin = userEmail === ADMIN_EMAIL;
+
   return (
     <aside className="w-64 min-h-screen bg-background border-r border-border flex flex-col">
       {/* Logo */}
@@ -84,6 +92,20 @@ export const DashboardSidebar = ({
           ))}
         </ul>
       </nav>
+
+      {/* Admin Button (only for admin) */}
+      {isAdmin && (
+        <div className="p-4 border-t border-border">
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => navigate("/admin")}
+          >
+            <Settings className="w-4 h-4" />
+            Panel Admin
+          </Button>
+        </div>
+      )}
 
       {/* Register Button (if not logged in) */}
       {!isLoggedIn && onRegister && (

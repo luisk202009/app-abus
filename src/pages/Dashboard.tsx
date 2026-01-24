@@ -293,6 +293,7 @@ const Dashboard = () => {
         isLoggedIn={!!user}
         isPremium={isPremium}
         userName={userData.name}
+        userEmail={user?.email}
       />
 
       {/* Main Content */}
