@@ -23,7 +23,7 @@ const Index = () => {
         <ResourcesSection />
         <PricingSection onStartFree={() => setIsModalOpen(true)} />
       </main>
-      <Footer />
+      <Footer onOpenModal={() => setIsModalOpen(true)} />
       <AnalysisModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   );
