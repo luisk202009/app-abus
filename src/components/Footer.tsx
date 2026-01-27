@@ -3,7 +3,11 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import albusLogoWhite from "@/assets/albus-logo-white.png";
 
-export const Footer = () => {
+interface FooterProps {
+  onOpenModal?: () => void;
+}
+
+export const Footer = ({ onOpenModal }: FooterProps) => {
   return (
     <footer className="bg-foreground text-primary-foreground py-16">
       <div className="container mx-auto">
@@ -14,7 +18,11 @@ export const Footer = () => {
             <p className="text-gray-400 max-w-md mb-6">
               Tu asistente inteligente para migrar a España. Simplificamos la burocracia para que tú puedas enfocarte en tu nueva vida.
             </p>
-            <Button variant="heroOutline" className="border-gray-600 text-primary-foreground hover:bg-gray-800 hover:text-primary-foreground">
+            <Button 
+              variant="heroOutline" 
+              className="border-gray-600 text-primary-foreground hover:bg-gray-800 hover:text-primary-foreground"
+              onClick={onOpenModal}
+            >
               Empezar ahora
               <ArrowRight className="w-4 h-4" />
             </Button>
@@ -34,9 +42,9 @@ export const Footer = () => {
           <div>
             <h4 className="font-semibold mb-4">Legal</h4>
             <ul className="space-y-3 text-gray-400">
-              <li><Link to="/privacidad" className="hover:text-primary-foreground transition-colors">Privacidad</Link></li>
-              <li><Link to="/terminos" className="hover:text-primary-foreground transition-colors">Términos</Link></li>
-              <li><a href="#" className="hover:text-primary-foreground transition-colors">Cookies</a></li>
+              <li><Link to="/terminos" className="hover:text-primary-foreground transition-colors">Términos y Condiciones</Link></li>
+              <li><Link to="/privacidad" className="hover:text-primary-foreground transition-colors">Política de Privacidad</Link></li>
+              <li><Link to="/privacidad#cookies" className="hover:text-primary-foreground transition-colors">Cookies</Link></li>
             </ul>
           </div>
         </div>
@@ -44,13 +52,13 @@ export const Footer = () => {
         {/* Legal Disclaimer */}
         <div className="mb-8 p-4 border border-gray-700 rounded-lg bg-gray-900/50">
           <p className="text-gray-400 text-sm text-center">
-            Albus es una plataforma tecnológica de asistencia. No proporcionamos asesoramiento legal ni somos un despacho de abogados.
+            Albus es una plataforma tecnológica de asistencia. No somos un despacho de abogados ni proporcionamos asesoramiento legal vinculante.
           </p>
         </div>
 
         <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-gray-500 text-sm">
-            © {new Date().getFullYear()} Albus. Todos los derechos reservados.
+            © 2026 Albus. Desarrollado por Albus LLC.
           </p>
           <p className="text-gray-500 text-sm">
             Hecho con ❤️ para la comunidad migrante
