@@ -1,265 +1,268 @@
 
 
-# Plan: Completar la Experiencia de Selección de Rutas
+# Plan: Modo Admin/Usuario para Pruebas
 
 ## Resumen
 
-Finalizar el sistema de rutas con mejoras en UI/UX incluyendo: skeleton loaders, animación de confetti al iniciar ruta, descripciones expandibles en el checklist, y un dropdown para cambiar entre rutas activas (usuarios Pro).
+Implementar un sistema de cambio de modo (Admin/Usuario) para el usuario `l@albus.com.co` que permita:
+- **Modo Admin**: Sin límites de rutas, acceso completo a todas las funcionalidades premium
+- **Modo Usuario**: Experimenta la plataforma como un usuario normal con límites de plan (Free o Pro simulado)
 
 ---
 
-## 1. Cambios Requeridos
+## Arquitectura de la Solución
 
-### 1.1 Instalar canvas-confetti
+### Enfoque: Context + LocalStorage (Para Testing)
 
-Se necesita una librería ligera para la animación de celebración:
+Se utilizará un contexto React que almacena el modo actual del admin. Este enfoque es ideal para pruebas ya que:
 
-```bash
-npm install canvas-confetti
-npm install -D @types/canvas-confetti
-```
-
----
-
-## 2. Nuevos Componentes
-
-### 2.1 `RouteCardSkeleton.tsx`
-
-Componente skeleton para mostrar mientras cargan las rutas:
-
-| Elemento | Descripción |
-|----------|-------------|
-| Título | Skeleton de altura 6, ancho 40% |
-| Badge país | Skeleton circular pequeño |
-| Descripción | 2 líneas de skeleton |
-| Stats | 2 filas con iconos skeleton |
-| Botón | Skeleton de altura 10 |
-
-### 2.2 `ActiveRouteSwitcher.tsx`
-
-Dropdown para usuarios Pro con múltiples rutas:
-
-| Elemento | Descripción |
-|----------|-------------|
-| Trigger | Botón con nombre de ruta actual + ChevronDown |
-| Dropdown | Lista de rutas activas con progreso |
-| Items | Nombre + barra de progreso miniatura |
-| Posición | En el header del Dashboard |
-
-### 2.3 `SuccessConfetti.tsx`
-
-Componente que dispara confetti al iniciar una ruta:
-
-| Elemento | Descripción |
-|----------|-------------|
-| Trigger | Se activa cuando `startRoute` retorna `true` |
-| Duración | 2-3 segundos |
-| Colores | Negro, gris, blanco (mantener B&W) |
-
----
-
-## 3. Modificaciones a Componentes Existentes
-
-### 3.1 `RouteChecklist.tsx` - Descripciones Expandibles
-
-Modificar cada paso para incluir una sección colapsable con la descripción:
+1. No requiere cambios en la base de datos
+2. Persiste entre sesiones (localStorage)
+3. Solo afecta al usuario admin
+4. Fácil de activar/desactivar
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ ○ Prueba de Medios Económicos              [Paso 1] ▼      │
+│                    AdminModeContext                         │
 ├─────────────────────────────────────────────────────────────┤
-│   Extractos de los últimos 3 meses y carta de la empresa.  │
-│   [Sección expandible - se muestra al hacer clic en ▼]     │
+│  isAdmin: boolean        (true si email = admin)           │
+│  testMode: 'admin' | 'free' | 'pro'                        │
+│  setTestMode: (mode) => void                               │
+│  effectiveIsPremium: boolean                               │
+│  effectiveMaxRoutes: number                                │
+│  isTestingAsUser: boolean                                  │
+└─────────────────────────────────────────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Sidebar / Admin Header                                     │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  [Toggle: 👑 Admin | 👤 Free | ⭐ Pro]                  ││
+│  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Requiere modificar el hook `useRoutes.tsx` para incluir la descripción del paso.
-
-### 3.2 `RouteSelector.tsx` y `RouteExplorer.tsx` - Skeletons
-
-Agregar estados de carga con skeletons mientras se obtienen los templates.
-
-### 3.3 `Dashboard.tsx` - Integrar Switcher y Confetti
-
-| Cambio | Descripción |
-|--------|-------------|
-| Header | Agregar `ActiveRouteSwitcher` si Pro + múltiples rutas |
-| Confetti | Disparar animación tras `startRoute` exitoso |
-| Estado | Agregar `showConfetti` state |
-
-### 3.4 `useRoutes.tsx` - Incluir Descripciones
-
-Modificar la interfaz `RouteStep` y las queries para incluir `description` desde `route_template_steps`.
-
 ---
 
-## 4. Flujo de Usuario Actualizado
+## Componentes Nuevos
+
+### 1. `AdminModeContext.tsx`
+
+Contexto que gestiona el modo de prueba del admin:
+
+| Estado | Descripción |
+|--------|-------------|
+| `testMode: 'admin'` | Modo normal del admin - sin límites |
+| `testMode: 'free'` | Simula usuario Free - 1 ruta máx |
+| `testMode: 'pro'` | Simula usuario Pro - 3 rutas máx |
+
+### 2. `AdminModeSwitcher.tsx`
+
+Componente visual para cambiar entre modos:
 
 ```text
-Usuario en Dashboard
-        │
-        ▼
-┌────────────────────────┐
-│ Sin rutas activas      │
-│ → RouteSelector        │
-│   (con skeletons)      │
-└────────────────────────┘
-        │
-        ▼
-┌────────────────────────┐
-│ Click "Iniciar ruta"   │
-│ → Loading skeleton     │
-│ → Clonación de pasos   │
-└────────────────────────┘
-        │
-        ▼
-┌────────────────────────┐
-│ ✓ Éxito                │
-│ → Confetti B&W         │
-│ → Vista Roadmap        │
-└────────────────────────┘
-        │
-        ▼
-┌────────────────────────────────────────┐
-│ RouteChecklist con pasos expandibles   │
-│                                        │
-│ ○ Paso 1: Título                    ▼  │
-│   └─ Descripción detallada...          │
-│                                        │
-│ ○ Paso 2: Título                    ▶  │
-│                                        │
-└────────────────────────────────────────┘
-        │
-        ▼ (Si Pro con múltiples rutas)
-┌────────────────────────────────────────┐
-│ Header: [Nómada Digital ▼]             │
-│                                        │
-│ Dropdown:                              │
-│ ├─ Nómada Digital    ████░░ 60%        │
-│ ├─ Estudiante        ██░░░░ 40%        │
-│ └─ Emprendedor       ░░░░░░ 0%         │
-└────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  Modo de Prueba                                            │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ 👑 Admin (sin límites)  │ ✓ Activo                   │  │
+│  ├──────────────────────────────────────────────────────┤  │
+│  │ 👤 Usuario Free         │ 1 ruta máx                 │  │
+│  ├──────────────────────────────────────────────────────┤  │
+│  │ ⭐ Usuario Pro          │ 3 rutas máx                │  │
+│  └──────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 5. Archivos a Crear/Modificar
+## Archivos a Crear/Modificar
 
 | Archivo | Acción | Descripción |
 |---------|--------|-------------|
 | **Nuevos** | | |
-| `src/components/dashboard/RouteCardSkeleton.tsx` | Crear | Skeleton para cards de rutas |
-| `src/components/dashboard/ActiveRouteSwitcher.tsx` | Crear | Dropdown para cambiar rutas (Pro) |
-| `src/components/dashboard/SuccessConfetti.tsx` | Crear | Componente de animación confetti |
+| `src/contexts/AdminModeContext.tsx` | Crear | Contexto para gestionar modo admin/usuario |
+| `src/components/admin/AdminModeSwitcher.tsx` | Crear | UI para cambiar de modo |
 | **Modificar** | | |
-| `src/hooks/useRoutes.tsx` | Modificar | Incluir description en RouteStep |
-| `src/components/dashboard/RouteChecklist.tsx` | Modificar | Agregar secciones expandibles |
-| `src/components/dashboard/RouteSelector.tsx` | Modificar | Agregar skeleton loading |
-| `src/components/dashboard/RouteExplorer.tsx` | Modificar | Agregar skeleton loading |
-| `src/pages/Dashboard.tsx` | Modificar | Integrar switcher, confetti, y mejoras de UX |
-| `package.json` | Modificar | Agregar canvas-confetti |
+| `src/App.tsx` | Modificar | Envolver con AdminModeProvider |
+| `src/hooks/useSubscription.tsx` | Modificar | Respetar modo de prueba del admin |
+| `src/hooks/useRoutes.tsx` | Modificar | Usar límites del modo de prueba |
+| `src/components/dashboard/DashboardSidebar.tsx` | Modificar | Mostrar switcher para admin |
+| `src/pages/Dashboard.tsx` | Modificar | Integrar contexto |
 
 ---
 
-## 6. Estilos y Animaciones
+## Lógica de Negocio
 
-### Confetti B&W
-
-```typescript
-confetti({
-  particleCount: 100,
-  spread: 70,
-  colors: ['#000000', '#333333', '#666666', '#999999', '#ffffff'],
-  origin: { y: 0.6 }
-});
-```
-
-### Skeleton Premium
-
-Utilizando el componente existente `Skeleton`:
-
-```tsx
-<Skeleton className="h-6 w-3/4" />  // Título
-<Skeleton className="h-4 w-full" /> // Descripción línea 1
-<Skeleton className="h-4 w-2/3" />  // Descripción línea 2
-```
-
-### Collapsible con Animación
-
-```tsx
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-
-// Con animación suave de acordeón (ya configurada en tailwind)
-```
-
----
-
-## 7. Sección Técnica
-
-### Modificación de `useRoutes.tsx` para Descripciones
+### useSubscription Modificado
 
 ```typescript
-// Interfaz actualizada
-export interface RouteStep {
-  id: string;
-  title: string;
-  description: string | null;  // Ya existe pero no se populaba
-  step_order: number | null;
-  is_completed: boolean;
+// Pseudo-código
+const { testMode, isAdmin } = useAdminMode();
+
+// Si es admin en modo prueba, usar valores simulados
+if (isAdmin && testMode !== 'admin') {
+  return {
+    isPremium: testMode === 'pro',
+    maxRoutes: testMode === 'pro' ? 3 : 1,
+    // ... resto de valores simulados
+  };
 }
 
-// En el fetch de progress, necesitamos el template_id para obtener descripciones
-// Opción 1: Almacenar description en user_route_progress (migración)
-// Opción 2: Hacer JOIN con route_template_steps (más complejo)
-// Recomendado: Opción 1 - agregar columna step_description a user_route_progress
+// Si no es admin o está en modo admin, usar valores reales
+return {
+  isPremium: subscriptionStatus === 'pro',
+  maxRoutes: isPremium ? 3 : 1,
+  // ...
+};
 ```
 
-### Migración Requerida
-
-Para almacenar las descripciones junto con el progreso del usuario:
-
-```sql
--- Agregar columna para descripción
-ALTER TABLE user_route_progress 
-ADD COLUMN step_description text;
-
--- Actualizar datos existentes (si hay)
-UPDATE user_route_progress urp
-SET step_description = rts.description
-FROM user_active_routes uar, route_template_steps rts
-WHERE urp.user_route_id = uar.id
-AND rts.template_id = uar.template_id
-AND rts.title = urp.step_title;
-```
-
-### Estructura del ActiveRouteSwitcher
+### useRoutes Modificado
 
 ```typescript
-interface ActiveRouteSwitcherProps {
-  routes: ActiveRoute[];
-  selectedRouteId: string | null;
-  onSelectRoute: (routeId: string) => void;
-  getProgress: (routeId: string) => { completed: number; total: number };
-}
+// Pseudo-código
+const { effectiveIsPremium, effectiveMaxRoutes } = useAdminMode();
+
+// Usar límites efectivos en lugar de los reales
+const canAddRoute = activeRoutes.length < effectiveMaxRoutes;
 ```
 
 ---
 
-## 8. Consideraciones de Performance
+## Flujo de Usuario (Admin)
+
+```text
+Admin accede a Dashboard
+         │
+         ▼
+┌────────────────────────┐
+│ Ve su sidebar con el   │
+│ switcher de modo       │
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ Selecciona "Free"      │
+│ → localStorage.set()   │
+│ → Context actualiza    │
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ Dashboard muestra:     │
+│ • Límite de 1 ruta     │
+│ • Modal de límite      │
+│ • Sin badge Pro        │
+│ • Recursos bloqueados  │
+└────────────────────────┘
+         │
+         ▼ (Admin prueba el flujo completo)
+┌────────────────────────┐
+│ Cambia a modo "Pro"    │
+│ → 3 rutas permitidas   │
+│ → Badge Pro visible    │
+│ → Recursos desbloq.    │
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ Vuelve a "Admin"       │
+│ → Sin límites          │
+│ → Acceso total         │
+└────────────────────────┘
+```
+
+---
+
+## Interfaz del Switcher en Sidebar
+
+Para el admin, aparecerá un nuevo componente encima del botón "Panel Admin":
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  ...navegación existente...                                 │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  🔧 Modo de Prueba                                      ││
+│  │  ┌────────────────────────────────────────────────────┐ ││
+│  │  │ 👑 Admin  ○  👤 Free  ○  ⭐ Pro                    │ ││
+│  │  └────────────────────────────────────────────────────┘ ││
+│  └─────────────────────────────────────────────────────────┘│
+│  [Panel Admin]                                              │
+├─────────────────────────────────────────────────────────────┤
+│  © 2024 Albus                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Consideraciones de Seguridad
 
 | Aspecto | Implementación |
 |---------|----------------|
-| Optimistic UI | El confetti se dispara inmediatamente tras el éxito |
-| Skeleton timing | Mínimo 300ms para evitar flash |
-| Lazy loading | Confetti se importa dinámicamente |
-| Memoización | Switcher usa useMemo para calcular progreso |
+| Solo para admin | El contexto verifica `user.email === ADMIN_EMAIL` antes de activar |
+| Client-side only | Esto es SOLO para testing - no afecta datos reales |
+| No modifica BD | Los límites son simulados en el frontend |
+| Visible solo admin | El switcher solo aparece si `isAdmin === true` |
+
+**Nota importante**: Este sistema es exclusivamente para pruebas de UX por parte del admin. Las restricciones reales de plan siguen siendo aplicadas por RLS en la base de datos para todos los usuarios normales.
 
 ---
 
-## 9. Dependencias
+## Sección Técnica
 
-La única dependencia nueva es `canvas-confetti`:
-- Tamaño: ~3KB gzipped
-- Sin dependencias adicionales
-- Ampliamente usada (>5M descargas semanales)
+### AdminModeContext Interface
+
+```typescript
+interface AdminModeContextType {
+  // ¿Es el usuario admin?
+  isAdmin: boolean;
+  
+  // Modo actual: 'admin' | 'free' | 'pro'
+  testMode: TestMode;
+  setTestMode: (mode: TestMode) => void;
+  
+  // Valores efectivos para usar en hooks
+  effectiveIsPremium: boolean;
+  effectiveMaxRoutes: number;
+  
+  // ¿Está simulando ser usuario?
+  isTestingAsUser: boolean;
+}
+```
+
+### Persistencia en LocalStorage
+
+```typescript
+const ADMIN_MODE_KEY = 'albus_admin_test_mode';
+
+// Al cambiar modo
+localStorage.setItem(ADMIN_MODE_KEY, mode);
+
+// Al iniciar
+const savedMode = localStorage.getItem(ADMIN_MODE_KEY) || 'admin';
+```
+
+### Integración con Hooks Existentes
+
+Los hooks `useSubscription` y `useRoutes` serán modificados para:
+
+1. Importar `useAdminMode`
+2. Verificar si el usuario es admin en modo prueba
+3. Retornar valores simulados cuando corresponda
+4. Mantener comportamiento normal para usuarios regulares
+
+---
+
+## Testing de la Implementación
+
+Tras implementar, el admin podrá probar:
+
+| Escenario | Modo | Resultado Esperado |
+|-----------|------|-------------------|
+| Añadir 2da ruta | Free | Modal de límite |
+| Añadir 2da ruta | Pro | Éxito + confetti |
+| Añadir 4ta ruta | Pro | Modal de límite |
+| Añadir rutas ilimitadas | Admin | Siempre éxito |
+| Ver recursos Pro | Free | Bloqueados con paywall |
+| Ver recursos Pro | Pro/Admin | Desbloqueados |
 
