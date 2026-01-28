@@ -1,268 +1,225 @@
 
 
-# Plan: Modo Admin/Usuario para Pruebas
+# Plan: Corrección de Bugs de Autenticación y Modo Admin
 
-## Resumen
+## Problemas Identificados
 
-Implementar un sistema de cambio de modo (Admin/Usuario) para el usuario `l@albus.com.co` que permita:
-- **Modo Admin**: Sin límites de rutas, acceso completo a todas las funcionalidades premium
-- **Modo Usuario**: Experimenta la plataforma como un usuario normal con límites de plan (Free o Pro simulado)
+### Problema 1: Banner "Regístrate" aparece para usuarios logueados
 
----
+**Causa**: En la imagen, el banner aparece porque el usuario realmente NO está logueado. Los intentos de login fallan con error "Email not confirmed".
 
-## Arquitectura de la Solución
+**Usuarios afectados**:
+- `laugrisales919@gmail.com` - email_confirmed_at: NULL
+- `luisk20@gmail.com` - email_confirmed_at: NULL
+- `l@albus.com.co` - confirmado correctamente
 
-### Enfoque: Context + LocalStorage (Para Testing)
+### Problema 2: Error "Email not confirmed" al iniciar sesión
 
-Se utilizará un contexto React que almacena el modo actual del admin. Este enfoque es ideal para pruebas ya que:
+**Causa**: Supabase tiene habilitada la verificación de email por defecto. Los usuarios se registraron pero nunca hicieron clic en el enlace de confirmación.
 
-1. No requiere cambios en la base de datos
-2. Persiste entre sesiones (localStorage)
-3. Solo afecta al usuario admin
-4. Fácil de activar/desactivar
+**Logs de Auth** (del contexto):
+```
+"error": "400: Email not confirmed"
+"mail_type": "confirmation" → enviado a laugrisales919@gmail.com
+"mail_type": "confirmation" → enviado a luisk20@gmail.com
+```
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    AdminModeContext                         │
-├─────────────────────────────────────────────────────────────┤
-│  isAdmin: boolean        (true si email = admin)           │
-│  testMode: 'admin' | 'free' | 'pro'                        │
-│  setTestMode: (mode) => void                               │
-│  effectiveIsPremium: boolean                               │
-│  effectiveMaxRoutes: number                                │
-│  isTestingAsUser: boolean                                  │
-└─────────────────────────────────────────────────────────────┘
-           │
-           ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Sidebar / Admin Header                                     │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │  [Toggle: 👑 Admin | 👤 Free | ⭐ Pro]                  ││
-│  └─────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────┘
+### Problema 3: Modo Admin no aplica límites correctamente
+
+**Causa**: `useRoutes.tsx` línea 56-57 recalcula `maxRoutes` localmente:
+```typescript
+const maxRoutes = isPremium ? 3 : 1;  // Ignora effectiveMaxRoutes
 ```
 
 ---
 
-## Componentes Nuevos
+## Soluciones
 
-### 1. `AdminModeContext.tsx`
+### Solución 1: Mejorar el manejo del error "Email not confirmed"
 
-Contexto que gestiona el modo de prueba del admin:
+Modificar `AuthModal.tsx` para detectar este error específico y mostrar un mensaje claro al usuario con opción de reenviar el email de confirmación.
 
-| Estado | Descripción |
+**Cambios en `AuthModal.tsx`**:
+
+| Cambio | Descripción |
 |--------|-------------|
-| `testMode: 'admin'` | Modo normal del admin - sin límites |
-| `testMode: 'free'` | Simula usuario Free - 1 ruta máx |
-| `testMode: 'pro'` | Simula usuario Pro - 3 rutas máx |
+| Detectar error específico | Verificar si el error contiene "email not confirmed" |
+| Mostrar mensaje claro | Indicar al usuario que debe confirmar su email |
+| Botón reenviar | Agregar opción para reenviar el email de confirmación |
 
-### 2. `AdminModeSwitcher.tsx`
+### Solución 2: Corregir el modo Admin
 
-Componente visual para cambiar entre modos:
+Modificar `useRoutes.tsx` para usar `maxRoutes` directamente de `useSubscription` en lugar de recalcularlo.
 
-```text
-┌────────────────────────────────────────────────────────────┐
-│  Modo de Prueba                                            │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │ 👑 Admin (sin límites)  │ ✓ Activo                   │  │
-│  ├──────────────────────────────────────────────────────┤  │
-│  │ 👤 Usuario Free         │ 1 ruta máx                 │  │
-│  ├──────────────────────────────────────────────────────┤  │
-│  │ ⭐ Usuario Pro          │ 3 rutas máx                │  │
-│  └──────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Archivos a Crear/Modificar
-
-| Archivo | Acción | Descripción |
-|---------|--------|-------------|
-| **Nuevos** | | |
-| `src/contexts/AdminModeContext.tsx` | Crear | Contexto para gestionar modo admin/usuario |
-| `src/components/admin/AdminModeSwitcher.tsx` | Crear | UI para cambiar de modo |
-| **Modificar** | | |
-| `src/App.tsx` | Modificar | Envolver con AdminModeProvider |
-| `src/hooks/useSubscription.tsx` | Modificar | Respetar modo de prueba del admin |
-| `src/hooks/useRoutes.tsx` | Modificar | Usar límites del modo de prueba |
-| `src/components/dashboard/DashboardSidebar.tsx` | Modificar | Mostrar switcher para admin |
-| `src/pages/Dashboard.tsx` | Modificar | Integrar contexto |
-
----
-
-## Lógica de Negocio
-
-### useSubscription Modificado
-
-```typescript
-// Pseudo-código
-const { testMode, isAdmin } = useAdminMode();
-
-// Si es admin en modo prueba, usar valores simulados
-if (isAdmin && testMode !== 'admin') {
-  return {
-    isPremium: testMode === 'pro',
-    maxRoutes: testMode === 'pro' ? 3 : 1,
-    // ... resto de valores simulados
-  };
-}
-
-// Si no es admin o está en modo admin, usar valores reales
-return {
-  isPremium: subscriptionStatus === 'pro',
-  maxRoutes: isPremium ? 3 : 1,
-  // ...
-};
-```
-
-### useRoutes Modificado
-
-```typescript
-// Pseudo-código
-const { effectiveIsPremium, effectiveMaxRoutes } = useAdminMode();
-
-// Usar límites efectivos en lugar de los reales
-const canAddRoute = activeRoutes.length < effectiveMaxRoutes;
-```
-
----
-
-## Flujo de Usuario (Admin)
+**Cambios en `useRoutes.tsx`**:
 
 ```text
-Admin accede a Dashboard
-         │
-         ▼
-┌────────────────────────┐
-│ Ve su sidebar con el   │
-│ switcher de modo       │
-└────────────────────────┘
-         │
-         ▼
-┌────────────────────────┐
-│ Selecciona "Free"      │
-│ → localStorage.set()   │
-│ → Context actualiza    │
-└────────────────────────┘
-         │
-         ▼
-┌────────────────────────┐
-│ Dashboard muestra:     │
-│ • Límite de 1 ruta     │
-│ • Modal de límite      │
-│ • Sin badge Pro        │
-│ • Recursos bloqueados  │
-└────────────────────────┘
-         │
-         ▼ (Admin prueba el flujo completo)
-┌────────────────────────┐
-│ Cambia a modo "Pro"    │
-│ → 3 rutas permitidas   │
-│ → Badge Pro visible    │
-│ → Recursos desbloq.    │
-└────────────────────────┘
-         │
-         ▼
-┌────────────────────────┐
-│ Vuelve a "Admin"       │
-│ → Sin límites          │
-│ → Acceso total         │
-└────────────────────────┘
+Antes (línea 47-57):
+  const { isPremium } = useSubscription();
+  ...
+  const maxRoutes = isPremium ? 3 : 1;
+
+Después:
+  const { maxRoutes } = useSubscription();
+  // Eliminar la recalculación local
 ```
 
----
+### Solución 3: Corregir el cálculo en useSubscription para modo Admin
 
-## Interfaz del Switcher en Sidebar
+Modificar `useSubscription.tsx` para que cuando el usuario sea admin (sin importar el modo de prueba), use los valores efectivos del contexto.
 
-Para el admin, aparecerá un nuevo componente encima del botón "Panel Admin":
+**Cambios en `useSubscription.tsx`**:
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│  ...navegación existente...                                 │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │  🔧 Modo de Prueba                                      ││
-│  │  ┌────────────────────────────────────────────────────┐ ││
-│  │  │ 👑 Admin  ○  👤 Free  ○  ⭐ Pro                    │ ││
-│  │  └────────────────────────────────────────────────────┘ ││
-│  └─────────────────────────────────────────────────────────┘│
-│  [Panel Admin]                                              │
-├─────────────────────────────────────────────────────────────┤
-│  © 2024 Albus                                               │
-└─────────────────────────────────────────────────────────────┘
+Antes (líneas 110-112):
+  const isPremium = isTestingAsUser ? effectiveIsPremium : realIsPremium;
+  const maxRoutes = isTestingAsUser ? effectiveMaxRoutes : (realIsPremium ? 3 : 1);
+
+Después:
+  const isPremium = isAdmin ? effectiveIsPremium : realIsPremium;
+  const maxRoutes = isAdmin ? effectiveMaxRoutes : (realIsPremium ? 3 : 1);
 ```
 
 ---
 
-## Consideraciones de Seguridad
+## Archivos a Modificar
 
-| Aspecto | Implementación |
-|---------|----------------|
-| Solo para admin | El contexto verifica `user.email === ADMIN_EMAIL` antes de activar |
-| Client-side only | Esto es SOLO para testing - no afecta datos reales |
-| No modifica BD | Los límites son simulados en el frontend |
-| Visible solo admin | El switcher solo aparece si `isAdmin === true` |
+| Archivo | Cambio | Prioridad |
+|---------|--------|-----------|
+| `src/components/auth/AuthModal.tsx` | Manejar error "email not confirmed" y agregar botón reenviar | Alta |
+| `src/hooks/useSubscription.tsx` | Usar `isAdmin` en lugar de `isTestingAsUser` | Alta |
+| `src/hooks/useRoutes.tsx` | Usar `maxRoutes` de useSubscription | Alta |
 
-**Nota importante**: Este sistema es exclusivamente para pruebas de UX por parte del admin. Las restricciones reales de plan siguen siendo aplicadas por RLS en la base de datos para todos los usuarios normales.
+---
+
+## Flujo Corregido para Email No Confirmado
+
+```text
+Usuario intenta iniciar sesión
+         │
+         ▼
+┌────────────────────────┐
+│ signIn() retorna error │
+│ "Email not confirmed"  │
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────┐
+│ Modal muestra mensaje claro:               │
+│                                            │
+│ "Tu email no está confirmado"              │
+│ "Revisa tu bandeja de entrada y haz clic   │
+│  en el enlace de confirmación."            │
+│                                            │
+│ [Reenviar email de confirmación]           │
+└────────────────────────────────────────────┘
+         │
+         ▼ (Si hace clic en reenviar)
+┌────────────────────────┐
+│ supabase.auth.resend() │
+│ Envía nuevo email      │
+└────────────────────────┘
+```
+
+---
+
+## Flujo Corregido para Modo Admin
+
+```text
+Admin con testMode = "admin"
+         │
+         ▼
+┌────────────────────────┐
+│ AdminModeContext       │
+│ isAdmin: true          │
+│ effectiveMaxRoutes: 999│
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ useSubscription        │
+│ isAdmin → true         │
+│ maxRoutes = 999        │
+│ (usa effectiveMaxRoutes│
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ useRoutes              │
+│ maxRoutes = 999        │
+│ (viene de useSubscription)│
+│ canAddRoute = true     │
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ Dashboard              │
+│ No muestra modal de    │
+│ límite para admin      │
+└────────────────────────┘
+```
 
 ---
 
 ## Sección Técnica
 
-### AdminModeContext Interface
+### AuthModal.tsx - Nuevo código para manejar email no confirmado
 
 ```typescript
-interface AdminModeContextType {
-  // ¿Es el usuario admin?
-  isAdmin: boolean;
-  
-  // Modo actual: 'admin' | 'free' | 'pro'
-  testMode: TestMode;
-  setTestMode: (mode: TestMode) => void;
-  
-  // Valores efectivos para usar en hooks
-  effectiveIsPremium: boolean;
-  effectiveMaxRoutes: number;
-  
-  // ¿Está simulando ser usuario?
-  isTestingAsUser: boolean;
+// En el catch del handleSubmit:
+const errorMessage = error.message?.toLowerCase() || "";
+
+if (errorMessage.includes("email not confirmed")) {
+  setShowEmailNotConfirmed(true);
+  // No lanzar el error genérico
+  return;
 }
+
+// Nuevo estado
+const [showEmailNotConfirmed, setShowEmailNotConfirmed] = useState(false);
+
+// Función para reenviar
+const handleResendConfirmation = async () => {
+  await supabase.auth.resend({
+    type: 'signup',
+    email: email,
+  });
+  toast({
+    title: "Email enviado",
+    description: "Revisa tu bandeja de entrada.",
+  });
+};
 ```
 
-### Persistencia en LocalStorage
+### useSubscription.tsx - Líneas 110-112
 
 ```typescript
-const ADMIN_MODE_KEY = 'albus_admin_test_mode';
-
-// Al cambiar modo
-localStorage.setItem(ADMIN_MODE_KEY, mode);
-
-// Al iniciar
-const savedMode = localStorage.getItem(ADMIN_MODE_KEY) || 'admin';
+// Cambiar isTestingAsUser a isAdmin
+const isPremium = isAdmin ? effectiveIsPremium : realIsPremium;
+const maxRoutes = isAdmin ? effectiveMaxRoutes : (realIsPremium ? 3 : 1);
 ```
 
-### Integración con Hooks Existentes
+### useRoutes.tsx - Líneas 47 y 56
 
-Los hooks `useSubscription` y `useRoutes` serán modificados para:
+```typescript
+// Cambiar de:
+const { isPremium } = useSubscription();
+const maxRoutes = isPremium ? 3 : 1;
 
-1. Importar `useAdminMode`
-2. Verificar si el usuario es admin en modo prueba
-3. Retornar valores simulados cuando corresponda
-4. Mantener comportamiento normal para usuarios regulares
+// A:
+const { isPremium, maxRoutes } = useSubscription();
+// Eliminar la línea: const maxRoutes = isPremium ? 3 : 1;
+```
 
 ---
 
-## Testing de la Implementación
+## Verificación de la Solución
 
-Tras implementar, el admin podrá probar:
-
-| Escenario | Modo | Resultado Esperado |
-|-----------|------|-------------------|
-| Añadir 2da ruta | Free | Modal de límite |
-| Añadir 2da ruta | Pro | Éxito + confetti |
-| Añadir 4ta ruta | Pro | Modal de límite |
-| Añadir rutas ilimitadas | Admin | Siempre éxito |
-| Ver recursos Pro | Free | Bloqueados con paywall |
-| Ver recursos Pro | Pro/Admin | Desbloqueados |
+| Escenario | Resultado Esperado |
+|-----------|-------------------|
+| Admin en modo "Admin" | Sin límites de rutas (999) |
+| Admin en modo "Free" | Límite de 1 ruta |
+| Admin en modo "Pro" | Límite de 3 rutas |
+| Usuario con email no confirmado | Ve mensaje claro + botón reenviar |
+| Usuario con email confirmado | Login exitoso + dashboard sin banner |
 
