@@ -99,11 +99,11 @@ export const useRoutes = (): UseRoutesReturn => {
                 status: route.status,
                 created_at: route.created_at,
                 template: route.route_templates as RouteTemplate | null,
-                progress: (progressData || []).map((p) => ({
+                progress: (progressData || []).map((p, index) => ({
                   id: p.id,
                   title: p.step_title || "",
-                  description: null,
-                  step_order: null,
+                  description: p.step_description || null,
+                  step_order: index + 1,
                   is_completed: p.is_completed || false,
                 })),
               };
@@ -176,11 +176,12 @@ export const useRoutes = (): UseRoutesReturn => {
 
         if (stepsError) throw stepsError;
 
-        // 3. Clone steps to user_route_progress
+        // 3. Clone steps to user_route_progress (including descriptions)
         if (templateSteps && templateSteps.length > 0) {
           const progressSteps = templateSteps.map((step) => ({
             user_route_id: newRoute.id,
             step_title: step.title,
+            step_description: step.description,
             is_completed: false,
           }));
 
@@ -204,11 +205,11 @@ export const useRoutes = (): UseRoutesReturn => {
           status: newRoute.status,
           created_at: newRoute.created_at,
           template: template || null,
-          progress: (progressData || []).map((p) => ({
+          progress: (progressData || []).map((p, index) => ({
             id: p.id,
             title: p.step_title || "",
-            description: null,
-            step_order: null,
+            description: p.step_description || null,
+            step_order: index + 1,
             is_completed: p.is_completed || false,
           })),
         };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { TaskList } from "@/components/dashboard/TaskList";
@@ -12,6 +12,8 @@ import { RouteExplorer } from "@/components/dashboard/RouteExplorer";
 import { RouteLimitModal } from "@/components/dashboard/RouteLimitModal";
 import { ActiveRouteCard } from "@/components/dashboard/ActiveRouteCard";
 import { RouteChecklist } from "@/components/dashboard/RouteChecklist";
+import { ActiveRouteSwitcher } from "@/components/dashboard/ActiveRouteSwitcher";
+import { SuccessConfetti } from "@/components/dashboard/SuccessConfetti";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,7 +21,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useRoutes } from "@/hooks/useRoutes";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 import { Button } from "@/components/ui/button";
-import { Plus, ArrowLeft } from "lucide-react";
+import { Plus } from "lucide-react";
 
 interface UserData {
   name: string;
@@ -60,6 +62,7 @@ const Dashboard = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserData>({
     name: "Usuario",
@@ -231,23 +234,32 @@ const Dashboard = () => {
     }
   };
 
-  const handleStartRoute = async (templateId: string) => {
-    if (!user) {
-      setShowAuthModal(true);
-      return;
-    }
+  const handleStartRoute = useCallback(
+    async (templateId: string) => {
+      if (!user) {
+        setShowAuthModal(true);
+        return;
+      }
 
-    if (!canAddRoute) {
-      setShowLimitModal(true);
-      return;
-    }
+      if (!canAddRoute) {
+        setShowLimitModal(true);
+        return;
+      }
 
-    const success = await startRoute(templateId);
-    if (success) {
-      // Switch to roadmap view to see the new route
-      setActiveNavItem("roadmap");
-    }
-  };
+      const success = await startRoute(templateId);
+      if (success) {
+        // Trigger confetti celebration
+        setShowConfetti(true);
+        // Switch to roadmap view to see the new route
+        setActiveNavItem("roadmap");
+      }
+    },
+    [user, canAddRoute, startRoute]
+  );
+
+  const handleConfettiComplete = useCallback(() => {
+    setShowConfetti(false);
+  }, []);
 
   const handleStepToggle = (stepId: string, isCompleted: boolean) => {
     updateStepProgress(stepId, isCompleted);
@@ -388,9 +400,20 @@ const Dashboard = () => {
 
           {/* Header */}
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Hola, {userData.name}!
-            </h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Hola, {userData.name}!
+              </h1>
+              {/* Route Switcher for Pro users with multiple routes */}
+              {isPremium && activeRoutes.length > 1 && (
+                <ActiveRouteSwitcher
+                  routes={activeRoutes}
+                  selectedRouteId={selectedRouteId}
+                  onSelectRoute={setSelectedRouteId}
+                  getProgress={getActiveRouteProgress}
+                />
+              )}
+            </div>
             <p className="text-muted-foreground">
               {activeRoutes.length > 0
                 ? `Tienes ${activeRoutes.length} ruta${
@@ -429,6 +452,9 @@ const Dashboard = () => {
         onUpgrade={handleCheckout}
         isUpgrading={isCheckoutLoading}
       />
+
+      {/* Success Confetti */}
+      <SuccessConfetti trigger={showConfetti} onComplete={handleConfettiComplete} />
     </div>
   );
 };
