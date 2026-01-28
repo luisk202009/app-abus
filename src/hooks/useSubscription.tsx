@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useAdminMode } from "@/contexts/AdminModeContext";
 
 export type SubscriptionStatus = "free" | "pro";
 
@@ -17,6 +18,7 @@ interface UseSubscriptionReturn {
 export const useSubscription = (): UseSubscriptionReturn => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { isAdmin, testMode, effectiveIsPremium, effectiveMaxRoutes, isTestingAsUser } = useAdminMode();
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>("free");
   const [isLoading, setIsLoading] = useState(true);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
@@ -100,18 +102,21 @@ export const useSubscription = (): UseSubscriptionReturn => {
         description: "No se pudo iniciar el proceso de pago. Intenta de nuevo.",
       });
     } finally {
-      setIsCheckoutLoading(false);
+    setIsCheckoutLoading(false);
     }
   };
 
-  const isPremium = subscriptionStatus === "pro";
+  // If admin is testing as user, use simulated values
+  const realIsPremium = subscriptionStatus === "pro";
+  const isPremium = isTestingAsUser ? effectiveIsPremium : realIsPremium;
+  const maxRoutes = isTestingAsUser ? effectiveMaxRoutes : (realIsPremium ? 3 : 1);
 
   return {
-    subscriptionStatus,
+    subscriptionStatus: isTestingAsUser ? (testMode === "pro" ? "pro" : "free") : subscriptionStatus,
     isLoading,
     isPremium,
     handleCheckout,
     isCheckoutLoading,
-    maxRoutes: isPremium ? 3 : 1,
+    maxRoutes,
   };
 };
