@@ -1,18 +1,25 @@
 import { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
-import { RoadmapTimeline } from "@/components/dashboard/RoadmapTimeline";
 import { TaskList } from "@/components/dashboard/TaskList";
 import { AuthBanner } from "@/components/dashboard/AuthBanner";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
 import { ResourcesSection } from "@/components/dashboard/ResourcesSection";
 import { SupportModal } from "@/components/dashboard/SupportModal";
+import { RouteSelector } from "@/components/dashboard/RouteSelector";
+import { RouteExplorer } from "@/components/dashboard/RouteExplorer";
+import { RouteLimitModal } from "@/components/dashboard/RouteLimitModal";
+import { ActiveRouteCard } from "@/components/dashboard/ActiveRouteCard";
+import { RouteChecklist } from "@/components/dashboard/RouteChecklist";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useRoutes } from "@/hooks/useRoutes";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
+import { Button } from "@/components/ui/button";
+import { Plus, ArrowLeft } from "lucide-react";
 
 interface UserData {
   name: string;
@@ -29,52 +36,40 @@ interface Task {
   completed: boolean;
 }
 
-// Default tasks based on visa type
-const getDefaultTasks = (visaType: string): Task[] => {
-  const baseTasks: Task[] = [
-    { id: "1", title: "Apostillar Antecedentes Penales", category: "Legal", completed: false },
-    { id: "2", title: "Contratar Seguro Médico", category: "Pago", completed: false },
-    { id: "3", title: "Obtener certificado de empadronamiento", category: "Documento", completed: false },
-  ];
-
-  if (visaType === "digital_nomad") {
-    return [
-      ...baseTasks,
-      { id: "4", title: "Demostrar ingresos mínimos (€2,646/mes)", category: "Documento", completed: false },
-      { id: "5", title: "Contrato de trabajo remoto traducido", category: "Legal", completed: false },
-    ];
-  }
-
-  if (visaType === "student") {
-    return [
-      ...baseTasks,
-      { id: "4", title: "Carta de aceptación de universidad", category: "Documento", completed: false },
-      { id: "5", title: "Demostrar solvencia económica", category: "Documento", completed: false },
-    ];
-  }
-
-  return baseTasks;
-};
-
 const Dashboard = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
   const { isPremium, handleCheckout, isCheckoutLoading } = useSubscription();
-  
+  const {
+    templates,
+    activeRoutes,
+    isLoading: routesLoading,
+    isStartingRoute,
+    startRoute,
+    updateStepProgress,
+    canAddRoute,
+    maxRoutes,
+    getActiveRouteProgress,
+  } = useRoutes();
+
   const [activeNavItem, setActiveNavItem] = useState("roadmap");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserData>({
     name: "Usuario",
     email: "",
     visaType: "consultation",
     visaTitle: "Consulta Inicial Personalizada",
   });
+
+  // Get selected route details
+  const selectedRoute = activeRoutes.find((r) => r.id === selectedRouteId);
 
   useEffect(() => {
     // Get data from location state (passed from onboarding)
@@ -109,31 +104,40 @@ const Dashboard = () => {
           .maybeSingle();
 
         if (submission) {
-          const recommendation = submission.ai_recommendation as { type?: string; title?: string; visa_type?: string } | null;
+          const recommendation = submission.ai_recommendation as {
+            type?: string;
+            title?: string;
+            visa_type?: string;
+          } | null;
           setUserData({
-            name: submission.full_name || user.email?.split("@")[0] || "Usuario",
+            name:
+              submission.full_name || user.email?.split("@")[0] || "Usuario",
             email: submission.email || user.email || "",
-            visaType: recommendation?.visa_type || recommendation?.type || "consultation",
+            visaType:
+              recommendation?.visa_type || recommendation?.type || "consultation",
             visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
             leadId: submission.id,
           });
         }
 
         // Fetch tasks from Supabase
-        await fetchTasks(user.id, state?.visaType || "consultation");
-      } else {
-        // Use default tasks based on visa type
-        const defaultTasks = getDefaultTasks(state?.visaType || "consultation");
-        setTasks(defaultTasks);
+        await fetchTasks(user.id);
       }
-      
+
       setIsLoading(false);
     };
 
     loadData();
   }, [location.state, user, authLoading]);
 
-  const fetchTasks = async (userId: string, visaType: string) => {
+  // Auto-select first active route when routes load
+  useEffect(() => {
+    if (activeRoutes.length > 0 && !selectedRouteId) {
+      setSelectedRouteId(activeRoutes[0].id);
+    }
+  }, [activeRoutes, selectedRouteId]);
+
+  const fetchTasks = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from("user_tasks")
@@ -152,15 +156,9 @@ const Dashboard = () => {
             completed: task.status === "completed",
           }))
         );
-      } else {
-        // No tasks in DB, use defaults
-        const defaultTasks = getDefaultTasks(visaType);
-        setTasks(defaultTasks);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
-      const defaultTasks = getDefaultTasks(userData.visaType);
-      setTasks(defaultTasks);
     }
   };
 
@@ -171,9 +169,7 @@ const Dashboard = () => {
     const newStatus = task?.completed ? false : true;
 
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId ? { ...t, completed: newStatus } : t
-      )
+      prev.map((t) => (t.id === taskId ? { ...t, completed: newStatus } : t))
     );
 
     // If logged in, persist to Supabase
@@ -221,13 +217,13 @@ const Dashboard = () => {
 
   const handleNavItemClick = (id: string) => {
     setActiveNavItem(id);
-    
+
     if (id === "support") {
       setShowSupportModal(true);
       return;
     }
-    
-    if (id !== "roadmap" && id !== "documents") {
+
+    if (id === "profile") {
       toast({
         title: "Próximamente",
         description: "Esta sección estará disponible pronto.",
@@ -235,13 +231,35 @@ const Dashboard = () => {
     }
   };
 
+  const handleStartRoute = async (templateId: string) => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    if (!canAddRoute) {
+      setShowLimitModal(true);
+      return;
+    }
+
+    const success = await startRoute(templateId);
+    if (success) {
+      // Switch to roadmap view to see the new route
+      setActiveNavItem("roadmap");
+    }
+  };
+
+  const handleStepToggle = (stepId: string, isCompleted: boolean) => {
+    updateStepProgress(stepId, isCompleted);
+  };
+
   // Render the active section content
   const renderContent = () => {
     switch (activeNavItem) {
       case "documents":
         return (
-          <DocumentsSection 
-            visaType={userData.visaType} 
+          <DocumentsSection
+            visaType={userData.visaType}
             isPremium={isPremium}
             onCheckout={handleCheckout}
             isCheckoutLoading={isCheckoutLoading}
@@ -255,20 +273,86 @@ const Dashboard = () => {
             isCheckoutLoading={isCheckoutLoading}
           />
         );
+      case "explorer":
+        return (
+          <RouteExplorer
+            templates={templates}
+            activeRoutes={activeRoutes}
+            onStartRoute={handleStartRoute}
+            isStarting={isStartingRoute}
+            canAddRoute={canAddRoute}
+            onLimitReached={() => setShowLimitModal(true)}
+          />
+        );
       case "roadmap":
       default:
+        // Show route selector if no active routes
+        if (activeRoutes.length === 0) {
+          return (
+            <RouteSelector
+              templates={templates}
+              onSelectRoute={handleStartRoute}
+              isStarting={isStartingRoute}
+            />
+          );
+        }
+
+        // Show active routes list and selected route checklist
         return (
-          <>
-            {/* Roadmap Timeline */}
-            <RoadmapTimeline currentStep={1} />
-            {/* Task List */}
-            <TaskList tasks={tasks} onTaskToggle={handleTaskToggle} isSaving={isSaving} />
-          </>
+          <div className="space-y-6">
+            {/* Active Routes List */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Mis Rutas Activas</h3>
+                {canAddRoute && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveNavItem("explorer")}
+                    className="gap-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Añadir ruta
+                  </Button>
+                )}
+              </div>
+
+              <div className="grid gap-3">
+                {activeRoutes.map((route) => (
+                  <ActiveRouteCard
+                    key={route.id}
+                    route={route}
+                    progress={getActiveRouteProgress(route.id)}
+                    onClick={() => setSelectedRouteId(route.id)}
+                    isSelected={route.id === selectedRouteId}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Selected Route Checklist */}
+            {selectedRoute && (
+              <RouteChecklist
+                steps={selectedRoute.progress}
+                onToggleStep={handleStepToggle}
+                routeName={selectedRoute.template?.name || "Mi Ruta"}
+              />
+            )}
+
+            {/* Legacy Task List (if any tasks exist) */}
+            {tasks.length > 0 && (
+              <TaskList
+                tasks={tasks}
+                onTaskToggle={handleTaskToggle}
+                isSaving={isSaving}
+              />
+            )}
+          </div>
         );
     }
   };
 
-  if (isLoading || authLoading) {
+  if (isLoading || authLoading || routesLoading) {
     return (
       <div className="min-h-screen bg-secondary flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -308,10 +392,11 @@ const Dashboard = () => {
               Hola, {userData.name}!
             </h1>
             <p className="text-muted-foreground">
-              Tu camino hacia el{" "}
-              <span className="font-medium text-foreground">
-                {userData.visaTitle}
-              </span>
+              {activeRoutes.length > 0
+                ? `Tienes ${activeRoutes.length} ruta${
+                    activeRoutes.length > 1 ? "s" : ""
+                  } activa${activeRoutes.length > 1 ? "s" : ""}`
+                : "Selecciona una ruta migratoria para comenzar"}
             </p>
           </div>
 
@@ -334,6 +419,15 @@ const Dashboard = () => {
         isOpen={showSupportModal}
         onClose={() => setShowSupportModal(false)}
         userEmail={userData.email}
+      />
+
+      {/* Route Limit Modal */}
+      <RouteLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        currentLimit={maxRoutes}
+        onUpgrade={handleCheckout}
+        isUpgrading={isCheckoutLoading}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { Home, FolderOpen, User, MessageCircle, LogIn, Crown, BookOpen, Settings } from "lucide-react";
+import { Home, FolderOpen, User, MessageCircle, LogIn, Crown, BookOpen, Settings, Compass } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { id: "roadmap", label: "Mi Ruta", icon: <Home className="w-5 h-5" /> },
+  { id: "explorer", label: "Explorar Rutas", icon: <Compass className="w-5 h-5" /> },
   { id: "documents", label: "Documentos", icon: <FolderOpen className="w-5 h-5" /> },
   { id: "resources", label: "Recursos", icon: <BookOpen className="w-5 h-5" /> },
   { id: "profile", label: "Perfil", icon: <User className="w-5 h-5" /> },
