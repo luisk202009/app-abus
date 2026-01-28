@@ -11,6 +11,7 @@ interface UseSubscriptionReturn {
   isPremium: boolean;
   handleCheckout: () => Promise<void>;
   isCheckoutLoading: boolean;
+  maxRoutes: number;
 }
 
 export const useSubscription = (): UseSubscriptionReturn => {
@@ -103,11 +104,14 @@ export const useSubscription = (): UseSubscriptionReturn => {
     }
   };
 
+  const isPremium = subscriptionStatus === "pro";
+
   return {
     subscriptionStatus,
     isLoading,
-    isPremium: subscriptionStatus === "pro",
+    isPremium,
     handleCheckout,
     isCheckoutLoading,
+    maxRoutes: isPremium ? 3 : 1,
   };
 };

@@ -70,6 +70,7 @@ export type Database = {
           id: string
           interval: string
           is_active: boolean
+          max_routes: number
           name: string
           price_cents: number
           slug: string
@@ -83,6 +84,7 @@ export type Database = {
           id?: string
           interval?: string
           is_active?: boolean
+          max_routes?: number
           name: string
           price_cents?: number
           slug: string
@@ -96,6 +98,7 @@ export type Database = {
           id?: string
           interval?: string
           is_active?: boolean
+          max_routes?: number
           name?: string
           price_cents?: number
           slug?: string
