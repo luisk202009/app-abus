@@ -106,10 +106,10 @@ export const useSubscription = (): UseSubscriptionReturn => {
     }
   };
 
-  // If admin is testing as user, use simulated values
+  // If admin, always use effective values from context (for testing different modes)
   const realIsPremium = subscriptionStatus === "pro";
-  const isPremium = isTestingAsUser ? effectiveIsPremium : realIsPremium;
-  const maxRoutes = isTestingAsUser ? effectiveMaxRoutes : (realIsPremium ? 3 : 1);
+  const isPremium = isAdmin ? effectiveIsPremium : realIsPremium;
+  const maxRoutes = isAdmin ? effectiveMaxRoutes : (realIsPremium ? 3 : 1);
 
   return {
     subscriptionStatus: isTestingAsUser ? (testMode === "pro" ? "pro" : "free") : subscriptionStatus,

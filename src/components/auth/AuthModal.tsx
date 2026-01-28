@@ -38,6 +38,8 @@ export const AuthModal = ({
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showEmailNotConfirmed, setShowEmailNotConfirmed] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   // Reset email when defaultEmail changes
   useEffect(() => {
@@ -102,7 +104,19 @@ export const AuthModal = ({
         onClose();
       } else {
         const { error } = await signIn(email, password);
-        if (error) throw error;
+        
+        if (error) {
+          const errorMessage = error.message?.toLowerCase() || "";
+          
+          // Handle email not confirmed error
+          if (errorMessage.includes("email not confirmed")) {
+            setShowEmailNotConfirmed(true);
+            setIsLoading(false);
+            return;
+          }
+          
+          throw error;
+        }
 
         toast({
           title: "¡Bienvenido de vuelta!",
@@ -124,6 +138,33 @@ export const AuthModal = ({
     }
   };
 
+  const handleResendConfirmation = async () => {
+    setIsResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Email enviado",
+        description: "Revisa tu bandeja de entrada y haz clic en el enlace de confirmación.",
+      });
+      setShowEmailNotConfirmed(false);
+    } catch (error: any) {
+      console.error("Resend error:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo enviar el email. Intenta de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
@@ -141,64 +182,102 @@ export const AuthModal = ({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="email"
-                type="email"
-                placeholder="tu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="pl-10"
-                required
-              />
+        {showEmailNotConfirmed ? (
+          <div className="space-y-4 mt-4 text-center">
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <Mail className="h-10 w-10 mx-auto text-amber-600 dark:text-amber-400 mb-3" />
+              <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
+                Email no confirmado
+              </h3>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
+                Revisa tu bandeja de entrada en <strong>{email}</strong> y haz clic en el enlace de confirmación para activar tu cuenta.
+              </p>
+              <div className="space-y-2">
+                <Button 
+                  onClick={handleResendConfirmation} 
+                  disabled={isResending}
+                  variant="outline"
+                  className="w-full"
+                >
+                  {isResending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    "Reenviar email de confirmación"
+                  )}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setShowEmailNotConfirmed(false)}
+                  className="w-full"
+                >
+                  Volver a intentar
+                </Button>
+              </div>
             </div>
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Contraseña</Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10 pr-10"
-                minLength={6}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="tu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
             </div>
-          </div>
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {mode === "signup" ? "Creando cuenta..." : "Iniciando sesión..."}
-              </>
-            ) : mode === "signup" ? (
-              "Crear cuenta"
-            ) : (
-              "Iniciar sesión"
-            )}
-          </Button>
-        </form>
+            <div className="space-y-2">
+              <Label htmlFor="password">Contraseña</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {mode === "signup" ? "Creando cuenta..." : "Iniciando sesión..."}
+                </>
+              ) : mode === "signup" ? (
+                "Crear cuenta"
+              ) : (
+                "Iniciar sesión"
+              )}
+            </Button>
+          </form>
+        )}
 
         <div className="mt-4 text-center text-sm text-muted-foreground">
           {mode === "signup" ? (
