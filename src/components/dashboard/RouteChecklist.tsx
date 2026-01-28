@@ -1,6 +1,12 @@
-import { Check, Circle } from "lucide-react";
+import { useState } from "react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { RouteStep } from "@/hooks/useRoutes";
 import { cn } from "@/lib/utils";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface RouteChecklistProps {
   steps: RouteStep[];
@@ -13,8 +19,32 @@ export const RouteChecklist = ({
   onToggleStep,
   routeName,
 }: RouteChecklistProps) => {
+  const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+
   const completedCount = steps.filter((s) => s.is_completed).length;
-  const progressPercent = steps.length > 0 ? (completedCount / steps.length) * 100 : 0;
+  const progressPercent =
+    steps.length > 0 ? (completedCount / steps.length) * 100 : 0;
+
+  const toggleExpand = (stepId: string) => {
+    setExpandedSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(stepId)) {
+        next.delete(stepId);
+      } else {
+        next.add(stepId);
+      }
+      return next;
+    });
+  };
+
+  const handleCheckboxClick = (
+    e: React.MouseEvent,
+    stepId: string,
+    isCompleted: boolean
+  ) => {
+    e.stopPropagation();
+    onToggleStep(stepId, isCompleted);
+  };
 
   return (
     <div className="bg-background rounded-xl border border-border p-6">
@@ -36,47 +66,95 @@ export const RouteChecklist = ({
         </div>
 
         {/* Steps */}
-        <div className="space-y-2 pt-2">
-          {steps.map((step, index) => (
-            <button
-              key={step.id}
-              onClick={() => onToggleStep(step.id, !step.is_completed)}
-              className={cn(
-                "w-full flex items-start gap-3 p-3 rounded-lg text-left transition-all",
-                "hover:bg-secondary/50",
-                step.is_completed && "opacity-60"
-              )}
-            >
-              {/* Checkbox */}
-              <div
-                className={cn(
-                  "mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
-                  step.is_completed
-                    ? "bg-primary border-primary"
-                    : "border-muted-foreground"
-                )}
-              >
-                {step.is_completed && (
-                  <Check className="w-3 h-3 text-primary-foreground" />
-                )}
-              </div>
+        <div className="space-y-1 pt-2">
+          {steps.map((step, index) => {
+            const hasDescription = !!step.description;
+            const isExpanded = expandedSteps.has(step.id);
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <span
+            return (
+              <Collapsible
+                key={step.id}
+                open={isExpanded}
+                onOpenChange={() => hasDescription && toggleExpand(step.id)}
+              >
+                <div
                   className={cn(
-                    "text-sm font-medium",
-                    step.is_completed && "line-through text-muted-foreground"
+                    "rounded-lg transition-all",
+                    step.is_completed && "opacity-60"
                   )}
                 >
-                  {step.title}
-                </span>
-                <span className="ml-2 text-xs text-muted-foreground">
-                  Paso {index + 1}
-                </span>
-              </div>
-            </button>
-          ))}
+                  {/* Step Row */}
+                  <div
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-lg",
+                      hasDescription && "cursor-pointer hover:bg-secondary/50"
+                    )}
+                    onClick={() => hasDescription && toggleExpand(step.id)}
+                  >
+                    {/* Checkbox */}
+                    <button
+                      onClick={(e) =>
+                        handleCheckboxClick(e, step.id, !step.is_completed)
+                      }
+                      className={cn(
+                        "mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                        step.is_completed
+                          ? "bg-primary border-primary"
+                          : "border-muted-foreground hover:border-primary"
+                      )}
+                    >
+                      {step.is_completed && (
+                        <Check className="w-3 h-3 text-primary-foreground" />
+                      )}
+                    </button>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <span
+                        className={cn(
+                          "text-sm font-medium",
+                          step.is_completed &&
+                            "line-through text-muted-foreground"
+                        )}
+                      >
+                        {step.title}
+                      </span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        Paso {index + 1}
+                      </span>
+                    </div>
+
+                    {/* Expand Icon */}
+                    {hasDescription && (
+                      <CollapsibleTrigger asChild>
+                        <button
+                          className="p-1 hover:bg-secondary rounded transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          )}
+                        </button>
+                      </CollapsibleTrigger>
+                    )}
+                  </div>
+
+                  {/* Expandable Description */}
+                  {hasDescription && (
+                    <CollapsibleContent className="animate-accordion-down">
+                      <div className="px-11 pb-3">
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {step.description}
+                        </p>
+                      </div>
+                    </CollapsibleContent>
+                  )}
+                </div>
+              </Collapsible>
+            );
+          })}
         </div>
       </div>
     </div>

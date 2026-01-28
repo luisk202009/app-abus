@@ -241,18 +241,21 @@ export type Database = {
         Row: {
           id: string
           is_completed: boolean | null
+          step_description: string | null
           step_title: string | null
           user_route_id: string | null
         }
         Insert: {
           id?: string
           is_completed?: boolean | null
+          step_description?: string | null
           step_title?: string | null
           user_route_id?: string | null
         }
         Update: {
           id?: string
           is_completed?: boolean | null
+          step_description?: string | null
           step_title?: string | null
           user_route_id?: string | null
         }

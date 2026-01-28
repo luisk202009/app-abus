@@ -1,17 +1,20 @@
 import { MapPin, Wallet, PiggyBank, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RouteTemplate } from "@/hooks/useRoutes";
+import { RouteCardSkeleton } from "./RouteCardSkeleton";
 
 interface RouteSelectorProps {
   templates: RouteTemplate[];
   onSelectRoute: (templateId: string) => void;
   isStarting: boolean;
+  isLoading?: boolean;
 }
 
 export const RouteSelector = ({
   templates,
   onSelectRoute,
   isStarting,
+  isLoading = false,
 }: RouteSelectorProps) => {
   return (
     <div className="space-y-6">
@@ -23,7 +26,10 @@ export const RouteSelector = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {templates.map((template) => (
+        {isLoading ? (
+          <RouteCardSkeleton count={4} />
+        ) : (
+          templates.map((template) => (
           <div
             key={template.id}
             className="group relative bg-background/80 backdrop-blur-sm rounded-2xl border border-border p-6 transition-all hover:shadow-lg hover:border-primary/30"
@@ -68,7 +74,8 @@ export const RouteSelector = ({
               <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
-        ))}
+        ))
+        )}
       </div>
     </div>
   );
