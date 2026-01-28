@@ -1,116 +1,125 @@
 
+# Plan: Corregir Error RLS en Tabla Resources
 
-# Plan: Finalizar Footer Legal y Páginas de Términos/Privacidad
+## Diagnóstico del Problema
 
-## Resumen de Cambios
+El error **"new row violates row-level security policy for table 'resources'"** ocurre porque:
 
-Se actualizará el footer y las páginas legales para cumplir con estándares profesionales de SaaS que maneja datos migratorios y pagos via Stripe.
+1. La tabla `resources` tiene RLS (Row-Level Security) habilitado
+2. Solo existe una política SELECT: "Anyone can view active resources"
+3. **No existen políticas INSERT, UPDATE ni DELETE**
+4. Aunque el frontend verifica que el usuario sea admin (`l@albus.com.co`), la base de datos no tiene esta información y bloquea la operación
+
+## Solución
+
+Crear una función de verificación de admin en la base de datos y agregar las políticas RLS correspondientes para que el admin pueda gestionar recursos.
 
 ---
 
-## 1. Actualizar Footer (`src/components/Footer.tsx`)
+## Cambios en Base de Datos (SQL Migration)
 
-### Cambios:
-- **Copyright**: Cambiar a "© 2026 Albus. Desarrollado por Albus LLC."
-- **Botón "Empezar ahora"**: Conectar con el modal de análisis (agregar prop `onOpenModal`)
-- **Link Cookies**: Crear una sección de cookies en la página de Privacidad y anclar el link
-- **Disclaimer**: Mantener el texto actual que ya es correcto
+### 1. Crear función `is_admin()`
 
-### Código propuesto:
+Una función SECURITY DEFINER que verifica si el usuario autenticado es el admin basándose en su email:
 
-```tsx
-interface FooterProps {
-  onOpenModal?: () => void;
-}
+```sql
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM auth.users
+    WHERE id = auth.uid()
+      AND email = 'l@albus.com.co'
+  )
+$$;
+```
 
-export const Footer = ({ onOpenModal }: FooterProps) => {
-  // ... resto del componente
+### 2. Agregar políticas RLS para la tabla `resources`
 
-  // Actualizar botón
-  <Button onClick={onOpenModal}>
-    Empezar ahora
-  </Button>
+```sql
+-- Admin puede crear recursos
+CREATE POLICY "Admin can insert resources"
+ON public.resources
+FOR INSERT
+TO authenticated
+WITH CHECK (public.is_admin());
 
-  // Actualizar copyright
-  <p>© 2026 Albus. Desarrollado por Albus LLC.</p>
+-- Admin puede actualizar recursos
+CREATE POLICY "Admin can update resources"
+ON public.resources
+FOR UPDATE
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
 
-  // Actualizar link de cookies
-  <Link to="/privacidad#cookies">Cookies</Link>
-}
+-- Admin puede eliminar recursos
+CREATE POLICY "Admin can delete resources"
+ON public.resources
+FOR DELETE
+TO authenticated
+USING (public.is_admin());
+```
+
+### 3. Agregar políticas RLS para la tabla `plans` (mismo problema potencial)
+
+```sql
+-- Admin puede crear planes
+CREATE POLICY "Admin can insert plans"
+ON public.plans
+FOR INSERT
+TO authenticated
+WITH CHECK (public.is_admin());
+
+-- Admin puede actualizar planes
+CREATE POLICY "Admin can update plans"
+ON public.plans
+FOR UPDATE
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+-- Admin puede eliminar planes
+CREATE POLICY "Admin can delete plans"
+ON public.plans
+FOR DELETE
+TO authenticated
+USING (public.is_admin());
 ```
 
 ---
 
-## 2. Actualizar Página de Términos (`src/pages/Terms.tsx`)
+## Diagrama de Flujo de Seguridad
 
-### Secciones a agregar/expandir:
-
-| Sección | Contenido |
-|---------|-----------|
-| **Pagos y Stripe** | Procesamiento via Stripe, políticas de reembolso, disputas |
-| **Propiedad Intelectual** | Derechos sobre contenido generado |
-| **Terminación** | Condiciones para cancelar cuenta |
-| **Jurisdicción** | Ley aplicable (España/UE) |
-| **Modificaciones** | Derecho a actualizar términos |
-
-### Estructura final:
-1. Aceptación de los Términos
-2. Descripción del Servicio
-3. Cuenta de Usuario
-4. Pagos y Suscripciones (expandido con Stripe)
-5. Limitación de Responsabilidad
-6. Propiedad Intelectual (nuevo)
-7. Terminación del Servicio (nuevo)
-8. Ley Aplicable (nuevo)
-9. Modificaciones (nuevo)
-10. Contacto
-
----
-
-## 3. Actualizar Página de Privacidad (`src/pages/Privacy.tsx`)
-
-### Secciones a agregar/expandir:
-
-| Sección | Contenido |
-|---------|-----------|
-| **Stripe y pagos** | Datos compartidos con procesador de pagos |
-| **Supabase** | Almacenamiento de datos |
-| **Derechos GDPR** | Acceso, rectificación, portabilidad, supresión |
-| **Retención de datos** | Cuánto tiempo se guardan |
-| **Transferencias internacionales** | Cláusulas contractuales estándar |
-| **Cookies (con id="cookies")** | Para anclar link del footer |
-
-### Estructura final:
-1. Información que Recopilamos
-2. Base Legal del Tratamiento (nuevo - GDPR)
-3. Uso de la Información
-4. Procesadores de Datos (nuevo - Stripe, Supabase)
-5. Almacenamiento y Seguridad
-6. Compartir Información
-7. Transferencias Internacionales (nuevo)
-8. Retención de Datos (nuevo)
-9. Tus Derechos (expandido con GDPR)
-10. Cookies (con `id="cookies"`)
-11. Menores de Edad (nuevo)
-12. Cambios en la Política (nuevo)
-13. Contacto
-
----
-
-## 4. Actualizar Index.tsx
-
-### Cambio:
-Pasar el `onOpenModal` al componente Footer para activar el botón "Empezar ahora":
-
-```tsx
-<Footer onOpenModal={() => setIsModalOpen(true)} />
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    Admin crea recurso                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Frontend: Verifica user.email === "l@albus.com.co"         │
+│  (Ya implementado en Admin.tsx)                             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Supabase Client: INSERT INTO resources                     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Base de Datos RLS:                                         │
+│  ¿is_admin() = true?                                        │
+│                                                             │
+│  Antes: ❌ No había política → ERROR                        │
+│  Después: ✅ Política verifica email → PERMITIDO            │
+└─────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## 5. Rutas (sin cambios necesarios)
-
-Las rutas actuales (`/terminos`, `/privacidad`) ya están en español y son coherentes con el idioma de la aplicación. Se mantendrán así.
 
 ---
 
@@ -118,48 +127,24 @@ Las rutas actuales (`/terminos`, `/privacidad`) ya están en español y son cohe
 
 | Archivo | Acción |
 |---------|--------|
-| `src/components/Footer.tsx` | Agregar prop, actualizar copyright y links |
-| `src/pages/Terms.tsx` | Expandir con secciones SaaS/Stripe |
-| `src/pages/Privacy.tsx` | Expandir con GDPR/Stripe/Cookies |
-| `src/pages/Index.tsx` | Pasar prop al Footer |
+| Nueva migración SQL | Crear función `is_admin()` y políticas RLS |
 
 ---
 
 ## Sección Técnica
 
-### Navegación con ancla (Cookies)
-Para que el link de Cookies funcione correctamente:
+### ¿Por qué usar SECURITY DEFINER?
 
-```tsx
-// En Footer.tsx
-<Link to="/privacidad#cookies">Cookies</Link>
+La función `is_admin()` usa `SECURITY DEFINER` para poder consultar `auth.users` (que normalmente no es accesible vía RLS) de forma segura. Esto evita problemas de recursión y permite la verificación del email del usuario.
 
-// En Privacy.tsx
-<section id="cookies" className="mb-8">
-  <h2>6. Cookies</h2>
-  ...
-</section>
-```
+### Consideraciones de Seguridad
 
-### Auto-scroll al ancla
-React Router no hace scroll automático a anclas. Se puede añadir un hook simple:
+- La verificación del email se hace **en la base de datos**, no solo en el frontend
+- Esto proporciona protección "defense in depth" (defensa en profundidad)
+- Incluso si alguien intenta hacer requests directos a la API, el RLS los bloqueará
 
-```tsx
-// En Privacy.tsx
-import { useEffect } from "react";
-import { useLocation } from "react-router-dom";
+### Notas sobre escalabilidad
 
-const Privacy = () => {
-  const { hash } = useLocation();
-  
-  useEffect(() => {
-    if (hash) {
-      const element = document.querySelector(hash);
-      element?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [hash]);
-  
-  // ... resto
-};
-```
-
+Si en el futuro se necesitan múltiples admins, se puede:
+1. Crear una tabla `user_roles` (recomendado por las instrucciones de seguridad)
+2. Modificar la función `is_admin()` para consultar esa tabla
