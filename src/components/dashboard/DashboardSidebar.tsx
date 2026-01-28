@@ -2,6 +2,7 @@ import { Home, FolderOpen, User, MessageCircle, LogIn, Crown, BookOpen, Settings
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { AdminModeSwitcher } from "@/components/admin/AdminModeSwitcher";
 import albusLogo from "@/assets/albus-logo.png";
 
 interface NavItem {
@@ -94,9 +95,12 @@ export const DashboardSidebar = ({
         </ul>
       </nav>
 
+      {/* Admin Mode Switcher (only for admin) */}
+      {isAdmin && <AdminModeSwitcher />}
+
       {/* Admin Button (only for admin) */}
       {isAdmin && (
-        <div className="p-4 border-t border-border">
+        <div className="px-4 pb-4">
           <Button
             variant="outline"
             className="w-full gap-2"
