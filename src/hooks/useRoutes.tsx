@@ -44,7 +44,7 @@ interface UseRoutesReturn {
 
 export const useRoutes = (): UseRoutesReturn => {
   const { user } = useAuth();
-  const { isPremium } = useSubscription();
+  const { isPremium, maxRoutes } = useSubscription();
   const { toast } = useToast();
 
   const [templates, setTemplates] = useState<RouteTemplate[]>([]);
@@ -52,8 +52,7 @@ export const useRoutes = (): UseRoutesReturn => {
   const [isLoading, setIsLoading] = useState(true);
   const [isStartingRoute, setIsStartingRoute] = useState(false);
 
-  // Plan limits: free = 1 route, pro = 3 routes
-  const maxRoutes = isPremium ? 3 : 1;
+  // Use maxRoutes from useSubscription (already handles admin mode)
   const canAddRoute = activeRoutes.length < maxRoutes;
 
   // Fetch templates and active routes
