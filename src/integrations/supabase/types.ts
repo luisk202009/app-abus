@@ -143,6 +143,126 @@ export type Database = {
         }
         Relationships: []
       }
+      route_template_steps: {
+        Row: {
+          description: string | null
+          id: string
+          step_order: number | null
+          template_id: string | null
+          title: string
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          step_order?: number | null
+          template_id?: string | null
+          title: string
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          step_order?: number | null
+          template_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_template_steps_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "route_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_templates: {
+        Row: {
+          country: string | null
+          description: string | null
+          estimated_cost: string | null
+          id: string
+          name: string
+          required_savings: string | null
+        }
+        Insert: {
+          country?: string | null
+          description?: string | null
+          estimated_cost?: string | null
+          id?: string
+          name: string
+          required_savings?: string | null
+        }
+        Update: {
+          country?: string | null
+          description?: string | null
+          estimated_cost?: string | null
+          id?: string
+          name?: string
+          required_savings?: string | null
+        }
+        Relationships: []
+      }
+      user_active_routes: {
+        Row: {
+          created_at: string | null
+          id: string
+          status: string | null
+          template_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          template_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          template_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_active_routes_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "route_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_route_progress: {
+        Row: {
+          id: string
+          is_completed: boolean | null
+          step_title: string | null
+          user_route_id: string | null
+        }
+        Insert: {
+          id?: string
+          is_completed?: boolean | null
+          step_title?: string | null
+          user_route_id?: string | null
+        }
+        Update: {
+          id?: string
+          is_completed?: boolean | null
+          step_title?: string | null
+          user_route_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_route_progress_user_route_id_fkey"
+            columns: ["user_route_id"]
+            isOneToOne: false
+            referencedRelation: "user_active_routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_tasks: {
         Row: {
           category: string | null
@@ -216,7 +336,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
