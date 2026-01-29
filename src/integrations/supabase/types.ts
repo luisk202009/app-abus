@@ -28,6 +28,7 @@ export type Database = {
           savings_range: string | null
           stripe_customer_id: string | null
           subscription_status: string | null
+          total_routes_created: number
           user_id: string | null
         }
         Insert: {
@@ -43,6 +44,7 @@ export type Database = {
           savings_range?: string | null
           stripe_customer_id?: string | null
           subscription_status?: string | null
+          total_routes_created?: number
           user_id?: string | null
         }
         Update: {
@@ -58,6 +60,7 @@ export type Database = {
           savings_range?: string | null
           stripe_customer_id?: string | null
           subscription_status?: string | null
+          total_routes_created?: number
           user_id?: string | null
         }
         Relationships: []

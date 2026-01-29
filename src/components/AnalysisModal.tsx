@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, ArrowRight, ArrowLeft, CheckCircle } from "lucide-react";
+import { X, ArrowRight, ArrowLeft, CheckCircle, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CountrySelect } from "@/components/onboarding/CountrySelect";
@@ -218,13 +218,25 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
   };
 
   const handleViewRoadmap = () => {
-    // Navigate to dashboard with user data
+    // Navigate to dashboard with user data - this activates the recommended route
     navigate("/dashboard", {
       state: {
         name: formData.name.trim(),
         email: formData.email.trim().toLowerCase(),
         visaType: recommendation?.visa_type || "consultation",
         visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
+        leadId: leadId,
+        startRecommendedRoute: true, // Flag to auto-start route
+      },
+    });
+    handleClose();
+  };
+
+  const handleExploreOthers = () => {
+    // Navigate to explore page to see all routes
+    navigate("/explorar", {
+      state: {
+        fromOnboarding: true,
         leadId: leadId,
       },
     });
@@ -313,8 +325,18 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
               className="w-full gap-2"
               onClick={handleViewRoadmap}
             >
-              Ver mi hoja de ruta completa
+              Iniciar esta ruta ahora
               <ArrowRight className="w-4 h-4" />
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full gap-2"
+              onClick={handleExploreOthers}
+            >
+              <Compass className="w-4 h-4" />
+              Ver otros destinos disponibles
             </Button>
           </div>
         </div>

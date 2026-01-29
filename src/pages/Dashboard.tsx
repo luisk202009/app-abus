@@ -10,6 +10,8 @@ import { SupportModal } from "@/components/dashboard/SupportModal";
 import { RouteSelector } from "@/components/dashboard/RouteSelector";
 import { RouteExplorer } from "@/components/dashboard/RouteExplorer";
 import { RouteLimitModal } from "@/components/dashboard/RouteLimitModal";
+import { SlotExhaustedModal } from "@/components/dashboard/SlotExhaustedModal";
+import { DeleteRouteModal } from "@/components/dashboard/DeleteRouteModal";
 import { ActiveRouteCard } from "@/components/dashboard/ActiveRouteCard";
 import { RouteChecklist } from "@/components/dashboard/RouteChecklist";
 import { ActiveRouteSwitcher } from "@/components/dashboard/ActiveRouteSwitcher";
@@ -18,7 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useRoutes } from "@/hooks/useRoutes";
+import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -50,9 +52,11 @@ const Dashboard = () => {
     isStartingRoute,
     startRoute,
     updateStepProgress,
+    deleteRoute,
     canAddRoute,
     maxRoutes,
     getActiveRouteProgress,
+    slotExhausted,
   } = useRoutes();
 
   const [activeNavItem, setActiveNavItem] = useState("roadmap");
@@ -62,6 +66,10 @@ const Dashboard = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showSlotExhaustedModal, setShowSlotExhaustedModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [routeToDelete, setRouteToDelete] = useState<ActiveRoute | null>(null);
+  const [isDeletingRoute, setIsDeletingRoute] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserData>({
@@ -241,8 +249,13 @@ const Dashboard = () => {
         return;
       }
 
+      // Check which modal to show based on subscription type
       if (!canAddRoute) {
-        setShowLimitModal(true);
+        if (slotExhausted) {
+          setShowSlotExhaustedModal(true);
+        } else {
+          setShowLimitModal(true);
+        }
         return;
       }
 
@@ -254,8 +267,31 @@ const Dashboard = () => {
         setActiveNavItem("roadmap");
       }
     },
-    [user, canAddRoute, startRoute]
+    [user, canAddRoute, slotExhausted, startRoute]
   );
+
+  const handleDeleteRouteClick = useCallback((route: ActiveRoute) => {
+    setRouteToDelete(route);
+    setShowDeleteModal(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!routeToDelete) return;
+    
+    setIsDeletingRoute(true);
+    const success = await deleteRoute(routeToDelete.id);
+    setIsDeletingRoute(false);
+    
+    if (success) {
+      setShowDeleteModal(false);
+      setRouteToDelete(null);
+      // If the deleted route was selected, select the first remaining route
+      if (selectedRouteId === routeToDelete.id) {
+        const remainingRoutes = activeRoutes.filter(r => r.id !== routeToDelete.id);
+        setSelectedRouteId(remainingRoutes[0]?.id || null);
+      }
+    }
+  }, [routeToDelete, deleteRoute, selectedRouteId, activeRoutes]);
 
   const handleConfettiComplete = useCallback(() => {
     setShowConfetti(false);
@@ -293,7 +329,13 @@ const Dashboard = () => {
             onStartRoute={handleStartRoute}
             isStarting={isStartingRoute}
             canAddRoute={canAddRoute}
-            onLimitReached={() => setShowLimitModal(true)}
+            onLimitReached={() => {
+              if (slotExhausted) {
+                setShowSlotExhaustedModal(true);
+              } else {
+                setShowLimitModal(true);
+              }
+            }}
           />
         );
       case "roadmap":
@@ -330,15 +372,17 @@ const Dashboard = () => {
               </div>
 
               <div className="grid gap-3">
-                {activeRoutes.map((route) => (
-                  <ActiveRouteCard
-                    key={route.id}
-                    route={route}
-                    progress={getActiveRouteProgress(route.id)}
-                    onClick={() => setSelectedRouteId(route.id)}
-                    isSelected={route.id === selectedRouteId}
-                  />
-                ))}
+                  {activeRoutes.map((route) => (
+                    <ActiveRouteCard
+                      key={route.id}
+                      route={route}
+                      progress={getActiveRouteProgress(route.id)}
+                      onClick={() => setSelectedRouteId(route.id)}
+                      isSelected={route.id === selectedRouteId}
+                      onViewDetails={() => setSelectedRouteId(route.id)}
+                      onDelete={() => handleDeleteRouteClick(route)}
+                    />
+                  ))}
               </div>
             </div>
 
@@ -444,13 +488,34 @@ const Dashboard = () => {
         userEmail={userData.email}
       />
 
-      {/* Route Limit Modal */}
+      {/* Route Limit Modal (for Pro users hitting active route limit) */}
       <RouteLimitModal
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         currentLimit={maxRoutes}
         onUpgrade={handleCheckout}
         isUpgrading={isCheckoutLoading}
+      />
+
+      {/* Slot Exhausted Modal (for Free users who used their lifetime slot) */}
+      <SlotExhaustedModal
+        isOpen={showSlotExhaustedModal}
+        onClose={() => setShowSlotExhaustedModal(false)}
+        onUpgrade={handleCheckout}
+        isUpgrading={isCheckoutLoading}
+      />
+
+      {/* Delete Route Modal */}
+      <DeleteRouteModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setRouteToDelete(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        routeName={routeToDelete?.template?.name || "esta ruta"}
+        isDeleting={isDeletingRoute}
+        isPro={isPremium}
       />
 
       {/* Success Confetti */}

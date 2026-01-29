@@ -2,12 +2,15 @@ import { Check, MapPin, ChevronRight } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { ActiveRoute } from "@/hooks/useRoutes";
 import { cn } from "@/lib/utils";
+import { RouteActionsMenu } from "./RouteActionsMenu";
 
 interface ActiveRouteCardProps {
   route: ActiveRoute;
   progress: { completed: number; total: number };
   onClick: () => void;
   isSelected?: boolean;
+  onViewDetails?: () => void;
+  onDelete?: () => void;
 }
 
 export const ActiveRouteCard = ({
@@ -15,6 +18,8 @@ export const ActiveRouteCard = ({
   progress,
   onClick,
   isSelected,
+  onViewDetails,
+  onDelete,
 }: ActiveRouteCardProps) => {
   const progressPercent =
     progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
@@ -61,8 +66,16 @@ export const ActiveRouteCard = ({
           </div>
         </div>
 
-        {/* Chevron */}
-        <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />
+        {/* Actions */}
+        <div className="flex items-center gap-1 shrink-0">
+          {onViewDetails && onDelete && (
+            <RouteActionsMenu
+              onViewDetails={onViewDetails}
+              onDelete={onDelete}
+            />
+          )}
+          <ChevronRight className="w-5 h-5 text-muted-foreground mt-1" />
+        </div>
       </div>
     </button>
   );

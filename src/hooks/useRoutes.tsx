@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useSubscription } from "./useSubscription";
@@ -37,23 +37,42 @@ interface UseRoutesReturn {
   isStartingRoute: boolean;
   startRoute: (templateId: string) => Promise<boolean>;
   updateStepProgress: (stepId: string, isCompleted: boolean) => Promise<void>;
+  deleteRoute: (routeId: string) => Promise<boolean>;
   canAddRoute: boolean;
   maxRoutes: number;
   getActiveRouteProgress: (routeId: string) => { completed: number; total: number };
+  totalRoutesCreated: number;
+  slotExhausted: boolean;
 }
 
 export const useRoutes = (): UseRoutesReturn => {
   const { user } = useAuth();
-  const { isPremium, maxRoutes } = useSubscription();
+  const { isPremium, maxRoutes, subscriptionStatus } = useSubscription();
   const { toast } = useToast();
 
   const [templates, setTemplates] = useState<RouteTemplate[]>([]);
   const [activeRoutes, setActiveRoutes] = useState<ActiveRoute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStartingRoute, setIsStartingRoute] = useState(false);
+  const [totalRoutesCreated, setTotalRoutesCreated] = useState(0);
 
-  // Use maxRoutes from useSubscription (already handles admin mode)
-  const canAddRoute = activeRoutes.length < maxRoutes;
+  // Calculate canAddRoute based on subscription type
+  const canAddRoute = useMemo(() => {
+    if (!user) return false;
+    
+    if (isPremium) {
+      // Pro: limit is based on active routes
+      return activeRoutes.length < maxRoutes;
+    } else {
+      // Free: limit is based on lifetime routes created
+      return totalRoutesCreated < 1;
+    }
+  }, [user, isPremium, activeRoutes.length, maxRoutes, totalRoutesCreated]);
+
+  // Slot exhausted = Free user who has already created 1+ route
+  const slotExhausted = useMemo(() => {
+    return !isPremium && totalRoutesCreated >= 1;
+  }, [isPremium, totalRoutesCreated]);
 
   // Fetch templates and active routes
   useEffect(() => {
@@ -72,6 +91,15 @@ export const useRoutes = (): UseRoutesReturn => {
 
         // Fetch user's active routes with progress
         if (user) {
+          // Fetch total_routes_created from onboarding_submissions
+          const { data: submissionData } = await supabase
+            .from("onboarding_submissions")
+            .select("total_routes_created")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          
+          setTotalRoutesCreated(submissionData?.total_routes_created || 0);
+
           const { data: routesData, error: routesError } = await supabase
             .from("user_active_routes")
             .select(`
@@ -157,7 +185,7 @@ export const useRoutes = (): UseRoutesReturn => {
       setIsStartingRoute(true);
 
       try {
-        // 1. Create user_active_route
+        // 1. Create user_active_route (trigger will increment total_routes_created)
         const { data: newRoute, error: routeError } = await supabase
           .from("user_active_routes")
           .insert({ user_id: user.id, template_id: templateId })
@@ -214,6 +242,8 @@ export const useRoutes = (): UseRoutesReturn => {
         };
 
         setActiveRoutes((prev) => [newActiveRoute, ...prev]);
+        // Update local counter (trigger already updated DB)
+        setTotalRoutesCreated((prev) => prev + 1);
 
         toast({
           title: "¡Ruta activada!",
@@ -234,6 +264,52 @@ export const useRoutes = (): UseRoutesReturn => {
       }
     },
     [user, canAddRoute, activeRoutes, templates, toast]
+  );
+
+  // Delete a route
+  const deleteRoute = useCallback(
+    async (routeId: string): Promise<boolean> => {
+      if (!user) return false;
+
+      try {
+        // 1. Delete progress steps first (due to FK constraint)
+        const { error: progressError } = await supabase
+          .from("user_route_progress")
+          .delete()
+          .eq("user_route_id", routeId);
+
+        if (progressError) throw progressError;
+
+        // 2. Delete the active route
+        const { error: routeError } = await supabase
+          .from("user_active_routes")
+          .delete()
+          .eq("id", routeId)
+          .eq("user_id", user.id);
+
+        if (routeError) throw routeError;
+
+        // 3. Update local state
+        const deletedRoute = activeRoutes.find((r) => r.id === routeId);
+        setActiveRoutes((prev) => prev.filter((r) => r.id !== routeId));
+
+        toast({
+          title: "Ruta eliminada",
+          description: `La ruta "${deletedRoute?.template?.name || ""}" ha sido eliminada.`,
+        });
+
+        return true;
+      } catch (error) {
+        console.error("Error deleting route:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo eliminar la ruta. Intenta de nuevo.",
+        });
+        return false;
+      }
+    },
+    [user, activeRoutes, toast]
   );
 
   // Update step progress
@@ -297,8 +373,11 @@ export const useRoutes = (): UseRoutesReturn => {
     isStartingRoute,
     startRoute,
     updateStepProgress,
+    deleteRoute,
     canAddRoute,
     maxRoutes,
     getActiveRouteProgress,
+    totalRoutesCreated,
+    slotExhausted,
   };
 };
