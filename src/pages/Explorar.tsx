@@ -5,6 +5,7 @@ import { RouteCard } from "@/components/routes/RouteCard";
 import { RouteCardSkeleton } from "@/components/routes/RouteCardSkeleton";
 import { RouteDetailModal } from "@/components/routes/RouteDetailModal";
 import { RouteLimitModal } from "@/components/dashboard/RouteLimitModal";
+import { SlotExhaustedModal } from "@/components/dashboard/SlotExhaustedModal";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { SuccessConfetti } from "@/components/dashboard/SuccessConfetti";
 import { useRoutes, type RouteTemplate } from "@/hooks/useRoutes";
@@ -17,10 +18,11 @@ const Explorar = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isPremium, maxRoutes, handleCheckout, isCheckoutLoading } = useSubscription();
-  const { templates, activeRoutes, isLoading, startRoute, isStartingRoute, canAddRoute } = useRoutes();
+  const { templates, activeRoutes, isLoading, startRoute, isStartingRoute, canAddRoute, slotExhausted } = useRoutes();
 
   const [selectedTemplate, setSelectedTemplate] = useState<RouteTemplate | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showSlotExhaustedModal, setShowSlotExhaustedModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [stepsCounts, setStepsCounts] = useState<Record<string, number>>({});
@@ -79,7 +81,11 @@ const Explorar = () => {
 
     if (!canAddRoute) {
       setSelectedTemplate(null);
-      setShowLimitModal(true);
+      if (slotExhausted) {
+        setShowSlotExhaustedModal(true);
+      } else {
+        setShowLimitModal(true);
+      }
       return;
     }
 
@@ -170,6 +176,13 @@ const Explorar = () => {
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         currentLimit={maxRoutes}
+        onUpgrade={handleCheckout}
+        isUpgrading={isCheckoutLoading}
+      />
+
+      <SlotExhaustedModal
+        isOpen={showSlotExhaustedModal}
+        onClose={() => setShowSlotExhaustedModal(false)}
         onUpgrade={handleCheckout}
         isUpgrading={isCheckoutLoading}
       />
