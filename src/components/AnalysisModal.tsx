@@ -15,6 +15,7 @@ import isotipoAlbus from "@/assets/isotipo-albus.png";
 interface AnalysisModalProps {
   isOpen: boolean;
   onClose: () => void;
+  source?: string; // e.g., "regularizacion" for auto-routing
 }
 
 interface FormData {
@@ -106,7 +107,7 @@ const generateRecommendation = (formData: FormData): AIRecommendation => {
   };
 };
 
-export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
+export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
@@ -227,6 +228,7 @@ export const AnalysisModal = ({ isOpen, onClose }: AnalysisModalProps) => {
         visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
         leadId: leadId,
         startRecommendedRoute: true, // Flag to auto-start route
+        source: source, // Pass source for auto-routing (e.g., "regularizacion")
       },
     });
     handleClose();

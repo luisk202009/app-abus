@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import RouteDetail from "./pages/RouteDetail";
 import Explorar from "./pages/Explorar";
+import Regularizacion from "./pages/Regularizacion";
 import Success from "./pages/Success";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
@@ -31,6 +32,7 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/dashboard/route/:routeId" element={<RouteDetail />} />
               <Route path="/explorar" element={<Explorar />} />
+              <Route path="/regularizacion" element={<Regularizacion />} />
               <Route path="/success" element={<Success />} />
               <Route path="/terminos" element={<Terms />} />
               <Route path="/privacidad" element={<Privacy />} />
