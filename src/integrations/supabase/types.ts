@@ -185,6 +185,7 @@ export type Database = {
         Row: {
           country: string | null
           description: string | null
+          difficulty: string | null
           estimated_cost: string | null
           id: string
           name: string
@@ -193,6 +194,7 @@ export type Database = {
         Insert: {
           country?: string | null
           description?: string | null
+          difficulty?: string | null
           estimated_cost?: string | null
           id?: string
           name: string
@@ -201,6 +203,7 @@ export type Database = {
         Update: {
           country?: string | null
           description?: string | null
+          difficulty?: string | null
           estimated_cost?: string | null
           id?: string
           name?: string
