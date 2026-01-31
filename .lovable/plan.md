@@ -1,536 +1,361 @@
 
-
-# Plan: Flujo de Selección de Rutas, Sistema Anti-Abuso y Eliminación
+# Plan: Rediseno de Vista de Rutas con Pagina de Detalle Estilo Asana
 
 ## Resumen
 
-Implementar un flujo completo post-análisis con recomendación de ruta, un sistema de slots anti-abuso que limita la creación de rutas de por vida para usuarios Free, y funcionalidad de eliminación de rutas con advertencias claras.
+Transformar la experiencia de gestion de rutas de una vista unica con checklist cambiante a una arquitectura de pagina dedicada por ruta. Cada ruta tendra su propia pagina interna con tareas expandibles estilo Asana, documentos adjuntos y sistema de notas/comentarios.
 
 ---
 
-## Estado Actual del Sistema
-
-| Componente | Estado | Detalles |
-|------------|--------|----------|
-| **AnalysisModal** | ✅ Funcional | Muestra recomendación y botón "Ver mi hoja de ruta" |
-| **useRoutes** | ✅ Funcional | Usa `activeRoutes.length < maxRoutes` para límite |
-| **RouteLimitModal** | ✅ Básico | Solo muestra "Mejorar a Pro" genérico |
-| **Eliminación de rutas** | ❌ No existe | Falta delete en `user_active_routes` |
-| **Contador total_routes_created** | ❌ No existe | Falta columna en DB |
-
-### Problema Actual
-
-El sistema actual permite:
-- Usuario Free crea 1 ruta
-- Usuario Free **elimina** la ruta  
-- Usuario Free puede crear **otra** ruta
-
-Esto permite abusar del sistema creando rutas infinitas.
-
----
-
-## Arquitectura de la Solución
+## Estado Actual vs. Nuevo Diseno
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         SISTEMA ANTI-ABUSO                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Usuario Free:                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────────┐ │
-│  │  total_routes_created = 0 → Puede crear 1 ruta                         │ │
-│  │  total_routes_created = 1 → BLOQUEADO (aunque elimine rutas)           │ │
-│  └─────────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-│  Usuario Pro:                                                               │
-│  ┌─────────────────────────────────────────────────────────────────────────┐ │
-│  │  Límite: 3 rutas ACTIVAS simultáneamente                               │ │
-│  │  Puede eliminar y crear nuevas rutas libremente                        │ │
-│  └─────────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+ACTUAL                                       NUEVO
+┌────────────────────────────────┐           ┌────────────────────────────────┐
+│  Dashboard                     │           │  Dashboard (/dashboard)        │
+│                                │           │                                │
+│  ┌─────────────────────────┐   │           │  ┌─────────────────────────┐   │
+│  │ Ruta 1 (seleccionada)   │   │           │  │ Ruta 1              →   │   │  Click navega
+│  └─────────────────────────┘   │           │  └─────────────────────────┘   │
+│  ┌─────────────────────────┐   │           │  ┌─────────────────────────┐   │
+│  │ Ruta 2                  │   │           │  │ Ruta 2              →   │   │
+│  └─────────────────────────┘   │           │  └─────────────────────────────┘
+│                                │           │                                │
+│  ═══════════════════════════   │           └────────────────────────────────┘
+│                                │                        │
+│  ┌─────────────────────────┐   │                        ▼ Click
+│  │ Checklist de Ruta 1     │   │           ┌────────────────────────────────┐
+│  │ □ Paso 1                │   │           │  Route Detail                  │
+│  │ □ Paso 2                │   │           │  (/dashboard/route/:id)        │
+│  │ □ Paso 3                │   │           │                                │
+│  └─────────────────────────┘   │           │  ┌─────────────────────────┐   │
+│                                │           │  │ Paso 1 (expandible)     │   │
+└────────────────────────────────┘           │  │   ├─ Descripcion        │   │
+                                             │  │   ├─ Documentos 📎      │   │
+                                             │  │   └─ Notas 💬           │   │
+                                             │  └─────────────────────────┘   │
+                                             │  ┌─────────────────────────┐   │
+                                             │  │ Paso 2 (expandible)     │   │
+                                             │  └─────────────────────────┘   │
+                                             └────────────────────────────────┘
+```
+
+---
+
+## Nueva Arquitectura de Navegacion
+
+```text
+/dashboard
+    │
+    ├── Vista: Lista de rutas activas (cards)
+    │
+    └── Click en ruta
+           │
+           ▼
+/dashboard/route/:routeId
+    │
+    ├── Encabezado: Nombre ruta + progreso + pais
+    │
+    ├── Tabs o Secciones:
+    │   ├── Tareas (checklist expandible)
+    │   ├── Documentos (vincular de boveda)
+    │   └── Actividad (timeline de notas)
+    │
+    └── Panel lateral o modal de tarea seleccionada
 ```
 
 ---
 
 ## Cambios de Base de Datos
 
-### 1. Nueva columna `total_routes_created`
+### Nueva tabla: `step_notes`
 
-Agregar a la tabla `onboarding_submissions`:
+Para almacenar notas/comentarios en cada paso de la ruta (estilo Asana):
 
-```sql
-ALTER TABLE onboarding_submissions 
-ADD COLUMN total_routes_created INTEGER NOT NULL DEFAULT 0;
-```
+| Columna | Tipo | Descripcion |
+|---------|------|-------------|
+| `id` | uuid | PK |
+| `step_id` | uuid | FK a user_route_progress |
+| `user_id` | uuid | Autor de la nota |
+| `content` | text | Contenido de la nota |
+| `created_at` | timestamptz | Fecha de creacion |
 
-### 2. Trigger para incrementar contador
+### Nueva tabla: `step_attachments`
 
-Crear un trigger que incrementa el contador al insertar en `user_active_routes`:
+Para vincular documentos de la boveda a pasos especificos:
 
-```sql
-CREATE OR REPLACE FUNCTION increment_total_routes_created()
-RETURNS TRIGGER AS $$
-BEGIN
-  UPDATE onboarding_submissions
-  SET total_routes_created = total_routes_created + 1
-  WHERE user_id = NEW.user_id;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER on_route_created
-AFTER INSERT ON user_active_routes
-FOR EACH ROW
-EXECUTE FUNCTION increment_total_routes_created();
-```
-
-### 3. Habilitar DELETE en `user_route_progress`
-
-Agregar política RLS para DELETE:
-
-```sql
-CREATE POLICY "Users can delete their route progress"
-ON user_route_progress FOR DELETE
-USING (
-  EXISTS (
-    SELECT 1 FROM user_active_routes
-    WHERE user_active_routes.id = user_route_progress.user_route_id
-    AND user_active_routes.user_id = auth.uid()
-  )
-);
-```
+| Columna | Tipo | Descripcion |
+|---------|------|-------------|
+| `id` | uuid | PK |
+| `step_id` | uuid | FK a user_route_progress |
+| `document_type` | text | Tipo de documento (passport, etc.) |
+| `file_url` | text | URL del archivo en storage (opcional) |
+| `created_at` | timestamptz | Fecha |
 
 ---
 
-## Flujos de Usuario
+## Componentes a Crear
 
-### Flujo 1: Post-Análisis con Recomendación
-
-```text
-Usuario completa onboarding
-         │
-         ▼
-┌────────────────────────────────────────────────────────────┐
-│                    PANTALLA RECOMENDACIÓN                  │
-│                                                            │
-│  "Nuestra recomendación para ti:"                         │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │  🎯 Visado de Nómada Digital                       │   │
-│  │                                                    │   │
-│  │  Con tus ingresos de trabajo remoto, calificas     │   │
-│  │  perfectamente para este visado...                 │   │
-│  │                                                    │   │
-│  │  95% match                                         │   │
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │         Iniciar esta ruta ahora  →                 │   │  (Primary)
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │         Ver otros destinos disponibles             │   │  (Secondary)
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-         │
-         ├──[Iniciar esta ruta]───► Registrarse → Dashboard con confetti
-         │
-         └──[Ver otros destinos]───► /explorar
-```
-
-### Flujo 2: Bloqueo Anti-Abuso (Usuario Free)
-
-```text
-Usuario Free intenta crear 2da ruta
-(total_routes_created >= 1)
-         │
-         ▼
-┌────────────────────────────────────────────────────────────┐
-│                    MODAL SLOT AGOTADO                      │
-│                                                            │
-│                        🔒                                  │
-│                                                            │
-│  "Has agotado tu ruta gratuita"                           │
-│                                                            │
-│  Tu plan Free te permite iniciar 1 ruta de por vida.      │
-│  Pásate al Plan Pro por solo €6,99/mes para explorar      │
-│  nuevos destinos y gestionar hasta 3 procesos             │
-│  migratorios simultáneamente.                             │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │           Mejorar a Pro - €6,99/mes  →             │   │
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-│                     [Entendido]                            │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
-
-### Flujo 3: Eliminación de Ruta
-
-```text
-Usuario clic en "⚙️ Gestionar" en ActiveRouteCard
-         │
-         ▼
-┌────────────────────────────────────────────────────────────┐
-│                   MENÚ DESPLEGABLE                         │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │  📋 Ver detalles                                   │   │
-│  │  🗑️ Eliminar ruta                                  │   │
-│  └────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────┘
-         │
-         ▼ (Clic en "Eliminar ruta")
-┌────────────────────────────────────────────────────────────┐
-│                   MODAL CONFIRMACIÓN                       │
-│                                                            │
-│                        ⚠️                                  │
-│                                                            │
-│  "¿Eliminar esta ruta?"                                   │
-│                                                            │
-│  Esta acción es irreversible. Se eliminará todo el        │
-│  progreso guardado en esta ruta.                          │
-│                                                            │
-│  ⚠️ Si estás en el Plan Gratis, no podrás iniciar         │
-│  otra ruta sin suscribirte a Pro.                         │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │            Cancelar          │   Eliminar          │   │
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Archivos a Crear
-
-| Archivo | Descripción |
+| Archivo | Descripcion |
 |---------|-------------|
-| `src/components/dashboard/SlotExhaustedModal.tsx` | Modal específico cuando Free agota su slot |
-| `src/components/dashboard/DeleteRouteModal.tsx` | Modal de confirmación para eliminar ruta |
-| `src/components/dashboard/RouteActionsMenu.tsx` | Menú desplegable para gestionar rutas |
+| `src/pages/RouteDetail.tsx` | Nueva pagina dedicada para cada ruta |
+| `src/components/route-detail/StepCard.tsx` | Tarjeta de paso expandible estilo Asana |
+| `src/components/route-detail/StepNotes.tsx` | Seccion de notas/comentarios |
+| `src/components/route-detail/StepAttachments.tsx` | Selector de documentos de boveda |
+| `src/components/route-detail/RouteHeader.tsx` | Header con nombre, progreso y acciones |
+| `src/components/route-detail/AttachDocumentModal.tsx` | Modal para vincular documentos |
 
 ## Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/components/AnalysisModal.tsx` | Nueva pantalla de recomendación con 2 CTAs |
-| `src/hooks/useRoutes.tsx` | Agregar `deleteRoute()`, obtener `total_routes_created`, lógica `canAddRoute` |
-| `src/hooks/useSubscription.tsx` | Exportar `totalRoutesCreated` para el frontend |
-| `src/components/dashboard/ActiveRouteCard.tsx` | Agregar botón "Gestionar" con menú |
-| `src/pages/Dashboard.tsx` | Integrar modales de eliminación y slot agotado |
-| `src/pages/Explorar.tsx` | Usar nuevo SlotExhaustedModal en lugar de RouteLimitModal |
+| `src/App.tsx` | Agregar ruta `/dashboard/route/:routeId` |
+| `src/pages/Dashboard.tsx` | Simplificar a lista de rutas + navegacion |
+| `src/components/dashboard/ActiveRouteCard.tsx` | Modificar onClick para navegar |
+| `src/hooks/useRoutes.tsx` | Agregar funciones para notas y adjuntos |
 
 ---
 
-## Lógica de Negocio Detallada
+## Diseno de la Pagina de Detalle de Ruta
 
-### Nueva función `canUserAddRoute`
-
-```typescript
-// En useRoutes.tsx
-const canAddRoute = useMemo(() => {
-  if (!user) return false;
-  
-  const isPro = subscriptionStatus === "pro";
-  
-  if (isPro) {
-    // Pro: límite de rutas ACTIVAS
-    return activeRoutes.length < 3;
-  } else {
-    // Free: límite de rutas CREADAS DE POR VIDA
-    return totalRoutesCreated < 1;
-  }
-}, [user, subscriptionStatus, activeRoutes.length, totalRoutesCreated]);
-
-// Determinar qué modal mostrar
-const slotExhausted = !isPro && totalRoutesCreated >= 1;
-```
-
-### Nueva función `deleteRoute`
-
-```typescript
-const deleteRoute = useCallback(async (routeId: string): Promise<boolean> => {
-  if (!user) return false;
-  
-  try {
-    // 1. Eliminar progreso de pasos
-    await supabase
-      .from("user_route_progress")
-      .delete()
-      .eq("user_route_id", routeId);
-    
-    // 2. Eliminar ruta activa
-    const { error } = await supabase
-      .from("user_active_routes")
-      .delete()
-      .eq("id", routeId)
-      .eq("user_id", user.id);
-    
-    if (error) throw error;
-    
-    // 3. Actualizar estado local
-    setActiveRoutes((prev) => prev.filter((r) => r.id !== routeId));
-    
-    toast({
-      title: "Ruta eliminada",
-      description: "La ruta ha sido eliminada correctamente.",
-    });
-    
-    return true;
-  } catch (error) {
-    toast({
-      variant: "destructive",
-      title: "Error",
-      description: "No se pudo eliminar la ruta.",
-    });
-    return false;
-  }
-}, [user, toast]);
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ← Volver a mis rutas                                                       │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │  Visado Nomada Digital                                    🇪🇸 Espana   ││
+│  │                                                                         ││
+│  │  [═══════════════════════░░░░░░░░░] 60% • 3/5 pasos completados        ││
+│  │                                                            ⚙️ Gestionar ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                                                             │
+│  TAREAS                                                                     │
+│  ───────────────────────────────────────────────────────────────────────────│
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │ ✓ Paso 1: Apostillar Antecedentes                                      ││
+│  │   │                                                           ▼ expand ││
+│  │   ├─────────────────────────────────────────────────────────────────────││
+│  │   │ Descripcion:                                                       ││
+│  │   │ El certificado debe estar apostillado por la Haya...               ││
+│  │   │                                                                    ││
+│  │   │ 📎 Documentos adjuntos:                                            ││
+│  │   │ ┌────────────┐  ┌────────────┐                                     ││
+│  │   │ │ Pasaporte  │  │ + Adjuntar │                                     ││
+│  │   │ └────────────┘  └────────────┘                                     ││
+│  │   │                                                                    ││
+│  │   │ 💬 Notas (2):                                                      ││
+│  │   │ ┌───────────────────────────────────────────────────────────────┐  ││
+│  │   │ │ Ya envie el documento al consulado - hace 2 dias             │  ││
+│  │   │ └───────────────────────────────────────────────────────────────┘  ││
+│  │   │ ┌───────────────────────────────────────────────────────────────┐  ││
+│  │   │ │ Escribe una nota...                              [Agregar]   │  ││
+│  │   │ └───────────────────────────────────────────────────────────────┘  ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │ □ Paso 2: Contratar Seguro Medico                             ▶       ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │ □ Paso 3: Obtener Certificado Bancario                        ▶       ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Componentes de UI
-
-### SlotExhaustedModal
+## Flujo de Adjuntar Documento
 
 ```text
+Usuario expande paso
+         │
+         ▼
+┌────────────────────────────────┐
+│ Clic en "+ Adjuntar documento" │
+└────────────────────────────────┘
+         │
+         ▼
 ┌────────────────────────────────────────────────────────────┐
+│               MODAL: Adjuntar Documento                    │
 │                                                            │
-│                     🔒 (Icono Lock)                        │
+│  Selecciona un documento de tu boveda:                     │
 │                                                            │
-│         "Has agotado tu ruta gratuita"                     │
+│  ┌────────────────────────────────────────────────────────┐│
+│  │  📄 Pasaporte           Subido ✓           [Adjuntar] ││
+│  │  📄 Antecedentes        Pendiente          [Adjuntar] ││
+│  │  📄 Seguro Medico       Subido ✓           [Adjuntar] ││
+│  └────────────────────────────────────────────────────────┘│
 │                                                            │
-│  Tu plan Free te permite iniciar 1 ruta de por vida.      │
-│                                                            │
-│  Pásate al Plan Pro por solo €6,99/mes para:              │
-│  • Explorar nuevos destinos                               │
-│  • Gestionar hasta 3 procesos simultáneamente             │
-│  • Acceder a recursos premium                             │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │      👑  Mejorar a Pro - €6,99/mes                 │   │
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-│                     [Entendido]                            │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
-
-### DeleteRouteModal
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│                                                            │
-│                     ⚠️ (Icono Warning)                     │
-│                                                            │
-│            "¿Eliminar [Nombre Ruta]?"                      │
-│                                                            │
-│  Esta acción es irreversible. Se eliminará todo tu        │
-│  progreso guardado en esta ruta.                          │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │  ⚠️ Si estás en el Plan Gratis, no podrás         │   │
-│  │  iniciar otra ruta sin suscribirte a Pro.          │   │
-│  └────────────────────────────────────────────────────┘   │
-│  (Solo visible si isPro === false)                        │
-│                                                            │
-│  ┌─────────────────┐  ┌─────────────────────────────┐     │
-│  │    Cancelar     │  │   🗑️ Eliminar ruta          │     │
-│  └─────────────────┘  └─────────────────────────────┘     │
-│                        (variant="destructive")             │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
-
-### RouteActionsMenu (Dropdown)
-
-```text
-ActiveRouteCard existente
-┌─────────────────────────────────────────────────────────────┐
-│  Nómada Digital                              ⚙️ (Settings) │ ← Nuevo botón
-│  🇪🇸 España                                                  │
-│                                                             │
-│  Progreso: 2/5 pasos                                       │
-│  [═══════════░░░░░░░░░░░]                                  │
-└─────────────────────────────────────────────────────────────┘
-                                                   │
-                                                   ▼
-                                    ┌────────────────────────┐
-                                    │  📋 Ver detalles       │
-                                    │  🗑️ Eliminar ruta      │
-                                    └────────────────────────┘
-```
-
----
-
-## Pantalla de Recomendación Post-Análisis
-
-Modificar `AnalysisModal.tsx` para mostrar 2 CTAs:
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│                                                            │
-│                     ✓ (CheckCircle)                        │
-│                                                            │
-│              "Análisis Completado"                         │
-│                                                            │
-│  Hemos analizado tu perfil y encontramos la mejor         │
-│  opción para ti.                                          │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │  🎯 Tu mejor opción                                │   │
-│  │                                                    │   │
-│  │  Visado de Nómada Digital                          │   │
-│  │                                                    │   │
-│  │  Con tus ingresos de trabajo remoto, calificas...  │   │
-│  │                                                    │   │
-│  │  [═══════════════════════] 95% match              │   │
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │         Iniciar esta ruta ahora  →                 │   │  ← Primary (hero)
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │         Ver otros destinos disponibles             │   │  ← Secondary (outline)
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
+│                                           [Cancelar]       │
 └────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Sección Técnica
+## Flujo de Notas Estilo Asana
 
-### Migración SQL
+```text
+Usuario en paso expandido
+         │
+         ▼
+┌────────────────────────────────────────────────────────────┐
+│  💬 Notas                                                  │
+│                                                            │
+│  ┌────────────────────────────────────────────────────────┐│
+│  │ 👤 Tu (hace 2 dias)                                    ││
+│  │ Ya envie los documentos apostillados al consulado      ││
+│  │ de Barcelona.                                          ││
+│  └────────────────────────────────────────────────────────┘│
+│                                                            │
+│  ┌────────────────────────────────────────────────────────┐│
+│  │ Agregar nota...                                        ││
+│  │                                                        ││
+│  │ ┌────────────────────────────────────────────────────┐ ││
+│  │ │ Escribe aqui tu nota o recordatorio...            │ ││
+│  │ └────────────────────────────────────────────────────┘ ││
+│  │                                         [Agregar]      ││
+│  └────────────────────────────────────────────────────────┘│
+└────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Seccion Tecnica
+
+### Migracion SQL
 
 ```sql
--- 1. Agregar columna total_routes_created
-ALTER TABLE onboarding_submissions 
-ADD COLUMN IF NOT EXISTS total_routes_created INTEGER NOT NULL DEFAULT 0;
-
--- 2. Inicializar contador para usuarios existentes
-UPDATE onboarding_submissions os
-SET total_routes_created = (
-  SELECT COUNT(*) 
-  FROM user_active_routes uar 
-  WHERE uar.user_id = os.user_id
+-- Tabla para notas en pasos
+CREATE TABLE step_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  step_id UUID NOT NULL REFERENCES user_route_progress(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 3. Crear trigger para incrementar contador
-CREATE OR REPLACE FUNCTION increment_total_routes_created()
-RETURNS TRIGGER AS $$
-BEGIN
-  UPDATE onboarding_submissions
-  SET total_routes_created = total_routes_created + 1
-  WHERE user_id = NEW.user_id;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- RLS para step_notes
+ALTER TABLE step_notes ENABLE ROW LEVEL SECURITY;
 
-CREATE TRIGGER on_route_created
-AFTER INSERT ON user_active_routes
-FOR EACH ROW
-EXECUTE FUNCTION increment_total_routes_created();
-
--- 4. Política DELETE para user_route_progress
-CREATE POLICY "Users can delete their route progress"
-ON user_route_progress FOR DELETE
+CREATE POLICY "Users can view their own notes"
+ON step_notes FOR SELECT
 USING (
   EXISTS (
-    SELECT 1 FROM user_active_routes
-    WHERE user_active_routes.id = user_route_progress.user_route_id
-    AND user_active_routes.user_id = auth.uid()
+    SELECT 1 FROM user_route_progress urp
+    JOIN user_active_routes uar ON urp.user_route_id = uar.id
+    WHERE urp.id = step_notes.step_id
+    AND uar.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Users can insert their own notes"
+ON step_notes FOR INSERT
+WITH CHECK (
+  auth.uid() = user_id AND
+  EXISTS (
+    SELECT 1 FROM user_route_progress urp
+    JOIN user_active_routes uar ON urp.user_route_id = uar.id
+    WHERE urp.id = step_notes.step_id
+    AND uar.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Users can delete their own notes"
+ON step_notes FOR DELETE
+USING (user_id = auth.uid());
+
+-- Tabla para documentos adjuntos a pasos
+CREATE TABLE step_attachments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  step_id UUID NOT NULL REFERENCES user_route_progress(id) ON DELETE CASCADE,
+  document_type TEXT NOT NULL,
+  file_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- RLS para step_attachments
+ALTER TABLE step_attachments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage their step attachments"
+ON step_attachments FOR ALL
+USING (
+  EXISTS (
+    SELECT 1 FROM user_route_progress urp
+    JOIN user_active_routes uar ON urp.user_route_id = uar.id
+    WHERE urp.id = step_attachments.step_id
+    AND uar.user_id = auth.uid()
   )
 );
 ```
 
-### useRoutes.tsx actualizado
+### Nueva Ruta en App.tsx
 
 ```typescript
-interface UseRoutesReturn {
-  // ... existing
-  deleteRoute: (routeId: string) => Promise<boolean>;
-  totalRoutesCreated: number;
-  slotExhausted: boolean;
-}
+import RouteDetail from "./pages/RouteDetail";
 
-export const useRoutes = (): UseRoutesReturn => {
-  const [totalRoutesCreated, setTotalRoutesCreated] = useState(0);
-  
-  // Fetch totalRoutesCreated from onboarding_submissions
-  useEffect(() => {
-    if (user) {
-      supabase
-        .from("onboarding_submissions")
-        .select("total_routes_created")
-        .eq("user_id", user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          setTotalRoutesCreated(data?.total_routes_created || 0);
-        });
-    }
-  }, [user]);
-  
-  // Updated canAddRoute logic
-  const slotExhausted = subscriptionStatus !== "pro" && totalRoutesCreated >= 1;
-  const canAddRoute = subscriptionStatus === "pro" 
-    ? activeRoutes.length < maxRoutes 
-    : totalRoutesCreated < 1;
-  
-  // Delete route function
-  const deleteRoute = useCallback(async (routeId: string) => {
-    // ... implementation
-  }, [user]);
-  
-  return {
-    // ... existing
-    deleteRoute,
-    totalRoutesCreated,
-    slotExhausted,
-  };
-};
+// En Routes:
+<Route path="/dashboard/route/:routeId" element={<RouteDetail />} />
 ```
 
-### Actualización de Precios
+### Hook useRouteDetail
 
-El precio mencionado es €6,99/mes, pero el precio actual en Stripe es €9,99/mes. Esto requerirá:
+```typescript
+// src/hooks/useRouteDetail.tsx
+interface UseRouteDetailReturn {
+  route: ActiveRoute | null;
+  notes: StepNote[];
+  attachments: StepAttachment[];
+  isLoading: boolean;
+  addNote: (stepId: string, content: string) => Promise<void>;
+  deleteNote: (noteId: string) => Promise<void>;
+  attachDocument: (stepId: string, documentType: string) => Promise<void>;
+  removeAttachment: (attachmentId: string) => Promise<void>;
+}
+```
 
-1. **Crear nuevo precio en Stripe** a €6,99/mes
-2. **Actualizar** `create-checkout/index.ts` con el nuevo `priceId`
-3. **Actualizar** mensajes en modales con el precio correcto
+### StepCard Component
+
+```typescript
+interface StepCardProps {
+  step: RouteStep;
+  notes: StepNote[];
+  attachments: StepAttachment[];
+  isExpanded: boolean;
+  onToggle: () => void;
+  onToggleComplete: (isCompleted: boolean) => void;
+  onAddNote: (content: string) => void;
+  onAttachDocument: () => void;
+}
+```
 
 ---
 
-## Verificación
+## Orden de Implementacion
+
+1. **Migracion SQL** - Crear tablas `step_notes` y `step_attachments`
+2. **Hook useRouteDetail** - Logica para cargar ruta individual con notas y adjuntos
+3. **RouteHeader.tsx** - Encabezado con info de ruta y navegacion
+4. **StepNotes.tsx** - Componente de notas/comentarios
+5. **StepAttachments.tsx** - Componente de documentos adjuntos
+6. **StepCard.tsx** - Tarjeta expandible con todo integrado
+7. **AttachDocumentModal.tsx** - Modal selector de documentos
+8. **RouteDetail.tsx** - Pagina principal que une todo
+9. **App.tsx** - Agregar ruta
+10. **Dashboard.tsx** - Simplificar a lista de rutas
+11. **ActiveRouteCard.tsx** - Cambiar onClick a navigate
+
+---
+
+## Verificacion
 
 | Escenario | Resultado Esperado |
 |-----------|-------------------|
-| Usuario Free crea 1ra ruta | ✅ Éxito, `total_routes_created` = 1 |
-| Usuario Free intenta 2da ruta | ❌ SlotExhaustedModal aparece |
-| Usuario Free elimina ruta | ✅ Ruta eliminada, `total_routes_created` permanece 1 |
-| Usuario Free intenta nueva ruta | ❌ SlotExhaustedModal aparece |
-| Usuario Pro crea 3 rutas | ✅ Éxito |
-| Usuario Pro elimina 1, crea nueva | ✅ Éxito (límite de activas, no históricas) |
-| Post-análisis muestra 2 CTAs | ✅ "Iniciar ruta" y "Ver otros destinos" |
-| Delete modal muestra advertencia Free | ✅ Solo si `isPro === false` |
-
----
-
-## Orden de Implementación
-
-1. **Migración SQL** - Agregar columna y trigger
-2. **SlotExhaustedModal.tsx** - Nuevo componente
-3. **DeleteRouteModal.tsx** - Nuevo componente  
-4. **RouteActionsMenu.tsx** - Dropdown para ActiveRouteCard
-5. **useRoutes.tsx** - Agregar `deleteRoute`, `totalRoutesCreated`, `slotExhausted`
-6. **ActiveRouteCard.tsx** - Integrar menú de acciones
-7. **AnalysisModal.tsx** - Agregar segundo CTA para explorar
-8. **Dashboard.tsx y Explorar.tsx** - Integrar nuevos modales
-9. **Actualizar precio** - Cambiar a €6,99 si es necesario
-
+| Click en ruta desde Dashboard | Navega a `/dashboard/route/:id` |
+| Expandir paso | Muestra descripcion, docs adjuntos, notas |
+| Agregar nota | Aparece en lista con timestamp |
+| Adjuntar documento | Modal muestra docs de boveda, se vincula |
+| Toggle checkbox | Actualiza progreso optimisticamente |
+| Volver a Dashboard | Breadcrumb o boton navega correctamente |
+| Usuario sin rutas | Redirige o muestra mensaje apropiado |
