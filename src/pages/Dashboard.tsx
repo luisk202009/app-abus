@@ -29,6 +29,7 @@ interface UserData {
   visaType: string;
   visaTitle: string;
   leadId?: string;
+  source?: string;
 }
 
 interface Task {
@@ -83,6 +84,7 @@ const Dashboard = () => {
       visaType?: string;
       visaTitle?: string;
       leadId?: string;
+      source?: string;
     } | null;
 
     if (state?.name) {
@@ -92,6 +94,7 @@ const Dashboard = () => {
         visaType: state.visaType || "consultation",
         visaTitle: state.visaTitle || "Consulta Inicial Personalizada",
         leadId: state.leadId,
+        source: state.source,
       });
     }
 
@@ -133,6 +136,27 @@ const Dashboard = () => {
 
     loadData();
   }, [location.state, user, authLoading]);
+
+  // Auto-start regularization route when coming from /regularizacion landing page
+  useEffect(() => {
+    const source = localStorage.getItem("onboarding_source") || userData.source;
+    
+    if (source === "regularizacion" && user && !routesLoading && templates.length > 0 && canAddRoute) {
+      // Clear localStorage
+      localStorage.removeItem("onboarding_source");
+      
+      // Find the regularization template
+      const regTemplate = templates.find(t => 
+        t.name.toLowerCase().includes("regularización") || 
+        t.name.toLowerCase().includes("regularizacion")
+      );
+      
+      if (regTemplate && activeRoutes.length === 0) {
+        // Auto-start the route
+        handleStartRoute(regTemplate.id);
+      }
+    }
+  }, [user, routesLoading, templates, canAddRoute, userData.source, activeRoutes.length]);
 
   const fetchTasks = async (userId: string) => {
     try {
