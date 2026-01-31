@@ -208,6 +208,70 @@ export type Database = {
         }
         Relationships: []
       }
+      step_attachments: {
+        Row: {
+          created_at: string
+          document_type: string
+          file_url: string | null
+          id: string
+          step_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_type: string
+          file_url?: string | null
+          id?: string
+          step_id: string
+        }
+        Update: {
+          created_at?: string
+          document_type?: string
+          file_url?: string | null
+          id?: string
+          step_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "step_attachments_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "user_route_progress"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      step_notes: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          step_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          step_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          step_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "step_notes_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "user_route_progress"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_active_routes: {
         Row: {
           created_at: string | null

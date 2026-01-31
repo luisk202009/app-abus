@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { AdminModeProvider } from "@/contexts/AdminModeContext";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
+import RouteDetail from "./pages/RouteDetail";
 import Explorar from "./pages/Explorar";
 import Success from "./pages/Success";
 import Terms from "./pages/Terms";
@@ -28,6 +29,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard/route/:routeId" element={<RouteDetail />} />
               <Route path="/explorar" element={<Explorar />} />
               <Route path="/success" element={<Success />} />
               <Route path="/terminos" element={<Terms />} />
