@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Check, MapPin, ChevronRight } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { ActiveRoute } from "@/hooks/useRoutes";
@@ -7,7 +8,7 @@ import { RouteActionsMenu } from "./RouteActionsMenu";
 interface ActiveRouteCardProps {
   route: ActiveRoute;
   progress: { completed: number; total: number };
-  onClick: () => void;
+  onClick?: () => void;
   isSelected?: boolean;
   onViewDetails?: () => void;
   onDelete?: () => void;
@@ -21,13 +22,19 @@ export const ActiveRouteCard = ({
   onViewDetails,
   onDelete,
 }: ActiveRouteCardProps) => {
+  const navigate = useNavigate();
   const progressPercent =
     progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
   const isCompleted = progressPercent === 100;
 
+  const handleClick = () => {
+    // Navigate to route detail page
+    navigate(`/dashboard/route/${route.id}`);
+  };
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       className={cn(
         "w-full text-left bg-background rounded-xl border p-4 transition-all hover:shadow-md",
         isSelected ? "border-primary ring-1 ring-primary" : "border-border"
@@ -68,9 +75,9 @@ export const ActiveRouteCard = ({
 
         {/* Actions */}
         <div className="flex items-center gap-1 shrink-0">
-          {onViewDetails && onDelete && (
+          {onDelete && (
             <RouteActionsMenu
-              onViewDetails={onViewDetails}
+              onViewDetails={handleClick}
               onDelete={onDelete}
             />
           )}

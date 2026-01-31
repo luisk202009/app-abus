@@ -13,8 +13,6 @@ import { RouteLimitModal } from "@/components/dashboard/RouteLimitModal";
 import { SlotExhaustedModal } from "@/components/dashboard/SlotExhaustedModal";
 import { DeleteRouteModal } from "@/components/dashboard/DeleteRouteModal";
 import { ActiveRouteCard } from "@/components/dashboard/ActiveRouteCard";
-import { RouteChecklist } from "@/components/dashboard/RouteChecklist";
-import { ActiveRouteSwitcher } from "@/components/dashboard/ActiveRouteSwitcher";
 import { SuccessConfetti } from "@/components/dashboard/SuccessConfetti";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -51,7 +49,6 @@ const Dashboard = () => {
     isLoading: routesLoading,
     isStartingRoute,
     startRoute,
-    updateStepProgress,
     deleteRoute,
     canAddRoute,
     maxRoutes,
@@ -71,16 +68,12 @@ const Dashboard = () => {
   const [routeToDelete, setRouteToDelete] = useState<ActiveRoute | null>(null);
   const [isDeletingRoute, setIsDeletingRoute] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserData>({
     name: "Usuario",
     email: "",
     visaType: "consultation",
     visaTitle: "Consulta Inicial Personalizada",
   });
-
-  // Get selected route details
-  const selectedRoute = activeRoutes.find((r) => r.id === selectedRouteId);
 
   useEffect(() => {
     // Get data from location state (passed from onboarding)
@@ -140,13 +133,6 @@ const Dashboard = () => {
 
     loadData();
   }, [location.state, user, authLoading]);
-
-  // Auto-select first active route when routes load
-  useEffect(() => {
-    if (activeRoutes.length > 0 && !selectedRouteId) {
-      setSelectedRouteId(activeRoutes[0].id);
-    }
-  }, [activeRoutes, selectedRouteId]);
 
   const fetchTasks = async (userId: string) => {
     try {
@@ -285,21 +271,12 @@ const Dashboard = () => {
     if (success) {
       setShowDeleteModal(false);
       setRouteToDelete(null);
-      // If the deleted route was selected, select the first remaining route
-      if (selectedRouteId === routeToDelete.id) {
-        const remainingRoutes = activeRoutes.filter(r => r.id !== routeToDelete.id);
-        setSelectedRouteId(remainingRoutes[0]?.id || null);
-      }
     }
-  }, [routeToDelete, deleteRoute, selectedRouteId, activeRoutes]);
+  }, [routeToDelete, deleteRoute, activeRoutes]);
 
   const handleConfettiComplete = useCallback(() => {
     setShowConfetti(false);
   }, []);
-
-  const handleStepToggle = (stepId: string, isCompleted: boolean) => {
-    updateStepProgress(stepId, isCompleted);
-  };
 
   // Render the active section content
   const renderContent = () => {
@@ -351,7 +328,7 @@ const Dashboard = () => {
           );
         }
 
-        // Show active routes list and selected route checklist
+        // Show active routes list - clicking navigates to route detail
         return (
           <div className="space-y-6">
             {/* Active Routes List */}
@@ -371,29 +348,21 @@ const Dashboard = () => {
                 )}
               </div>
 
+              <p className="text-sm text-muted-foreground">
+                Haz clic en una ruta para ver los pasos, agregar notas y adjuntar documentos.
+              </p>
+
               <div className="grid gap-3">
-                  {activeRoutes.map((route) => (
-                    <ActiveRouteCard
-                      key={route.id}
-                      route={route}
-                      progress={getActiveRouteProgress(route.id)}
-                      onClick={() => setSelectedRouteId(route.id)}
-                      isSelected={route.id === selectedRouteId}
-                      onViewDetails={() => setSelectedRouteId(route.id)}
-                      onDelete={() => handleDeleteRouteClick(route)}
-                    />
-                  ))}
+                {activeRoutes.map((route) => (
+                  <ActiveRouteCard
+                    key={route.id}
+                    route={route}
+                    progress={getActiveRouteProgress(route.id)}
+                    onDelete={() => handleDeleteRouteClick(route)}
+                  />
+                ))}
               </div>
             </div>
-
-            {/* Selected Route Checklist */}
-            {selectedRoute && (
-              <RouteChecklist
-                steps={selectedRoute.progress}
-                onToggleStep={handleStepToggle}
-                routeName={selectedRoute.template?.name || "Mi Ruta"}
-              />
-            )}
 
             {/* Legacy Task List (if any tasks exist) */}
             {tasks.length > 0 && (
@@ -444,20 +413,9 @@ const Dashboard = () => {
 
           {/* Header */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Hola, {userData.name}!
-              </h1>
-              {/* Route Switcher for Pro users with multiple routes */}
-              {isPremium && activeRoutes.length > 1 && (
-                <ActiveRouteSwitcher
-                  routes={activeRoutes}
-                  selectedRouteId={selectedRouteId}
-                  onSelectRoute={setSelectedRouteId}
-                  getProgress={getActiveRouteProgress}
-                />
-              )}
-            </div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Hola, {userData.name}!
+            </h1>
             <p className="text-muted-foreground">
               {activeRoutes.length > 0
                 ? `Tienes ${activeRoutes.length} ruta${
