@@ -1,350 +1,316 @@
 
-# Plan: Rediseno de Vista de Rutas con Pagina de Detalle Estilo Asana
+# Plan: Editor de Plantillas Maestras para Panel Admin
 
 ## Resumen
 
-Transformar la experiencia de gestion de rutas de una vista unica con checklist cambiante a una arquitectura de pagina dedicada por ruta. Cada ruta tendra su propia pagina interna con tareas expandibles estilo Asana, documentos adjuntos y sistema de notas/comentarios.
+Implementar un sistema completo de gestion de plantillas de rutas en el Panel de Administracion. El editor permitira crear, editar y eliminar rutas y sus pasos asociados, con una interfaz intuitiva que sigue los patrones existentes de AdminPlansTab y AdminResourcesTab.
 
 ---
 
-## Estado Actual vs. Nuevo Diseno
+## Estado Actual
 
-```text
-ACTUAL                                       NUEVO
-┌────────────────────────────────┐           ┌────────────────────────────────┐
-│  Dashboard                     │           │  Dashboard (/dashboard)        │
-│                                │           │                                │
-│  ┌─────────────────────────┐   │           │  ┌─────────────────────────┐   │
-│  │ Ruta 1 (seleccionada)   │   │           │  │ Ruta 1              →   │   │  Click navega
-│  └─────────────────────────┘   │           │  └─────────────────────────┘   │
-│  ┌─────────────────────────┐   │           │  ┌─────────────────────────┐   │
-│  │ Ruta 2                  │   │           │  │ Ruta 2              →   │   │
-│  └─────────────────────────┘   │           │  └─────────────────────────────┘
-│                                │           │                                │
-│  ═══════════════════════════   │           └────────────────────────────────┘
-│                                │                        │
-│  ┌─────────────────────────┐   │                        ▼ Click
-│  │ Checklist de Ruta 1     │   │           ┌────────────────────────────────┐
-│  │ □ Paso 1                │   │           │  Route Detail                  │
-│  │ □ Paso 2                │   │           │  (/dashboard/route/:id)        │
-│  │ □ Paso 3                │   │           │                                │
-│  └─────────────────────────┘   │           │  ┌─────────────────────────┐   │
-│                                │           │  │ Paso 1 (expandible)     │   │
-└────────────────────────────────┘           │  │   ├─ Descripcion        │   │
-                                             │  │   ├─ Documentos 📎      │   │
-                                             │  │   └─ Notas 💬           │   │
-                                             │  └─────────────────────────┘   │
-                                             │  ┌─────────────────────────┐   │
-                                             │  │ Paso 2 (expandible)     │   │
-                                             │  └─────────────────────────┘   │
-                                             └────────────────────────────────┘
-```
-
----
-
-## Nueva Arquitectura de Navegacion
-
-```text
-/dashboard
-    │
-    ├── Vista: Lista de rutas activas (cards)
-    │
-    └── Click en ruta
-           │
-           ▼
-/dashboard/route/:routeId
-    │
-    ├── Encabezado: Nombre ruta + progreso + pais
-    │
-    ├── Tabs o Secciones:
-    │   ├── Tareas (checklist expandible)
-    │   ├── Documentos (vincular de boveda)
-    │   └── Actividad (timeline de notas)
-    │
-    └── Panel lateral o modal de tarea seleccionada
-```
+| Componente | Estado | Detalles |
+|------------|--------|----------|
+| `route_templates` | Solo lectura | 5 rutas existentes (Nomada Digital, Estudiante, etc.) |
+| `route_template_steps` | Solo lectura | 20+ pasos distribuidos entre rutas |
+| RLS Policies | Solo SELECT | Falta INSERT, UPDATE, DELETE para admin |
+| Admin Panel | 3 tabs | Usuarios, Planes, Recursos |
+| `is_admin()` | Existe | Funcion SECURITY DEFINER disponible |
 
 ---
 
 ## Cambios de Base de Datos
 
-### Nueva tabla: `step_notes`
+### 1. Nueva columna `difficulty` en route_templates
 
-Para almacenar notas/comentarios en cada paso de la ruta (estilo Asana):
+```sql
+ALTER TABLE route_templates
+ADD COLUMN difficulty TEXT DEFAULT 'media';
+```
 
-| Columna | Tipo | Descripcion |
-|---------|------|-------------|
-| `id` | uuid | PK |
-| `step_id` | uuid | FK a user_route_progress |
-| `user_id` | uuid | Autor de la nota |
-| `content` | text | Contenido de la nota |
-| `created_at` | timestamptz | Fecha de creacion |
+### 2. Politicas RLS para route_templates
 
-### Nueva tabla: `step_attachments`
+```sql
+-- Admin puede insertar rutas
+CREATE POLICY "Admin can insert route templates"
+ON route_templates FOR INSERT
+WITH CHECK (is_admin());
 
-Para vincular documentos de la boveda a pasos especificos:
+-- Admin puede actualizar rutas
+CREATE POLICY "Admin can update route templates"
+ON route_templates FOR UPDATE
+USING (is_admin())
+WITH CHECK (is_admin());
 
-| Columna | Tipo | Descripcion |
-|---------|------|-------------|
-| `id` | uuid | PK |
-| `step_id` | uuid | FK a user_route_progress |
-| `document_type` | text | Tipo de documento (passport, etc.) |
-| `file_url` | text | URL del archivo en storage (opcional) |
-| `created_at` | timestamptz | Fecha |
+-- Admin puede eliminar rutas
+CREATE POLICY "Admin can delete route templates"
+ON route_templates FOR DELETE
+USING (is_admin());
+```
+
+### 3. Politicas RLS para route_template_steps
+
+```sql
+-- Admin puede insertar pasos
+CREATE POLICY "Admin can insert route template steps"
+ON route_template_steps FOR INSERT
+WITH CHECK (is_admin());
+
+-- Admin puede actualizar pasos
+CREATE POLICY "Admin can update route template steps"
+ON route_template_steps FOR UPDATE
+USING (is_admin())
+WITH CHECK (is_admin());
+
+-- Admin puede eliminar pasos
+CREATE POLICY "Admin can delete route template steps"
+ON route_template_steps FOR DELETE
+USING (is_admin());
+```
 
 ---
 
-## Componentes a Crear
+## Arquitectura del Editor
 
-| Archivo | Descripcion |
-|---------|-------------|
-| `src/pages/RouteDetail.tsx` | Nueva pagina dedicada para cada ruta |
-| `src/components/route-detail/StepCard.tsx` | Tarjeta de paso expandible estilo Asana |
-| `src/components/route-detail/StepNotes.tsx` | Seccion de notas/comentarios |
-| `src/components/route-detail/StepAttachments.tsx` | Selector de documentos de boveda |
-| `src/components/route-detail/RouteHeader.tsx` | Header con nombre, progreso y acciones |
-| `src/components/route-detail/AttachDocumentModal.tsx` | Modal para vincular documentos |
-
-## Archivos a Modificar
-
-| Archivo | Cambio |
-|---------|--------|
-| `src/App.tsx` | Agregar ruta `/dashboard/route/:routeId` |
-| `src/pages/Dashboard.tsx` | Simplificar a lista de rutas + navegacion |
-| `src/components/dashboard/ActiveRouteCard.tsx` | Modificar onClick para navegar |
-| `src/hooks/useRoutes.tsx` | Agregar funciones para notas y adjuntos |
+```text
+Admin Panel (/admin)
+│
+├── Tab: Usuarios (existente)
+├── Tab: Planes (existente)
+├── Tab: Recursos (existente)
+│
+└── Tab: Rutas (NUEVO)
+    │
+    ├── Seccion A: Catalogo de Rutas
+    │   ├── Tabla con todas las rutas
+    │   ├── Boton "+ Nueva ruta"
+    │   └── Acciones: Editar, Ver pasos, Eliminar
+    │
+    └── Seccion B: Editor de Pasos (condicional)
+        ├── Aparece al seleccionar una ruta
+        ├── Lista ordenada de pasos
+        ├── Boton "+ Nuevo paso"
+        └── Drag & drop o flechas para reordenar
+```
 
 ---
 
-## Diseno de la Pagina de Detalle de Ruta
+## Diseno de Interfaz
+
+### Vista Principal del Tab "Rutas"
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  ← Volver a mis rutas                                                       │
+│  Catalogo de Rutas                                          [+ Nueva ruta] │
+│  Gestiona las plantillas de rutas disponibles para usuarios                │
+├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │  Visado Nomada Digital                                    🇪🇸 Espana   ││
-│  │                                                                         ││
-│  │  [═══════════════════════░░░░░░░░░] 60% • 3/5 pasos completados        ││
-│  │                                                            ⚙️ Gestionar ││
+│  │ Nombre          │ Pais    │ Dificultad │ Pasos │ Acciones              ││
+│  ├─────────────────────────────────────────────────────────────────────────┤│
+│  │ Nomada Digital  │ Espana  │ Media      │ 5     │ [Edit][Steps][Delete] ││
+│  │ Estudiante      │ Espana  │ Facil      │ 5     │ [Edit][Steps][Delete] ││
+│  │ Emprendedor     │ Espana  │ Alta       │ 5     │ [Edit][Steps][Delete] ││
+│  │ Arraigo Social  │ Espana  │ Media      │ 6     │ [Edit][Steps][Delete] ││
 │  └─────────────────────────────────────────────────────────────────────────┘│
 │                                                                             │
-│  TAREAS                                                                     │
-│  ───────────────────────────────────────────────────────────────────────────│
+│  ═══════════════════════════════════════════════════════════════════════════│
+│                                                                             │
+│  Pasos de: Nomada Digital                                   [+ Nuevo paso] │
+│  ─────────────────────────────────────────────────────────────────────────  │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │ ✓ Paso 1: Apostillar Antecedentes                                      ││
-│  │   │                                                           ▼ expand ││
-│  │   ├─────────────────────────────────────────────────────────────────────││
-│  │   │ Descripcion:                                                       ││
-│  │   │ El certificado debe estar apostillado por la Haya...               ││
-│  │   │                                                                    ││
-│  │   │ 📎 Documentos adjuntos:                                            ││
-│  │   │ ┌────────────┐  ┌────────────┐                                     ││
-│  │   │ │ Pasaporte  │  │ + Adjuntar │                                     ││
-│  │   │ └────────────┘  └────────────┘                                     ││
-│  │   │                                                                    ││
-│  │   │ 💬 Notas (2):                                                      ││
-│  │   │ ┌───────────────────────────────────────────────────────────────┐  ││
-│  │   │ │ Ya envie el documento al consulado - hace 2 dias             │  ││
-│  │   │ └───────────────────────────────────────────────────────────────┘  ││
-│  │   │ ┌───────────────────────────────────────────────────────────────┐  ││
-│  │   │ │ Escribe una nota...                              [Agregar]   │  ││
-│  │   │ └───────────────────────────────────────────────────────────────┘  ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │ □ Paso 2: Contratar Seguro Medico                             ▶       ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │ □ Paso 3: Obtener Certificado Bancario                        ▶       ││
+│  │ #  │ Titulo                        │ Descripcion          │ Acciones   ││
+│  ├─────────────────────────────────────────────────────────────────────────┤│
+│  │ 1  │ Preparar documentacion base   │ Pasaporte vigente... │ [↑][↓][✏][🗑]││
+│  │ 2  │ Demostrar ingresos remotos    │ Contratos de trab... │ [↑][↓][✏][🗑]││
+│  │ 3  │ Seguro medico                 │ Contratar seguro...  │ [↑][↓][✏][🗑]││
+│  │ 4  │ Solicitar cita consular       │ Agendar cita en...   │ [↑][↓][✏][🗑]││
+│  │ 5  │ Entrevista consular           │ Asistir a la ent...  │ [↑][↓][✏][🗑]││
 │  └─────────────────────────────────────────────────────────────────────────┘│
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## Flujo de Adjuntar Documento
+### Modal: Crear/Editar Ruta
 
 ```text
-Usuario expande paso
-         │
-         ▼
-┌────────────────────────────────┐
-│ Clic en "+ Adjuntar documento" │
-└────────────────────────────────┘
-         │
-         ▼
 ┌────────────────────────────────────────────────────────────┐
-│               MODAL: Adjuntar Documento                    │
+│  Nueva ruta                                           [X]  │
+├────────────────────────────────────────────────────────────┤
 │                                                            │
-│  Selecciona un documento de tu boveda:                     │
-│                                                            │
+│  Nombre de la Ruta                                         │
 │  ┌────────────────────────────────────────────────────────┐│
-│  │  📄 Pasaporte           Subido ✓           [Adjuntar] ││
-│  │  📄 Antecedentes        Pendiente          [Adjuntar] ││
-│  │  📄 Seguro Medico       Subido ✓           [Adjuntar] ││
+│  │ Visado de Nomada Digital                               ││
 │  └────────────────────────────────────────────────────────┘│
 │                                                            │
-│                                           [Cancelar]       │
+│  Pais                        Nivel de Dificultad           │
+│  ┌──────────────────────┐    ┌──────────────────────┐      │
+│  │ Espana          ▼    │    │ Media           ▼    │      │
+│  └──────────────────────┘    └──────────────────────┘      │
+│                                                            │
+│  Descripcion breve                                         │
+│  ┌────────────────────────────────────────────────────────┐│
+│  │ Visado para trabajadores remotos con ingresos estables ││
+│  │ desde cualquier parte del mundo.                       ││
+│  └────────────────────────────────────────────────────────┘│
+│                                                            │
+│  Coste Estimado              Ahorros Requeridos            │
+│  ┌──────────────────────┐    ┌──────────────────────┐      │
+│  │ 800 - 1,200 EUR      │    │ 10,000+ EUR          │      │
+│  └──────────────────────┘    └──────────────────────┘      │
+│                                                            │
+│                              [Cancelar]  [Guardar ruta]    │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Modal: Crear/Editar Paso
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│  Nuevo paso                                           [X]  │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  Titulo del Paso                                           │
+│  ┌────────────────────────────────────────────────────────┐│
+│  │ Demostrar ingresos remotos                             ││
+│  └────────────────────────────────────────────────────────┘│
+│                                                            │
+│  Orden                                                     │
+│  ┌────────────────────────────────────────────────────────┐│
+│  │ 2                                                      ││
+│  └────────────────────────────────────────────────────────┘│
+│                                                            │
+│  Descripcion                                               │
+│  ┌────────────────────────────────────────────────────────┐│
+│  │ Contratos de trabajo remoto o facturas de clientes     ││
+│  │ (minimo 2,520 EUR/mes). Incluir extractos bancarios    ││
+│  │ de los ultimos 3-6 meses.                              ││
+│  └────────────────────────────────────────────────────────┘│
+│                                                            │
+│                              [Cancelar]  [Guardar paso]    │
+│                                                            │
 └────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Flujo de Notas Estilo Asana
+## Archivos a Crear
 
-```text
-Usuario en paso expandido
-         │
-         ▼
-┌────────────────────────────────────────────────────────────┐
-│  💬 Notas                                                  │
-│                                                            │
-│  ┌────────────────────────────────────────────────────────┐│
-│  │ 👤 Tu (hace 2 dias)                                    ││
-│  │ Ya envie los documentos apostillados al consulado      ││
-│  │ de Barcelona.                                          ││
-│  └────────────────────────────────────────────────────────┘│
-│                                                            │
-│  ┌────────────────────────────────────────────────────────┐│
-│  │ Agregar nota...                                        ││
-│  │                                                        ││
-│  │ ┌────────────────────────────────────────────────────┐ ││
-│  │ │ Escribe aqui tu nota o recordatorio...            │ ││
-│  │ └────────────────────────────────────────────────────┘ ││
-│  │                                         [Agregar]      ││
-│  └────────────────────────────────────────────────────────┘│
-└────────────────────────────────────────────────────────────┘
-```
+| Archivo | Descripcion |
+|---------|-------------|
+| `src/components/admin/AdminRoutesTab.tsx` | Tab principal con catalogo y editor de pasos |
+| `src/components/admin/RouteTemplateForm.tsx` | Modal/formulario para crear/editar rutas |
+| `src/components/admin/StepTemplateForm.tsx` | Modal/formulario para crear/editar pasos |
+
+## Archivos a Modificar
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/pages/Admin.tsx` | Agregar nuevo tab "Rutas" con icono Map o Route |
 
 ---
 
 ## Seccion Tecnica
 
-### Migracion SQL
+### Migracion SQL Completa
 
 ```sql
--- Tabla para notas en pasos
-CREATE TABLE step_notes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  step_id UUID NOT NULL REFERENCES user_route_progress(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- 1. Agregar columna difficulty
+ALTER TABLE route_templates
+ADD COLUMN IF NOT EXISTS difficulty TEXT DEFAULT 'media';
 
--- RLS para step_notes
-ALTER TABLE step_notes ENABLE ROW LEVEL SECURITY;
+-- 2. RLS para route_templates (admin CRUD)
+CREATE POLICY "Admin can insert route templates"
+ON route_templates FOR INSERT
+WITH CHECK (is_admin());
 
-CREATE POLICY "Users can view their own notes"
-ON step_notes FOR SELECT
-USING (
-  EXISTS (
-    SELECT 1 FROM user_route_progress urp
-    JOIN user_active_routes uar ON urp.user_route_id = uar.id
-    WHERE urp.id = step_notes.step_id
-    AND uar.user_id = auth.uid()
-  )
-);
+CREATE POLICY "Admin can update route templates"
+ON route_templates FOR UPDATE
+USING (is_admin())
+WITH CHECK (is_admin());
 
-CREATE POLICY "Users can insert their own notes"
-ON step_notes FOR INSERT
-WITH CHECK (
-  auth.uid() = user_id AND
-  EXISTS (
-    SELECT 1 FROM user_route_progress urp
-    JOIN user_active_routes uar ON urp.user_route_id = uar.id
-    WHERE urp.id = step_notes.step_id
-    AND uar.user_id = auth.uid()
-  )
-);
+CREATE POLICY "Admin can delete route templates"
+ON route_templates FOR DELETE
+USING (is_admin());
 
-CREATE POLICY "Users can delete their own notes"
-ON step_notes FOR DELETE
-USING (user_id = auth.uid());
+-- 3. RLS para route_template_steps (admin CRUD)
+CREATE POLICY "Admin can insert route template steps"
+ON route_template_steps FOR INSERT
+WITH CHECK (is_admin());
 
--- Tabla para documentos adjuntos a pasos
-CREATE TABLE step_attachments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  step_id UUID NOT NULL REFERENCES user_route_progress(id) ON DELETE CASCADE,
-  document_type TEXT NOT NULL,
-  file_url TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+CREATE POLICY "Admin can update route template steps"
+ON route_template_steps FOR UPDATE
+USING (is_admin())
+WITH CHECK (is_admin());
 
--- RLS para step_attachments
-ALTER TABLE step_attachments ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage their step attachments"
-ON step_attachments FOR ALL
-USING (
-  EXISTS (
-    SELECT 1 FROM user_route_progress urp
-    JOIN user_active_routes uar ON urp.user_route_id = uar.id
-    WHERE urp.id = step_attachments.step_id
-    AND uar.user_id = auth.uid()
-  )
-);
+CREATE POLICY "Admin can delete route template steps"
+ON route_template_steps FOR DELETE
+USING (is_admin());
 ```
 
-### Nueva Ruta en App.tsx
+### Interface TypeScript para RouteTemplate
 
 ```typescript
-import RouteDetail from "./pages/RouteDetail";
+interface RouteTemplate {
+  id: string;
+  name: string;
+  country: string;
+  description: string | null;
+  estimated_cost: string | null;
+  required_savings: string | null;
+  difficulty: 'facil' | 'media' | 'alta';
+}
 
-// En Routes:
-<Route path="/dashboard/route/:routeId" element={<RouteDetail />} />
-```
-
-### Hook useRouteDetail
-
-```typescript
-// src/hooks/useRouteDetail.tsx
-interface UseRouteDetailReturn {
-  route: ActiveRoute | null;
-  notes: StepNote[];
-  attachments: StepAttachment[];
-  isLoading: boolean;
-  addNote: (stepId: string, content: string) => Promise<void>;
-  deleteNote: (noteId: string) => Promise<void>;
-  attachDocument: (stepId: string, documentType: string) => Promise<void>;
-  removeAttachment: (attachmentId: string) => Promise<void>;
+interface RouteTemplateStep {
+  id: string;
+  template_id: string;
+  title: string;
+  description: string | null;
+  step_order: number;
 }
 ```
 
-### StepCard Component
+### Logica de Reordenamiento de Pasos
 
 ```typescript
-interface StepCardProps {
-  step: RouteStep;
-  notes: StepNote[];
-  attachments: StepAttachment[];
-  isExpanded: boolean;
-  onToggle: () => void;
-  onToggleComplete: (isCompleted: boolean) => void;
-  onAddNote: (content: string) => void;
-  onAttachDocument: () => void;
-}
+const moveStepUp = async (step: RouteTemplateStep) => {
+  const currentIndex = steps.findIndex(s => s.id === step.id);
+  if (currentIndex <= 0) return;
+  
+  const prevStep = steps[currentIndex - 1];
+  
+  // Swap orders
+  await supabase.from('route_template_steps')
+    .update({ step_order: prevStep.step_order })
+    .eq('id', step.id);
+    
+  await supabase.from('route_template_steps')
+    .update({ step_order: step.step_order })
+    .eq('id', prevStep.id);
+    
+  fetchSteps();
+};
 ```
+
+### Sincronizacion
+
+Los cambios en plantillas afectan solo a nuevas activaciones:
+- Cuando un usuario inicia una ruta, se copian los pasos actuales a `user_route_progress`
+- Las rutas ya iniciadas mantienen su estado original
+- No se requiere logica adicional de sincronizacion
 
 ---
 
 ## Orden de Implementacion
 
-1. **Migracion SQL** - Crear tablas `step_notes` y `step_attachments`
-2. **Hook useRouteDetail** - Logica para cargar ruta individual con notas y adjuntos
-3. **RouteHeader.tsx** - Encabezado con info de ruta y navegacion
-4. **StepNotes.tsx** - Componente de notas/comentarios
-5. **StepAttachments.tsx** - Componente de documentos adjuntos
-6. **StepCard.tsx** - Tarjeta expandible con todo integrado
-7. **AttachDocumentModal.tsx** - Modal selector de documentos
-8. **RouteDetail.tsx** - Pagina principal que une todo
-9. **App.tsx** - Agregar ruta
-10. **Dashboard.tsx** - Simplificar a lista de rutas
-11. **ActiveRouteCard.tsx** - Cambiar onClick a navigate
+1. **Migracion SQL** - Agregar columna difficulty y politicas RLS
+2. **AdminRoutesTab.tsx** - Componente principal con tabla de rutas
+3. **RouteTemplateForm.tsx** - Modal para crear/editar rutas
+4. **StepTemplateForm.tsx** - Modal para crear/editar pasos
+5. **Admin.tsx** - Integrar nuevo tab
+6. **Funcionalidad de reordenar** - Flechas arriba/abajo para pasos
 
 ---
 
@@ -352,10 +318,10 @@ interface StepCardProps {
 
 | Escenario | Resultado Esperado |
 |-----------|-------------------|
-| Click en ruta desde Dashboard | Navega a `/dashboard/route/:id` |
-| Expandir paso | Muestra descripcion, docs adjuntos, notas |
-| Agregar nota | Aparece en lista con timestamp |
-| Adjuntar documento | Modal muestra docs de boveda, se vincula |
-| Toggle checkbox | Actualiza progreso optimisticamente |
-| Volver a Dashboard | Breadcrumb o boton navega correctamente |
-| Usuario sin rutas | Redirige o muestra mensaje apropiado |
+| Admin crea nueva ruta | Aparece en tabla, disponible para usuarios |
+| Admin edita ruta existente | Cambios guardados, rutas activas no afectadas |
+| Admin elimina ruta | Se elimina con sus pasos (CASCADE) |
+| Admin agrega paso | Aparece en lista ordenada |
+| Admin reordena pasos | Orden actualizado correctamente |
+| Usuario no-admin intenta CRUD | Operacion rechazada por RLS |
+| Nuevo usuario inicia ruta | Recibe los pasos actualizados |
