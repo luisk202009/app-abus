@@ -1,376 +1,411 @@
 
-# Plan: Separar Arraigos y Regularización 2026 con Flujos Independientes
+# Plan: Premium Onboarding and Payment Gateway (Task C01)
 
 ## Resumen
 
-Dividir la experiencia actual de regularización en dos páginas independientes bajo `/españa/`, cada una con su propio flujo de preguntas de elegibilidad específico. Esto permite filtrar mejor a los usuarios y dirigirlos al template correcto según su situación real.
+Implementar un flujo de conversión premium que intercepta a usuarios aptos tras el chequeo de elegibilidad, presentándoles una pantalla de éxito con tabla de precios y pagos únicos vía Stripe. Tras el pago, se crea la cuenta y se asigna la ruta automáticamente.
 
 ---
 
-## Arquitectura de URLs
+## Arquitectura del Nuevo Flujo
 
 ```text
-ANTES:
-/regularizacion → Contenido mixto (3 pilares + docs)
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                    FLUJO ACTUAL (a modificar)                                 │
+└───────────────────────────────────────────────────────────────────────────────┘
 
-DESPUÉS:
-/españa/arraigos        → Página sobre los 3 tipos de arraigo tradicionales
-/españa/regularizacion  → Página dedicada a Regularización Extraordinaria 2026
-```
+Landing (/españa/regularizacion)
+         │
+         │ Click "Analizar elegibilidad"
+         ▼
+┌─────────────────────────────────┐
+│  EligibilityModalReg2026        │
+│  Pregunta 1 → Pregunta 2        │
+│  → EligibilityResult (Apto/No)  │
+└─────────────────────────────────┘
+         │
+         │ Si APTO → Continuar
+         ▼
+┌─────────────────────────────────┐
+│  AnalysisModal (Onboarding)     │  ← ACTUALMENTE VA AQUÍ
+│  5 pasos → Dashboard            │
+└─────────────────────────────────┘
 
----
 
-## Flujos de Elegibilidad
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                    NUEVO FLUJO PROPUESTO                                      │
+└───────────────────────────────────────────────────────────────────────────────┘
 
-### Path A: Regularización 2026 (`/españa/regularizacion`)
-
-```text
-┌────────────────────────────────────────────────────────┐
-│  Pregunta 1:                                           │
-│  "¿Ingresaste a España antes del 31 de diciembre      │
-│   de 2025?"                                            │
-│                                                        │
-│  [ Sí, antes de esa fecha ]                           │
-│  [ No, después de esa fecha ]                         │
-│                                                        │
-│  Si NO → Redirige a /españa/arraigos con mensaje      │
-└────────────────────────────────────────────────────────┘
-              │
-              │ SI
-              ▼
-┌────────────────────────────────────────────────────────┐
-│  Pregunta 2:                                           │
-│  "¿Puedes acreditar 5 meses de estancia mediante      │
-│   empadronamiento o recibos?"                          │
-│                                                        │
-│  [ Sí, tengo documentación ]                          │
-│  [ No, aún no llego a 5 meses ]                       │
-│                                                        │
-│  Si NO → Mensaje: "Debes esperar hasta completar      │
-│          5 meses antes del 30 de junio"               │
-└────────────────────────────────────────────────────────┘
-              │
-              │ SI
-              ▼
-┌────────────────────────────────────────────────────────┐
-│  ÉXITO:                                                │
-│  "¡Apto para Regularización!"                         │
-│  Podrás trabajar en 15 días tras tu solicitud.        │
-│                                                        │
-│  [Continuar al proceso completo →]                    │
-│  (Inicia ruta: Regularización Extraordinaria 2026)    │
-└────────────────────────────────────────────────────────┘
-```
-
-### Path B: Arraigos (`/españa/arraigos`)
-
-```text
-┌────────────────────────────────────────────────────────┐
-│  Pregunta 1:                                           │
-│  "¿Cuánto tiempo llevas viviendo en España?"          │
-│                                                        │
-│  [ Menos de 2 años ]                                  │
-│  [ 2 años ]                                           │
-│  [ 3 años o más ]                                     │
-│                                                        │
-│  Si < 2 años → "Debes esperar hasta cumplir 2 años   │
-│                para solicitar arraigo"                │
-└────────────────────────────────────────────────────────┘
-              │
-              │ 2 años o 3+ años
-              ▼
-┌────────────────────────────────────────────────────────┐
-│  Pregunta 2 (varía según tiempo):                     │
-│                                                        │
-│  SI 2 AÑOS:                                           │
-│  "¿Tienes una oferta de trabajo (Laboral) o vas a    │
-│   matricularte en formación (Socioformativo)?"        │
-│                                                        │
-│  [ Tengo oferta de trabajo ]                          │
-│  [ Voy a estudiar/formarme ]                          │
-│  [ Ninguna de las dos ]                               │
-│                                                        │
-│  SI 3+ AÑOS:                                          │
-│  "¿Tienes informe de inserción social o contrato?"   │
-│                                                        │
-│  [ Tengo informe de inserción ]                       │
-│  [ Tengo contrato de trabajo ]                        │
-│  [ Ninguno de los dos ]                               │
-└────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌────────────────────────────────────────────────────────┐
-│  RESULTADO PERSONALIZADO:                             │
-│                                                        │
-│  2 años + trabajo → "Arraigo Laboral"                 │
-│  2 años + formación → "Arraigo Socioformativo"        │
-│  3+ años + inserción → "Arraigo Social"               │
-│  3+ años + contrato → "Arraigo Social"                │
-│                                                        │
-│  [Continuar al proceso completo →]                    │
-│  (Inicia ruta: Arraigo Social - template existente)   │
-└────────────────────────────────────────────────────────┘
-```
-
----
-
-## Diseño Visual: Landing Regularización 2026
-
-```text
+Landing (/españa/regularizacion)
+         │
+         │ Click "Analizar elegibilidad"
+         ▼
+┌─────────────────────────────────┐
+│  EligibilityModalReg2026        │
+│  Pregunta 1 → Pregunta 2        │
+└─────────────────────────────────┘
+         │
+         │ Si APTO
+         ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  Navbar                                                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  [REGULARIZACIÓN 2026] Badge con fondo negro                               │
-│                                                                             │
+│                     NUEVA PANTALLA: QualificationSuccess                    │
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │  ✓ ¡Perfil Validado!                                                   ││
+│  │  "Tienes el 95% de éxito para tu residencia"                           ││
 │  │                                                                         ││
-│  │           Regularización Extraordinaria 2026                            ││
-│  │           ════════════════════════════════════                          ││
-│  │                                                                         ││
-│  │   Entrada en España antes del 31/12/2025                               ││
-│  │   + 5 meses de estancia = Permiso de trabajo en 15 días                ││
-│  │                                                                         ││
-│  │                    [Analizar mi elegibilidad →]                        ││
-│  │                                                                         ││
+│  │  ┌─────────────────────┐  ┌─────────────────────────────────────────┐  ││
+│  │  │ PLAN DIGITAL  49€   │  │ PLAN PREMIUM  149€                      │  ││
+│  │  │ ─────────────       │  │ ─────────────                           │  ││
+│  │  │ ✓ Guía paso a paso  │  │ ✓ Todo del Digital                      │  ││
+│  │  │ ✓ Generador 790-052 │  │ ✓ Revisión humana de documentos         │  ││
+│  │  │ ✓ Checklist docs    │  │ ✓ Carga en plataforma Mercurio         │  ││
+│  │  │                     │  │ [RECOMENDADO] Badge dorado              │  ││
+│  │  │ [Pagar 49€]         │  │ [Pagar 149€]                            │  ││
+│  │  └─────────────────────┘  └─────────────────────────────────────────┘  ││
 │  └─────────────────────────────────────────────────────────────────────────┘│
-│                                                                             │
-│  ═══════════════════════════════════════════════════════════════════════════│
-│                                                                             │
-│  Requisitos Clave                                                          │
-│                                                                             │
-│  ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐         │
-│  │ FECHA DE ENTRADA  │ │ TIEMPO MÍNIMO     │ │ RESULTADO         │         │
-│  │ ─────────────     │ │ ─────────────     │ │ ─────────────     │         │
-│  │ Antes del         │ │ 5 meses de        │ │ Permiso de        │         │
-│  │ 31 dic 2025       │ │ empadronamiento   │ │ trabajo en 15     │         │
-│  │                   │ │                   │ │ días hábiles      │         │
-│  └───────────────────┘ └───────────────────┘ └───────────────────┘         │
-│                                                                             │
-│  ═══════════════════════════════════════════════════════════════════════════│
-│                                                                             │
-│  Plazo límite: 30 de junio de 2026                                        │
-│  [Verificar si califico →]                                                 │
-│                                                                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Footer                                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │
+         │ Click "Pagar ahora"
+         ▼
+┌─────────────────────────────────┐
+│  RegistrationModal (NUEVO)      │
+│  - Solo nombre + email          │
+│  - Crea cuenta Supabase Auth    │
+│  - Redirige a Stripe Checkout   │
+└─────────────────────────────────┘
+         │
+         │ Pago exitoso en Stripe
+         ▼
+┌─────────────────────────────────┐
+│  /success (MODIFICADO)          │
+│  - Verifica pago                 │
+│  - Actualiza subscription_status │
+│  - Auto-asigna ruta Reg2026     │
+│  - Redirige a Dashboard Pro     │
+└─────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     DASHBOARD PRO (MEJORADO)                                │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │  Banner flotante: "Quedan XX días para apertura (1 abril)"             ││
+│  ├─────────────────────────────────────────────────────────────────────────┤│
+│  │  Barra de progreso visual                                              ││
+│  │  ════════════════════░░░░░░░░░░ 40% completado                        ││
+│  ├─────────────────────────────────────────────────────────────────────────┤│
+│  │  Pasos con File Upload:                                                ││
+│  │  ┌─────────────────────────────────────────────────────────────────┐  ││
+│  │  │ 1. Verificación de Permanencia                                  │  ││
+│  │  │    [📎 Subir empadronamiento]  [✓ Archivo subido]               │  ││
+│  │  ├─────────────────────────────────────────────────────────────────┤  ││
+│  │  │ 2. Antecedentes Penales                                         │  ││
+│  │  │    [📎 Subir certificado]  [📎 Subir apostilla]                 │  ││
+│  │  └─────────────────────────────────────────────────────────────────┘  ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Diseño Visual: Landing Arraigos
+## 1. Productos y Precios en Stripe
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Navbar                                                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │                                                                         ││
-│  │                    Vías de Arraigo en España                           ││
-│  │                    ═════════════════════════                           ││
-│  │                                                                         ││
-│  │   Regularízate a través de tu tiempo de residencia,                    ││
-│  │   vínculos laborales o formación profesional.                          ││
-│  │                                                                         ││
-│  │                    [Analizar mi perfil →]                              ││
-│  │                                                                         ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-│                                                                             │
-│  ═══════════════════════════════════════════════════════════════════════════│
-│                                                                             │
-│  Los 3 Pilares del Arraigo                                                 │
-│                                                                             │
-│  ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐         │
-│  │ ARRAIGO SOCIAL    │ │ ARRAIGO LABORAL   │ │ ARRAIGO           │         │
-│  │ ─────────────     │ │ ─────────────     │ │ SOCIOFORMATIVO    │         │
-│  │ 3 años + informe  │ │ 2 años + contrato │ │ ─────────────     │         │
-│  │ de inserción o    │ │ de trabajo        │ │ 2 años +          │         │
-│  │ contrato          │ │                   │ │ matriculación     │         │
-│  │                   │ │                   │ │ en formación      │         │
-│  │ ✓ Empadronamiento │ │ ✓ Empadronamiento │ │ ✓ Empadronamiento │         │
-│  │ ✓ Antecedentes    │ │ ✓ Antecedentes    │ │ ✓ Antecedentes    │         │
-│  │ ✓ Informe/Contrato│ │ ✓ Oferta laboral  │ │ ✓ Curso acreditado│         │
-│  └───────────────────┘ └───────────────────┘ └───────────────────┘         │
-│                                                                             │
-│  ═══════════════════════════════════════════════════════════════════════════│
-│                                                                             │
-│  Documentos Requeridos (Checklist interactivo)                             │
-│                                                                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Footer                                                                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+### Crear Nuevos Productos (One-Time Payments)
+
+| Producto | Precio | Tipo | Stripe Price ID (a crear) |
+|----------|--------|------|---------------------------|
+| Albus Digital Regularización | 49€ | payment (one-time) | A generar |
+| Albus Premium Regularización | 149€ | payment (one-time) | A generar |
 
 ---
 
-## Archivos a Crear
+## 2. Componentes a Crear
 
 | Archivo | Descripción |
 |---------|-------------|
-| `src/pages/espana/Regularizacion2026.tsx` | Landing de Regularización Extraordinaria 2026 |
-| `src/pages/espana/Arraigos.tsx` | Landing de Arraigos (contenido actual adaptado) |
-| `src/components/eligibility/EligibilityModalReg2026.tsx` | Modal de 2 preguntas para Reg 2026 |
-| `src/components/eligibility/EligibilityModalArraigos.tsx` | Modal de 2 preguntas para Arraigos |
-| `src/components/eligibility/EligibilityResult.tsx` | Componente de resultado de elegibilidad |
-| `src/components/espana/RequirementCard.tsx` | Tarjeta de requisito para Reg 2026 |
-| `src/components/espana/HeroArraigos.tsx` | Hero section para página de Arraigos |
-| `src/components/espana/HeroReg2026.tsx` | Hero section para página de Reg 2026 |
+| `src/components/eligibility/QualificationSuccess.tsx` | Pantalla de éxito con tabla de precios |
+| `src/components/eligibility/PricingCard.tsx` | Tarjeta individual de plan |
+| `src/components/eligibility/RegistrationModal.tsx` | Modal de registro rápido (nombre + email) |
+| `src/components/dashboard/UrgencyBanner.tsx` | Banner flotante con countdown |
+| `src/components/dashboard/ProgressBar.tsx` | Barra de progreso visual |
+| `src/components/route-detail/StepFileUpload.tsx` | Componente de subida de archivos por paso |
 
-## Archivos a Modificar
+---
+
+## 3. Edge Functions
+
+### create-one-time-payment (NUEVO)
+
+Función para crear sesiones de pago único (no suscripción):
+
+```typescript
+// supabase/functions/create-one-time-payment/index.ts
+// Diferencias con create-checkout:
+// - mode: "payment" en lugar de "subscription"
+// - Recibe priceId específico del plan seleccionado
+// - Permite checkout sin autenticación previa (guest)
+// - Guarda metadata: plan_type, route_template_id
+```
+
+### verify-payment (NUEVO)
+
+Función para verificar el pago tras redirect de Stripe:
+
+```typescript
+// supabase/functions/verify-payment/index.ts
+// - Recibe session_id de Stripe
+// - Verifica estado de pago
+// - Actualiza subscription_status del usuario
+// - Retorna información del plan comprado
+```
+
+---
+
+## 4. Diseño Visual: QualificationSuccess
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│   [Fondo oscuro/negro con acentos dorados para "Premium"]                  │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                                                                     │  │
+│   │     ✓ (check dorado)                                                │  │
+│   │                                                                     │  │
+│   │     ¡Perfil Validado!                                               │  │
+│   │     ─────────────────                                               │  │
+│   │                                                                     │  │
+│   │     Tienes el 95% de éxito para obtener                            │  │
+│   │     tu residencia en España.                                        │  │
+│   │                                                                     │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│   ┌───────────────────────────┐   ┌───────────────────────────────────┐   │
+│   │                           │   │  [RECOMENDADO] badge dorado        │   │
+│   │     PLAN DIGITAL          │   │                                   │   │
+│   │     ─────────────         │   │     PLAN PREMIUM                  │   │
+│   │                           │   │     ─────────────                 │   │
+│   │     49€                   │   │                                   │   │
+│   │     pago único            │   │     149€                          │   │
+│   │                           │   │     pago único                    │   │
+│   │     ────────────────────  │   │                                   │   │
+│   │                           │   │     ────────────────────          │   │
+│   │     ✓ Guía paso a paso    │   │                                   │   │
+│   │     ✓ Generador Tasa 790  │   │     ✓ Todo del Plan Digital       │   │
+│   │     ✓ Checklist docs      │   │     ✓ Revisión humana de docs     │   │
+│   │     ✓ Soporte por email   │   │     ✓ Carga en Mercurio           │   │
+│   │                           │   │     ✓ Soporte prioritario         │   │
+│   │                           │   │                                   │   │
+│   │     [  Elegir Digital  ]  │   │     [  Elegir Premium  ] (dorado) │   │
+│   │     (botón outline)       │   │     (botón solido)                │   │
+│   │                           │   │                                   │   │
+│   └───────────────────────────┘   └───────────────────────────────────┘   │
+│                                                                             │
+│                                                                             │
+│            Garantía de devolución de 7 días · Pago seguro                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. Diseño Visual: UrgencyBanner
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│   ⏰  Quedan 58 días para la apertura de solicitudes (1 de abril)          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Estilo:
+- Fondo negro/oscuro
+- Texto blanco
+- Icono de reloj o calendario
+- Fijo en parte superior del Dashboard (solo para usuarios Pro)
+- Se calcula dinámicamente basado en fecha actual vs 1 abril 2026
+```
+
+---
+
+## 6. Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/App.tsx` | Agregar rutas `/españa/regularizacion` y `/españa/arraigos`, redirigir `/regularizacion` |
-| `src/pages/Dashboard.tsx` | Manejar sources `reg2026` y `arraigos` para auto-asignación |
-| `src/components/Navbar.tsx` | Actualizar enlaces si aplica |
-
-## Archivos a Eliminar (Opcional)
-
-| Archivo | Razón |
-|---------|-------|
-| `src/pages/Regularizacion.tsx` | Reemplazado por las dos nuevas páginas (o mantener como redirect) |
+| `src/components/eligibility/EligibilityModalReg2026.tsx` | Mostrar QualificationSuccess en lugar de EligibilityResult cuando apto |
+| `src/components/eligibility/EligibilityModalArraigos.tsx` | Mismo cambio para arraigos |
+| `src/pages/espana/Regularizacion2026.tsx` | Integrar nuevo flujo con registration modal |
+| `src/pages/espana/Arraigos.tsx` | Integrar nuevo flujo |
+| `src/pages/Success.tsx` | Verificar pago y auto-asignar ruta |
+| `src/pages/Dashboard.tsx` | Agregar UrgencyBanner y mejorar progress |
+| `src/pages/RouteDetail.tsx` | Integrar file upload mejorado |
+| `src/components/route-detail/StepCard.tsx` | Agregar sección de file upload integrada |
 
 ---
 
 ## Sección Técnica
 
-### Conexión con Templates
+### Estructura de QualificationSuccess.tsx
 
 ```typescript
-// IDs de templates para auto-routing
-const TEMPLATE_IDS = {
-  regularizacion2026: "57b27d4a-190b-4ece-a1c3-de1859d58217",
-  arraigoSocial: "f451f205-2dae-4eaf-9103-d895c626d57c",
-};
-```
-
-### Tipos de Resultado de Elegibilidad
-
-```typescript
-type EligibilityResult = 
-  | { eligible: true; routeType: "regularizacion2026" | "arraigo_social" | "arraigo_laboral" | "arraigo_formativo"; message: string }
-  | { eligible: false; reason: "date" | "time" | "documents"; message: string; redirect?: string };
-```
-
-### Flujo del Modal de Elegibilidad Reg 2026
-
-```typescript
-// EligibilityModalReg2026.tsx
-interface Reg2026FormData {
-  enteredBeforeDeadline: boolean | null; // Q1: ¿Antes del 31/12/2025?
-  hasFiveMonthsProof: boolean | null;    // Q2: ¿5 meses de empadronamiento?
+interface QualificationSuccessProps {
+  routeType: "regularizacion2026" | "arraigo_social" | "arraigo_laboral" | "arraigo_formativo";
+  onSelectPlan: (plan: "digital" | "premium") => void;
+  onClose: () => void;
 }
 
-const evaluateEligibility = (data: Reg2026FormData): EligibilityResult => {
-  if (data.enteredBeforeDeadline === false) {
-    return {
-      eligible: false,
-      reason: "date",
-      message: "Para la Regularización 2026 debes haber entrado antes del 31 de diciembre de 2025. Te recomendamos explorar las vías de arraigo tradicionales.",
-      redirect: "/españa/arraigos",
-    };
-  }
-  
-  if (data.hasFiveMonthsProof === false) {
-    return {
-      eligible: false,
-      reason: "time",
-      message: "Debes esperar hasta completar 5 meses de estancia antes del 30 de junio de 2026.",
-    };
-  }
-  
-  return {
-    eligible: true,
-    routeType: "regularizacion2026",
-    message: "¡Apto para Regularización! Podrás trabajar en 15 días tras tu solicitud.",
-  };
+const plans = [
+  {
+    id: "digital",
+    name: "Plan Digital",
+    price: 49,
+    priceId: "price_XXXXX", // A crear
+    features: [
+      "Guía paso a paso completa",
+      "Generador de Tasa 790-052",
+      "Checklist de documentos",
+      "Soporte por email",
+    ],
+    highlighted: false,
+  },
+  {
+    id: "premium",
+    name: "Plan Premium",
+    price: 149,
+    priceId: "price_YYYYY", // A crear
+    features: [
+      "Todo del Plan Digital",
+      "Revisión humana de documentos",
+      "Carga en plataforma Mercurio",
+      "Soporte prioritario",
+    ],
+    highlighted: true,
+    badge: "Recomendado",
+  },
+];
+```
+
+### Edge Function: create-one-time-payment
+
+```typescript
+// supabase/functions/create-one-time-payment/index.ts
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@18.5.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version",
 };
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { priceId, email, name, routeTemplateId, planType } = await req.json();
+
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+      apiVersion: "2025-08-27.basil",
+    });
+
+    // Check/create customer
+    const customers = await stripe.customers.list({ email, limit: 1 });
+    let customerId;
+    if (customers.data.length > 0) {
+      customerId = customers.data[0].id;
+    } else {
+      const customer = await stripe.customers.create({
+        email,
+        name,
+        metadata: { route_template_id: routeTemplateId },
+      });
+      customerId = customer.id;
+    }
+
+    // Create one-time payment session
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: "payment", // One-time, NOT subscription
+      success_url: `${req.headers.get("origin")}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${req.headers.get("origin")}/españa/regularizacion`,
+      metadata: {
+        plan_type: planType,
+        route_template_id: routeTemplateId,
+        user_email: email,
+        user_name: name,
+      },
+    });
+
+    return new Response(JSON.stringify({ url: session.url }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+});
 ```
 
-### Flujo del Modal de Elegibilidad Arraigos
+### Storage Bucket para Documentos de Usuario
+
+```sql
+-- Crear bucket para documentos de usuario
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('user-documents', 'user-documents', false);
+
+-- RLS: Users can only access their own documents
+CREATE POLICY "Users can upload their documents"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users can view their documents"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users can delete their documents"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = auth.uid()::text);
+```
+
+### Countdown Logic para UrgencyBanner
 
 ```typescript
-// EligibilityModalArraigos.tsx
-interface ArraigosFormData {
-  timeInSpain: "less_than_2" | "2_years" | "3_plus_years" | null;
-  // Pregunta condicional según tiempo:
-  twoYearOption: "trabajo" | "formacion" | "ninguno" | null;
-  threeYearOption: "insercion" | "contrato" | "ninguno" | null;
-}
-
-const evaluateArraigo = (data: ArraigosFormData): EligibilityResult => {
-  if (data.timeInSpain === "less_than_2") {
-    return {
-      eligible: false,
-      reason: "time",
-      message: "Debes esperar hasta cumplir al menos 2 años de residencia continuada para solicitar arraigo.",
-    };
-  }
-  
-  if (data.timeInSpain === "2_years") {
-    if (data.twoYearOption === "trabajo") {
-      return { eligible: true, routeType: "arraigo_laboral", message: "Calificas para Arraigo Laboral" };
-    }
-    if (data.twoYearOption === "formacion") {
-      return { eligible: true, routeType: "arraigo_formativo", message: "Calificas para Arraigo Socioformativo" };
-    }
-    return { eligible: false, reason: "documents", message: "Necesitas una oferta de trabajo o matricularte en formación." };
-  }
-  
-  // 3+ años
-  if (data.threeYearOption === "ninguno") {
-    return { eligible: false, reason: "documents", message: "Necesitas informe de inserción social o contrato de trabajo." };
-  }
-  
-  return { eligible: true, routeType: "arraigo_social", message: "Calificas para Arraigo Social" };
+// src/components/dashboard/UrgencyBanner.tsx
+const calculateDaysUntilDeadline = () => {
+  const deadline = new Date("2026-04-01");
+  const today = new Date();
+  const diffTime = deadline.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 0;
 };
-```
-
-### Actualización de App.tsx
-
-```typescript
-// Nuevas rutas
-<Route path="/españa/regularizacion" element={<Regularizacion2026 />} />
-<Route path="/españa/arraigos" element={<Arraigos />} />
-
-// Redirect de URL antigua (opcional)
-<Route path="/regularizacion" element={<Navigate to="/españa/arraigos" replace />} />
-```
-
-### Actualización de Dashboard.tsx
-
-```typescript
-// Detectar source y auto-iniciar ruta
-useEffect(() => {
-  const source = localStorage.getItem("onboarding_source");
-  
-  if (source === "reg2026") {
-    localStorage.removeItem("onboarding_source");
-    const template = templates.find(t => t.id === TEMPLATE_IDS.regularizacion2026);
-    if (template && canAddRoute) handleStartRoute(template.id);
-  }
-  
-  if (source === "arraigos") {
-    localStorage.removeItem("onboarding_source");
-    const template = templates.find(t => t.id === TEMPLATE_IDS.arraigoSocial);
-    if (template && canAddRoute) handleStartRoute(template.id);
-  }
-}, [templates, canAddRoute]);
 ```
 
 ---
 
 ## Orden de Implementación
 
-1. **Crear componentes de elegibilidad** - Modales con flujo de preguntas
-2. **Crear página Regularización 2026** - Landing con hero y requisitos
-3. **Crear página Arraigos** - Adaptar contenido actual con nuevo hero
-4. **Actualizar App.tsx** - Nuevas rutas bajo `/españa/`
-5. **Actualizar Dashboard.tsx** - Manejar nuevos sources
-6. **Mantener redirect** - `/regularizacion` → `/españa/arraigos`
-7. **Actualizar navegación** - Si hay enlaces directos
+1. **Crear productos Stripe** - Digital (49€) y Premium (149€) con precios one-time
+2. **create-one-time-payment** - Edge function para pagos únicos
+3. **QualificationSuccess.tsx** - Pantalla de éxito con pricing table
+4. **PricingCard.tsx** - Componente de tarjeta de precio
+5. **RegistrationModal.tsx** - Modal de registro rápido
+6. **Modificar EligibilityModalReg2026** - Integrar nuevo flujo
+7. **Modificar EligibilityModalArraigos** - Integrar nuevo flujo
+8. **UrgencyBanner.tsx** - Banner de countdown
+9. **ProgressBar.tsx** - Barra de progreso visual
+10. **StepFileUpload.tsx** - Upload de archivos por paso
+11. **Storage bucket** - Configurar user-documents
+12. **Modificar Success.tsx** - Verificar pago y crear cuenta
+13. **Modificar Dashboard.tsx** - Integrar urgency banner
+14. **Modificar StepCard.tsx** - Integrar file upload
 
 ---
 
@@ -378,14 +413,12 @@ useEffect(() => {
 
 | Escenario | Resultado Esperado |
 |-----------|-------------------|
-| Usuario visita `/españa/regularizacion` | Ve landing de Reg 2026 con requisitos |
-| Click "Analizar elegibilidad" en Reg 2026 | Modal con 2 preguntas específicas |
-| No entró antes del 31/12/2025 | Redirige a `/españa/arraigos` |
-| No tiene 5 meses de estancia | Mensaje: "Debes esperar hasta..." |
-| Cumple ambos requisitos | Mensaje éxito + botón continuar → auto-inicia ruta |
-| Usuario visita `/españa/arraigos` | Ve landing con 3 pilares |
-| Click "Analizar perfil" en Arraigos | Modal con preguntas de tiempo |
-| Menos de 2 años en España | Mensaje: "Debes esperar..." |
-| 2 años + oferta trabajo | Identifica "Arraigo Laboral" |
-| 3+ años + contrato | Identifica "Arraigo Social" → auto-inicia ruta |
-| URL antigua `/regularizacion` | Redirige a `/españa/arraigos` |
+| Usuario apto en Reg2026 | Ve QualificationSuccess con 2 planes |
+| Click "Elegir Digital" | Modal de registro → Stripe checkout 49€ |
+| Click "Elegir Premium" | Modal de registro → Stripe checkout 149€ |
+| Pago exitoso | Crea cuenta → Asigna ruta → Dashboard Pro |
+| Dashboard Pro user | Ve UrgencyBanner con días restantes |
+| Dashboard Pro user | Ve barra de progreso general |
+| Route Detail Pro | Puede subir archivos por paso |
+| Usuario cancela pago | Vuelve a landing, puede reintentar |
+| Usuario Free en Dashboard | No ve UrgencyBanner |
