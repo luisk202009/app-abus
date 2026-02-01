@@ -1,93 +1,156 @@
 
-# Plan: Lanzamiento Completo de Regularizacion Espanola 2026
+# Plan: Separar Arraigos y Regularización 2026 con Flujos Independientes
 
 ## Resumen
 
-Crear una experiencia de conversion completa para el programa de Regularizacion Extraordinaria 2026 en Espana. Incluye una landing page de alto impacto, plantilla de ruta con sus pasos detallados, y logica de conexion para auto-asignar la ruta a usuarios que lleguen desde esta pagina.
+Dividir la experiencia actual de regularización en dos páginas independientes bajo `/españa/`, cada una con su propio flujo de preguntas de elegibilidad específico. Esto permite filtrar mejor a los usuarios y dirigirlos al template correcto según su situación real.
 
 ---
 
-## Arquitectura del Flujo
+## Arquitectura de URLs
 
 ```text
-/regularizacion (Landing Page)
-         │
-         │ Click "Iniciar mi proceso"
-         │ source=regularizacion
-         ▼
-┌──────────────────────────────────┐
-│   AnalysisModal (Onboarding)     │
-│   - Guarda source en localStorage│
-│   - O pasa via state             │
-└──────────────────────────────────┘
-         │
-         │ Completa onboarding
-         ▼
-┌──────────────────────────────────┐
-│   Dashboard                      │
-│   - Detecta source=regularizacion│
-│   - Auto-inicia ruta especifica  │
-│   - Salta Route Explorer         │
-└──────────────────────────────────┘
+ANTES:
+/regularizacion → Contenido mixto (3 pilares + docs)
+
+DESPUÉS:
+/españa/arraigos        → Página sobre los 3 tipos de arraigo tradicionales
+/españa/regularizacion  → Página dedicada a Regularización Extraordinaria 2026
 ```
 
 ---
 
-## 1. Landing Page `/regularizacion`
+## Flujos de Elegibilidad
 
-### Estructura Visual
+### Path A: Regularización 2026 (`/españa/regularizacion`)
+
+```text
+┌────────────────────────────────────────────────────────┐
+│  Pregunta 1:                                           │
+│  "¿Ingresaste a España antes del 31 de diciembre      │
+│   de 2025?"                                            │
+│                                                        │
+│  [ Sí, antes de esa fecha ]                           │
+│  [ No, después de esa fecha ]                         │
+│                                                        │
+│  Si NO → Redirige a /españa/arraigos con mensaje      │
+└────────────────────────────────────────────────────────┘
+              │
+              │ SI
+              ▼
+┌────────────────────────────────────────────────────────┐
+│  Pregunta 2:                                           │
+│  "¿Puedes acreditar 5 meses de estancia mediante      │
+│   empadronamiento o recibos?"                          │
+│                                                        │
+│  [ Sí, tengo documentación ]                          │
+│  [ No, aún no llego a 5 meses ]                       │
+│                                                        │
+│  Si NO → Mensaje: "Debes esperar hasta completar      │
+│          5 meses antes del 30 de junio"               │
+└────────────────────────────────────────────────────────┘
+              │
+              │ SI
+              ▼
+┌────────────────────────────────────────────────────────┐
+│  ÉXITO:                                                │
+│  "¡Apto para Regularización!"                         │
+│  Podrás trabajar en 15 días tras tu solicitud.        │
+│                                                        │
+│  [Continuar al proceso completo →]                    │
+│  (Inicia ruta: Regularización Extraordinaria 2026)    │
+└────────────────────────────────────────────────────────┘
+```
+
+### Path B: Arraigos (`/españa/arraigos`)
+
+```text
+┌────────────────────────────────────────────────────────┐
+│  Pregunta 1:                                           │
+│  "¿Cuánto tiempo llevas viviendo en España?"          │
+│                                                        │
+│  [ Menos de 2 años ]                                  │
+│  [ 2 años ]                                           │
+│  [ 3 años o más ]                                     │
+│                                                        │
+│  Si < 2 años → "Debes esperar hasta cumplir 2 años   │
+│                para solicitar arraigo"                │
+└────────────────────────────────────────────────────────┘
+              │
+              │ 2 años o 3+ años
+              ▼
+┌────────────────────────────────────────────────────────┐
+│  Pregunta 2 (varía según tiempo):                     │
+│                                                        │
+│  SI 2 AÑOS:                                           │
+│  "¿Tienes una oferta de trabajo (Laboral) o vas a    │
+│   matricularte en formación (Socioformativo)?"        │
+│                                                        │
+│  [ Tengo oferta de trabajo ]                          │
+│  [ Voy a estudiar/formarme ]                          │
+│  [ Ninguna de las dos ]                               │
+│                                                        │
+│  SI 3+ AÑOS:                                          │
+│  "¿Tienes informe de inserción social o contrato?"   │
+│                                                        │
+│  [ Tengo informe de inserción ]                       │
+│  [ Tengo contrato de trabajo ]                        │
+│  [ Ninguno de los dos ]                               │
+└────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌────────────────────────────────────────────────────────┐
+│  RESULTADO PERSONALIZADO:                             │
+│                                                        │
+│  2 años + trabajo → "Arraigo Laboral"                 │
+│  2 años + formación → "Arraigo Socioformativo"        │
+│  3+ años + inserción → "Arraigo Social"               │
+│  3+ años + contrato → "Arraigo Social"                │
+│                                                        │
+│  [Continuar al proceso completo →]                    │
+│  (Inicia ruta: Arraigo Social - template existente)   │
+└────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Diseño Visual: Landing Regularización 2026
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  Navbar                                                                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  [NEW 2026] Badge                                                           │
+│  [REGULARIZACIÓN 2026] Badge con fondo negro                               │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
 │  │                                                                         ││
-│  │              Nueva Reforma de Extranjeria 2026                          ││
-│  │              ═══════════════════════════════════                        ││
+│  │           Regularización Extraordinaria 2026                            ││
+│  │           ════════════════════════════════════                          ││
 │  │                                                                         ││
-│  │   Regularizate en Espana con las nuevas leyes                          ││
-│  │   que entran en vigor este ano.                                        ││
+│  │   Entrada en España antes del 31/12/2025                               ││
+│  │   + 5 meses de estancia = Permiso de trabajo en 15 días                ││
 │  │                                                                         ││
-│  │                    [Iniciar mi proceso →]                              ││
+│  │                    [Analizar mi elegibilidad →]                        ││
 │  │                                                                         ││
 │  └─────────────────────────────────────────────────────────────────────────┘│
 │                                                                             │
 │  ═══════════════════════════════════════════════════════════════════════════│
 │                                                                             │
-│  Los 3 Pilares de la Nueva Ley                                             │
+│  Requisitos Clave                                                          │
 │                                                                             │
 │  ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐         │
-│  │ ARRAIGO SOCIAL    │ │ ARRAIGO FORMACION │ │ SEGUNDA OPORTUN.  │         │
+│  │ FECHA DE ENTRADA  │ │ TIEMPO MÍNIMO     │ │ RESULTADO         │         │
 │  │ ─────────────     │ │ ─────────────     │ │ ─────────────     │         │
-│  │ 2 anos residencia │ │ Formacion + empleo│ │ Vias irregulares  │         │
-│  │ (antes eran 3)    │ │ sin experiencia   │ │ previa reconocida │         │
-│  │                   │ │                   │ │                   │         │
-│  │ ✓ Empadronamiento │ │ ✓ Curso acreditado│ │ ✓ Buen historial  │         │
-│  │ ✓ Antecedentes    │ │ ✓ Contrato empleo │ │ ✓ Sin delitos     │         │
-│  │ ✓ Contrato/Medios │ │ ✓ Seguro medico   │ │ ✓ Integracion     │         │
+│  │ Antes del         │ │ 5 meses de        │ │ Permiso de        │         │
+│  │ 31 dic 2025       │ │ empadronamiento   │ │ trabajo en 15     │         │
+│  │                   │ │                   │ │ días hábiles      │         │
 │  └───────────────────┘ └───────────────────┘ └───────────────────┘         │
 │                                                                             │
 │  ═══════════════════════════════════════════════════════════════════════════│
 │                                                                             │
-│  Documentos que Necesitaras (Preview Interactivo)                          │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │  □  Empadronamiento historico (min. 2 anos)                            ││
-│  │  □  Pasaporte vigente                                                  ││
-│  │  □  Antecedentes penales apostillados                                  ││
-│  │  □  Contrato de trabajo o compromiso de formacion                      ││
-│  │  □  Certificado medico                                                 ││
-│  │  □  Tasa 790-052 pagada                                                ││
-│  │  □  Foto tipo carnet                                                   ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-│                                                                             │
-│  ═══════════════════════════════════════════════════════════════════════════│
-│                                                                             │
-│               [Comenzar mi proceso de regularizacion →]                     │
+│  Plazo límite: 30 de junio de 2026                                        │
+│  [Verificar si califico →]                                                 │
 │                                                                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  Footer                                                                     │
@@ -96,217 +159,233 @@ Crear una experiencia de conversion completa para el programa de Regularizacion 
 
 ---
 
-## 2. Cambios de Base de Datos
-
-### Actualizar route_templates
-
-Actualizar el registro existente "Regularizacion" (id: `57b27d4a-190b-4ece-a1c3-de1859d58217`) con datos completos:
-
-| Campo | Valor |
-|-------|-------|
-| name | Regularizacion Extraordinaria 2026 |
-| country | Espana |
-| description | Nueva via de regularizacion con arraigo social de 2 anos bajo la reforma de extranjeria 2026. |
-| estimated_cost | 200 - 500 EUR |
-| required_savings | Variable |
-| difficulty | facil |
-
-### Insertar route_template_steps
-
-5 pasos para la ruta de regularizacion:
-
-| Orden | Titulo | Descripcion |
-|-------|--------|-------------|
-| 1 | Verificacion de Permanencia | Conseguir empadronamiento historico que demuestre al menos 2 anos de residencia continuada en Espana. Solicitar en tu Ayuntamiento local. |
-| 2 | Antecedentes Penales | Solicitar certificado de antecedentes penales de tu pais de origen y apostillarlo con la Apostilla de la Haya. Algunos paises requieren traduccion jurada. |
-| 3 | Prueba de Medios Economicos | Preparar contrato de trabajo (min. 1 ano, 40h/semana) o compromiso de formacion acreditado. Alternativa: recursos propios demostrables. |
-| 4 | Tasa 790-052 | Generar y pagar la tasa administrativa 790-052 en una entidad bancaria colaboradora. Importe aprox: 16-20 EUR. |
-| 5 | Presentacion Telematica | Subir todos los documentos a la plataforma Mercurio del Ministerio. Agendar cita si es requerido por tu oficina de extranjeria. |
-
----
-
-## 3. Logica de Conexion
-
-### Flujo Tecnico
+## Diseño Visual: Landing Arraigos
 
 ```text
-1. Usuario llega a /regularizacion
-         │
-         ▼
-2. Click "Iniciar mi proceso"
-   - Abre AnalysisModal con prop: source="regularizacion"
-   - Guarda en localStorage: "onboarding_source" = "regularizacion"
-         │
-         ▼
-3. Usuario completa onboarding
-   - Se guarda en onboarding_submissions
-         │
-         ▼
-4. Redirige a Dashboard con state:
-   {
-     ...userData,
-     source: "regularizacion",
-     autoStartRouteSlug: "regularizacion-2026"
-   }
-         │
-         ▼
-5. Dashboard detecta source y autoStartRouteSlug
-   - Busca template con name LIKE "%Regularizacion%"
-   - Auto-ejecuta startRoute(templateId)
-   - Free users gastan su slot en esta ruta
-   - NO muestra Route Explorer
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Navbar                                                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                                                                         ││
+│  │                    Vías de Arraigo en España                           ││
+│  │                    ═════════════════════════                           ││
+│  │                                                                         ││
+│  │   Regularízate a través de tu tiempo de residencia,                    ││
+│  │   vínculos laborales o formación profesional.                          ││
+│  │                                                                         ││
+│  │                    [Analizar mi perfil →]                              ││
+│  │                                                                         ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                                                             │
+│  ═══════════════════════════════════════════════════════════════════════════│
+│                                                                             │
+│  Los 3 Pilares del Arraigo                                                 │
+│                                                                             │
+│  ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐         │
+│  │ ARRAIGO SOCIAL    │ │ ARRAIGO LABORAL   │ │ ARRAIGO           │         │
+│  │ ─────────────     │ │ ─────────────     │ │ SOCIOFORMATIVO    │         │
+│  │ 3 años + informe  │ │ 2 años + contrato │ │ ─────────────     │         │
+│  │ de inserción o    │ │ de trabajo        │ │ 2 años +          │         │
+│  │ contrato          │ │                   │ │ matriculación     │         │
+│  │                   │ │                   │ │ en formación      │         │
+│  │ ✓ Empadronamiento │ │ ✓ Empadronamiento │ │ ✓ Empadronamiento │         │
+│  │ ✓ Antecedentes    │ │ ✓ Antecedentes    │ │ ✓ Antecedentes    │         │
+│  │ ✓ Informe/Contrato│ │ ✓ Oferta laboral  │ │ ✓ Curso acreditado│         │
+│  └───────────────────┘ └───────────────────┘ └───────────────────┘         │
+│                                                                             │
+│  ═══════════════════════════════════════════════════════════════════════════│
+│                                                                             │
+│  Documentos Requeridos (Checklist interactivo)                             │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Footer                                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Archivos a Crear
 
-| Archivo | Descripcion |
+| Archivo | Descripción |
 |---------|-------------|
-| `src/pages/Regularizacion.tsx` | Landing page completa de la campana |
-| `src/components/regularizacion/PillarCard.tsx` | Tarjeta para cada pilar de la ley |
-| `src/components/regularizacion/DocumentChecklist.tsx` | Preview interactivo de documentos |
-| `src/components/regularizacion/HeroRegularizacion.tsx` | Hero section con badge NEW 2026 |
+| `src/pages/espana/Regularizacion2026.tsx` | Landing de Regularización Extraordinaria 2026 |
+| `src/pages/espana/Arraigos.tsx` | Landing de Arraigos (contenido actual adaptado) |
+| `src/components/eligibility/EligibilityModalReg2026.tsx` | Modal de 2 preguntas para Reg 2026 |
+| `src/components/eligibility/EligibilityModalArraigos.tsx` | Modal de 2 preguntas para Arraigos |
+| `src/components/eligibility/EligibilityResult.tsx` | Componente de resultado de elegibilidad |
+| `src/components/espana/RequirementCard.tsx` | Tarjeta de requisito para Reg 2026 |
+| `src/components/espana/HeroArraigos.tsx` | Hero section para página de Arraigos |
+| `src/components/espana/HeroReg2026.tsx` | Hero section para página de Reg 2026 |
 
 ## Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/App.tsx` | Agregar ruta `/regularizacion` |
-| `src/components/AnalysisModal.tsx` | Aceptar prop `source` y pasarlo al state |
-| `src/pages/Dashboard.tsx` | Detectar `source=regularizacion` y auto-iniciar ruta |
+| `src/App.tsx` | Agregar rutas `/españa/regularizacion` y `/españa/arraigos`, redirigir `/regularizacion` |
+| `src/pages/Dashboard.tsx` | Manejar sources `reg2026` y `arraigos` para auto-asignación |
+| `src/components/Navbar.tsx` | Actualizar enlaces si aplica |
+
+## Archivos a Eliminar (Opcional)
+
+| Archivo | Razón |
+|---------|-------|
+| `src/pages/Regularizacion.tsx` | Reemplazado por las dos nuevas páginas (o mantener como redirect) |
 
 ---
 
-## Seccion Tecnica
+## Sección Técnica
 
-### Migracion SQL
-
-```sql
--- Actualizar template de Regularizacion
-UPDATE route_templates
-SET 
-  name = 'Regularización Extraordinaria 2026',
-  description = 'Nueva vía de regularización con arraigo social de 2 años bajo la reforma de extranjería 2026.',
-  estimated_cost = '200 - 500€',
-  required_savings = 'Variable',
-  difficulty = 'facil'
-WHERE id = '57b27d4a-190b-4ece-a1c3-de1859d58217';
-
--- Insertar los 5 pasos
-INSERT INTO route_template_steps (template_id, step_order, title, description)
-VALUES
-  ('57b27d4a-190b-4ece-a1c3-de1859d58217', 1, 'Verificación de Permanencia', 
-   'Conseguir empadronamiento histórico que demuestre al menos 2 años de residencia continuada en España. Solicitar en tu Ayuntamiento local.'),
-  ('57b27d4a-190b-4ece-a1c3-de1859d58217', 2, 'Antecedentes Penales', 
-   'Solicitar certificado de antecedentes penales de tu país de origen y apostillarlo con la Apostilla de la Haya. Algunos países requieren traducción jurada.'),
-  ('57b27d4a-190b-4ece-a1c3-de1859d58217', 3, 'Prueba de Medios Económicos', 
-   'Preparar contrato de trabajo (mín. 1 año, 40h/semana) o compromiso de formación acreditado. Alternativa: recursos propios demostrables.'),
-  ('57b27d4a-190b-4ece-a1c3-de1859d58217', 4, 'Tasa 790-052', 
-   'Generar y pagar la tasa administrativa 790-052 en una entidad bancaria colaboradora. Importe aprox: 16-20€.'),
-  ('57b27d4a-190b-4ece-a1c3-de1859d58217', 5, 'Presentación Telemática', 
-   'Subir todos los documentos a la plataforma Mercurio del Ministerio. Agendar cita si es requerido por tu oficina de extranjería.');
-```
-
-### Componente Regularizacion.tsx (Estructura)
+### Conexión con Templates
 
 ```typescript
-// src/pages/Regularizacion.tsx
-interface RegularizacionProps {}
-
-const Regularizacion = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const handleStartProcess = () => {
-    // Guardar source en localStorage
-    localStorage.setItem("onboarding_source", "regularizacion");
-    setIsModalOpen(true);
-  };
-
-  return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <HeroRegularizacion onStart={handleStartProcess} />
-      <PillarsSection />
-      <DocumentChecklist />
-      <CTASection onStart={handleStartProcess} />
-      <Footer />
-      <AnalysisModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)}
-        source="regularizacion"
-      />
-    </div>
-  );
+// IDs de templates para auto-routing
+const TEMPLATE_IDS = {
+  regularizacion2026: "57b27d4a-190b-4ece-a1c3-de1859d58217",
+  arraigoSocial: "f451f205-2dae-4eaf-9103-d895c626d57c",
 };
 ```
 
-### Logica de Auto-Start en Dashboard
+### Tipos de Resultado de Elegibilidad
 
 ```typescript
-// En src/pages/Dashboard.tsx - dentro del useEffect
+type EligibilityResult = 
+  | { eligible: true; routeType: "regularizacion2026" | "arraigo_social" | "arraigo_laboral" | "arraigo_formativo"; message: string }
+  | { eligible: false; reason: "date" | "time" | "documents"; message: string; redirect?: string };
+```
+
+### Flujo del Modal de Elegibilidad Reg 2026
+
+```typescript
+// EligibilityModalReg2026.tsx
+interface Reg2026FormData {
+  enteredBeforeDeadline: boolean | null; // Q1: ¿Antes del 31/12/2025?
+  hasFiveMonthsProof: boolean | null;    // Q2: ¿5 meses de empadronamiento?
+}
+
+const evaluateEligibility = (data: Reg2026FormData): EligibilityResult => {
+  if (data.enteredBeforeDeadline === false) {
+    return {
+      eligible: false,
+      reason: "date",
+      message: "Para la Regularización 2026 debes haber entrado antes del 31 de diciembre de 2025. Te recomendamos explorar las vías de arraigo tradicionales.",
+      redirect: "/españa/arraigos",
+    };
+  }
+  
+  if (data.hasFiveMonthsProof === false) {
+    return {
+      eligible: false,
+      reason: "time",
+      message: "Debes esperar hasta completar 5 meses de estancia antes del 30 de junio de 2026.",
+    };
+  }
+  
+  return {
+    eligible: true,
+    routeType: "regularizacion2026",
+    message: "¡Apto para Regularización! Podrás trabajar en 15 días tras tu solicitud.",
+  };
+};
+```
+
+### Flujo del Modal de Elegibilidad Arraigos
+
+```typescript
+// EligibilityModalArraigos.tsx
+interface ArraigosFormData {
+  timeInSpain: "less_than_2" | "2_years" | "3_plus_years" | null;
+  // Pregunta condicional según tiempo:
+  twoYearOption: "trabajo" | "formacion" | "ninguno" | null;
+  threeYearOption: "insercion" | "contrato" | "ninguno" | null;
+}
+
+const evaluateArraigo = (data: ArraigosFormData): EligibilityResult => {
+  if (data.timeInSpain === "less_than_2") {
+    return {
+      eligible: false,
+      reason: "time",
+      message: "Debes esperar hasta cumplir al menos 2 años de residencia continuada para solicitar arraigo.",
+    };
+  }
+  
+  if (data.timeInSpain === "2_years") {
+    if (data.twoYearOption === "trabajo") {
+      return { eligible: true, routeType: "arraigo_laboral", message: "Calificas para Arraigo Laboral" };
+    }
+    if (data.twoYearOption === "formacion") {
+      return { eligible: true, routeType: "arraigo_formativo", message: "Calificas para Arraigo Socioformativo" };
+    }
+    return { eligible: false, reason: "documents", message: "Necesitas una oferta de trabajo o matricularte en formación." };
+  }
+  
+  // 3+ años
+  if (data.threeYearOption === "ninguno") {
+    return { eligible: false, reason: "documents", message: "Necesitas informe de inserción social o contrato de trabajo." };
+  }
+  
+  return { eligible: true, routeType: "arraigo_social", message: "Calificas para Arraigo Social" };
+};
+```
+
+### Actualización de App.tsx
+
+```typescript
+// Nuevas rutas
+<Route path="/españa/regularizacion" element={<Regularizacion2026 />} />
+<Route path="/españa/arraigos" element={<Arraigos />} />
+
+// Redirect de URL antigua (opcional)
+<Route path="/regularizacion" element={<Navigate to="/españa/arraigos" replace />} />
+```
+
+### Actualización de Dashboard.tsx
+
+```typescript
+// Detectar source y auto-iniciar ruta
 useEffect(() => {
   const source = localStorage.getItem("onboarding_source");
-  const stateSource = location.state?.source;
   
-  if (source === "regularizacion" || stateSource === "regularizacion") {
-    // Limpiar localStorage
+  if (source === "reg2026") {
     localStorage.removeItem("onboarding_source");
-    
-    // Buscar template de Regularizacion
-    const regTemplate = templates.find(t => 
-      t.name.toLowerCase().includes("regularización")
-    );
-    
-    if (regTemplate && canAddRoute) {
-      // Auto-iniciar la ruta
-      startRoute(regTemplate.id);
-    }
+    const template = templates.find(t => t.id === TEMPLATE_IDS.regularizacion2026);
+    if (template && canAddRoute) handleStartRoute(template.id);
   }
-}, [templates, canAddRoute, startRoute, location.state]);
+  
+  if (source === "arraigos") {
+    localStorage.removeItem("onboarding_source");
+    const template = templates.find(t => t.id === TEMPLATE_IDS.arraigoSocial);
+    if (template && canAddRoute) handleStartRoute(template.id);
+  }
+}, [templates, canAddRoute]);
 ```
 
 ---
 
-## Diseno Visual
+## Orden de Implementación
 
-### Paleta de Colores
-
-| Elemento | Color | Uso |
-|----------|-------|-----|
-| Badge "NEW 2026" | Negro con borde | Destacar novedad |
-| Pillar Cards | Fondo gris claro | Seccion informativa |
-| Document Checklist | Background blanco | Interactividad |
-| CTA Button | Negro solido | Accion principal |
-
-### Iconografia
-
-- Pilares: `Scale`, `GraduationCap`, `RefreshCw`
-- Documentos: `FileText`, `FileCheck`, `Stamp`, `CreditCard`, `Upload`
-- Badge: `Sparkles` o `Star`
+1. **Crear componentes de elegibilidad** - Modales con flujo de preguntas
+2. **Crear página Regularización 2026** - Landing con hero y requisitos
+3. **Crear página Arraigos** - Adaptar contenido actual con nuevo hero
+4. **Actualizar App.tsx** - Nuevas rutas bajo `/españa/`
+5. **Actualizar Dashboard.tsx** - Manejar nuevos sources
+6. **Mantener redirect** - `/regularizacion` → `/españa/arraigos`
+7. **Actualizar navegación** - Si hay enlaces directos
 
 ---
 
-## Orden de Implementacion
-
-1. **Migracion SQL** - Actualizar template y agregar pasos
-2. **Regularizacion.tsx** - Pagina principal con estructura
-3. **HeroRegularizacion.tsx** - Hero con badge NEW 2026
-4. **PillarCard.tsx** - Componente de pilar reutilizable
-5. **DocumentChecklist.tsx** - Preview interactivo de docs
-6. **App.tsx** - Agregar ruta `/regularizacion`
-7. **AnalysisModal.tsx** - Agregar prop `source`
-8. **Dashboard.tsx** - Logica de auto-start
-
----
-
-## Verificacion
+## Verificación
 
 | Escenario | Resultado Esperado |
 |-----------|-------------------|
-| Usuario visita /regularizacion | Ve landing page con 3 pilares y checklist |
-| Click "Iniciar mi proceso" | Abre onboarding modal |
-| Completa onboarding desde landing | Auto-inicia ruta Regularizacion 2026 |
-| Usuario Free usa landing | Gasta su slot en esta ruta especifica |
-| Usuario Pro usa landing | Inicia ruta sin gastar ultimo slot |
-| Template en Explorar | Muestra badge "Nuevo 2026" |
+| Usuario visita `/españa/regularizacion` | Ve landing de Reg 2026 con requisitos |
+| Click "Analizar elegibilidad" en Reg 2026 | Modal con 2 preguntas específicas |
+| No entró antes del 31/12/2025 | Redirige a `/españa/arraigos` |
+| No tiene 5 meses de estancia | Mensaje: "Debes esperar hasta..." |
+| Cumple ambos requisitos | Mensaje éxito + botón continuar → auto-inicia ruta |
+| Usuario visita `/españa/arraigos` | Ve landing con 3 pilares |
+| Click "Analizar perfil" en Arraigos | Modal con preguntas de tiempo |
+| Menos de 2 años en España | Mensaje: "Debes esperar..." |
+| 2 años + oferta trabajo | Identifica "Arraigo Laboral" |
+| 3+ años + contrato | Identifica "Arraigo Social" → auto-inicia ruta |
+| URL antigua `/regularizacion` | Redirige a `/españa/arraigos` |
