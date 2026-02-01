@@ -137,23 +137,35 @@ const Dashboard = () => {
     loadData();
   }, [location.state, user, authLoading]);
 
-  // Auto-start regularization route when coming from /regularizacion landing page
+  // Auto-start routes based on source (reg2026, arraigos, or legacy regularizacion)
   useEffect(() => {
     const source = localStorage.getItem("onboarding_source") || userData.source;
     
-    if (source === "regularizacion" && user && !routesLoading && templates.length > 0 && canAddRoute) {
+    if (!user || routesLoading || templates.length === 0 || !canAddRoute || activeRoutes.length > 0) {
+      return;
+    }
+
+    // Template IDs
+    const TEMPLATE_IDS = {
+      regularizacion2026: "57b27d4a-190b-4ece-a1c3-de1859d58217",
+      arraigoSocial: "f451f205-2dae-4eaf-9103-d895c626d57c",
+    };
+    
+    let templateToStart: string | null = null;
+
+    if (source === "reg2026") {
+      templateToStart = TEMPLATE_IDS.regularizacion2026;
+    } else if (source === "arraigos" || source === "regularizacion") {
+      templateToStart = TEMPLATE_IDS.arraigoSocial;
+    }
+
+    if (templateToStart) {
       // Clear localStorage
       localStorage.removeItem("onboarding_source");
       
-      // Find the regularization template
-      const regTemplate = templates.find(t => 
-        t.name.toLowerCase().includes("regularización") || 
-        t.name.toLowerCase().includes("regularizacion")
-      );
-      
-      if (regTemplate && activeRoutes.length === 0) {
-        // Auto-start the route
-        handleStartRoute(regTemplate.id);
+      const template = templates.find(t => t.id === templateToStart);
+      if (template) {
+        handleStartRoute(template.id);
       }
     }
   }, [user, routesLoading, templates, canAddRoute, userData.source, activeRoutes.length]);

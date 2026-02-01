@@ -2,14 +2,15 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AdminModeProvider } from "@/contexts/AdminModeContext";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import RouteDetail from "./pages/RouteDetail";
 import Explorar from "./pages/Explorar";
-import Regularizacion from "./pages/Regularizacion";
+import Regularizacion2026 from "./pages/espana/Regularizacion2026";
+import Arraigos from "./pages/espana/Arraigos";
 import Success from "./pages/Success";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
@@ -32,7 +33,11 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/dashboard/route/:routeId" element={<RouteDetail />} />
               <Route path="/explorar" element={<Explorar />} />
-              <Route path="/regularizacion" element={<Regularizacion />} />
+              {/* España routes */}
+              <Route path="/españa/regularizacion" element={<Regularizacion2026 />} />
+              <Route path="/españa/arraigos" element={<Arraigos />} />
+              {/* Legacy redirect */}
+              <Route path="/regularizacion" element={<Navigate to="/españa/arraigos" replace />} />
               <Route path="/success" element={<Success />} />
               <Route path="/terminos" element={<Terms />} />
               <Route path="/privacidad" element={<Privacy />} />
