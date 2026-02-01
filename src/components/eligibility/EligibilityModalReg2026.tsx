@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Calendar, FileCheck } from "lucide-react";
 import { EligibilityResult, EligibilityResultType } from "./EligibilityResult";
+import { QualificationSuccess } from "./QualificationSuccess";
 
 interface EligibilityModalReg2026Props {
   isOpen: boolean;
@@ -16,7 +17,7 @@ interface EligibilityModalReg2026Props {
   onEligible: () => void;
 }
 
-type Step = "q1" | "q2" | "result";
+type Step = "q1" | "q2" | "result" | "pricing";
 
 export const EligibilityModalReg2026 = ({
   isOpen,
@@ -88,7 +89,6 @@ export const EligibilityModalReg2026 = ({
 
   const handleQ2Answer = (answer: boolean) => {
     setHasFiveMonthsProof(answer);
-    const evalResult = evaluateEligibility();
     // Since Q1 was true, evaluate based on Q2
     if (!answer) {
       setResult({
@@ -97,15 +97,11 @@ export const EligibilityModalReg2026 = ({
         message: "Debes esperar hasta completar 5 meses de estancia documentada antes del 30 de junio de 2026.",
         subMessage: "Una vez cumplas este requisito, podrás iniciar el proceso.",
       });
+      setStep("result");
     } else {
-      setResult({
-        eligible: true,
-        routeType: "regularizacion2026",
-        message: "Podrás trabajar legalmente en 15 días tras tu solicitud.",
-        subMessage: "Te guiaremos paso a paso en todo el proceso.",
-      });
+      // User is eligible - show pricing screen
+      setStep("pricing");
     }
-    setStep("result");
   };
 
   const handleContinue = () => {
@@ -125,10 +121,10 @@ export const EligibilityModalReg2026 = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={step === "pricing" ? "sm:max-w-2xl" : "sm:max-w-md"}>
         <DialogHeader>
           <DialogTitle className="text-center">
-            {step === "result" ? "Resultado" : "Verificar Elegibilidad"}
+            {step === "result" ? "Resultado" : step === "pricing" ? "" : "Verificar Elegibilidad"}
           </DialogTitle>
         </DialogHeader>
 
@@ -235,6 +231,13 @@ export const EligibilityModalReg2026 = ({
             result={result}
             onContinue={handleContinue}
             onRedirect={handleRedirect}
+          />
+        )}
+
+        {step === "pricing" && (
+          <QualificationSuccess
+            routeType="regularizacion2026"
+            onClose={handleClose}
           />
         )}
       </DialogContent>
