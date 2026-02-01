@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Clock, Briefcase } from "lucide-react";
 import { EligibilityResult, EligibilityResultType } from "./EligibilityResult";
+import { QualificationSuccess, RouteType } from "./QualificationSuccess";
 
 interface EligibilityModalArraigosProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ interface EligibilityModalArraigosProps {
   onEligible: (routeType: string) => void;
 }
 
-type Step = "q1" | "q2_2years" | "q2_3years" | "result";
+type Step = "q1" | "q2_2years" | "q2_3years" | "result" | "pricing";
 type TimeInSpain = "less_than_2" | "2_years" | "3_plus_years";
 type TwoYearOption = "trabajo" | "formacion" | "ninguno";
 type ThreeYearOption = "insercion" | "contrato" | "ninguno";
@@ -30,6 +31,7 @@ export const EligibilityModalArraigos = ({
   const [twoYearOption, setTwoYearOption] = useState<TwoYearOption | null>(null);
   const [threeYearOption, setThreeYearOption] = useState<ThreeYearOption | null>(null);
   const [result, setResult] = useState<EligibilityResultType | null>(null);
+  const [eligibleRouteType, setEligibleRouteType] = useState<RouteType | null>(null);
 
   const resetModal = () => {
     setStep("q1");
@@ -37,6 +39,7 @@ export const EligibilityModalArraigos = ({
     setTwoYearOption(null);
     setThreeYearOption(null);
     setResult(null);
+    setEligibleRouteType(null);
   };
 
   const handleClose = () => {
@@ -66,19 +69,11 @@ export const EligibilityModalArraigos = ({
     setTwoYearOption(option);
     
     if (option === "trabajo") {
-      setResult({
-        eligible: true,
-        routeType: "arraigo_laboral",
-        message: "Calificas para Arraigo Laboral",
-        subMessage: "Podrás regularizar tu situación con un contrato de trabajo de al menos 1 año.",
-      });
+      setEligibleRouteType("arraigo_laboral");
+      setStep("pricing");
     } else if (option === "formacion") {
-      setResult({
-        eligible: true,
-        routeType: "arraigo_formativo",
-        message: "Calificas para Arraigo Socioformativo",
-        subMessage: "Podrás regularizarte matriculándote en un curso de formación acreditado.",
-      });
+      setEligibleRouteType("arraigo_formativo");
+      setStep("pricing");
     } else {
       setResult({
         eligible: false,
@@ -86,8 +81,8 @@ export const EligibilityModalArraigos = ({
         message: "Necesitas una oferta de trabajo o matricularte en formación para acceder al arraigo con 2 años.",
         subMessage: "Si llevas más tiempo, podrías optar al arraigo social con 3 años.",
       });
+      setStep("result");
     }
-    setStep("result");
   };
 
   const handleThreeYearAnswer = (option: ThreeYearOption) => {
@@ -100,17 +95,11 @@ export const EligibilityModalArraigos = ({
         message: "Necesitas informe de inserción social o contrato de trabajo para el arraigo social.",
         subMessage: "Contacta con los servicios sociales de tu ayuntamiento para obtener el informe.",
       });
+      setStep("result");
     } else {
-      setResult({
-        eligible: true,
-        routeType: "arraigo_social",
-        message: "Calificas para Arraigo Social",
-        subMessage: option === "insercion" 
-          ? "Con tu informe de inserción social podrás iniciar el proceso."
-          : "Con tu contrato de trabajo podrás iniciar el proceso.",
-      });
+      setEligibleRouteType("arraigo_social");
+      setStep("pricing");
     }
-    setStep("result");
   };
 
   const handleContinue = () => {
@@ -138,10 +127,10 @@ export const EligibilityModalArraigos = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={step === "pricing" ? "sm:max-w-2xl" : "sm:max-w-md"}>
         <DialogHeader>
           <DialogTitle className="text-center">
-            {step === "result" ? "Resultado" : "Analizar tu Perfil"}
+            {step === "result" ? "Resultado" : step === "pricing" ? "" : "Analizar tu Perfil"}
           </DialogTitle>
         </DialogHeader>
 
@@ -337,6 +326,13 @@ export const EligibilityModalArraigos = ({
           <EligibilityResult
             result={result}
             onContinue={handleContinue}
+          />
+        )}
+
+        {step === "pricing" && eligibleRouteType && (
+          <QualificationSuccess
+            routeType={eligibleRouteType}
+            onClose={handleClose}
           />
         )}
       </DialogContent>

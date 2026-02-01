@@ -4,7 +4,7 @@ import { useAuth } from "./useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useAdminMode } from "@/contexts/AdminModeContext";
 
-export type SubscriptionStatus = "free" | "pro";
+export type SubscriptionStatus = "free" | "pro" | "digital" | "premium";
 
 interface UseSubscriptionReturn {
   subscriptionStatus: SubscriptionStatus;
@@ -14,6 +14,11 @@ interface UseSubscriptionReturn {
   isCheckoutLoading: boolean;
   maxRoutes: number;
 }
+
+// Helper to check if status grants premium features
+const isPremiumStatus = (status: SubscriptionStatus): boolean => {
+  return status === "pro" || status === "digital" || status === "premium";
+};
 
 export const useSubscription = (): UseSubscriptionReturn => {
   const { user } = useAuth();
@@ -107,7 +112,7 @@ export const useSubscription = (): UseSubscriptionReturn => {
   };
 
   // If admin, always use effective values from context (for testing different modes)
-  const realIsPremium = subscriptionStatus === "pro";
+  const realIsPremium = isPremiumStatus(subscriptionStatus);
   const isPremium = isAdmin ? effectiveIsPremium : realIsPremium;
   const maxRoutes = isAdmin ? effectiveMaxRoutes : (realIsPremium ? 3 : 1);
 
