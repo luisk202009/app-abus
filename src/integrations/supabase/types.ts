@@ -307,6 +307,48 @@ export type Database = {
           },
         ]
       }
+      user_documents: {
+        Row: {
+          category: string
+          created_at: string | null
+          document_type: string
+          file_name: string | null
+          file_url: string | null
+          id: string
+          route_type: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+          validation_message: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          document_type: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          route_type?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+          validation_message?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          document_type?: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          route_type?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+          validation_message?: string | null
+        }
+        Relationships: []
+      }
       user_route_progress: {
         Row: {
           id: string
