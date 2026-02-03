@@ -1,120 +1,77 @@
 
-# Plan: Premium Onboarding and Payment Gateway (Task C01)
+# Plan: Task C02 - Secure Document Management System and AI-assisted Validation
 
 ## Resumen
 
-Implementar un flujo de conversión premium que intercepta a usuarios aptos tras el chequeo de elegibilidad, presentándoles una pantalla de éxito con tabla de precios y pagos únicos vía Stripe. Tras el pago, se crea la cuenta y se asigna la ruta automáticamente.
+Implementar un sistema completo de gestión de documentos ("La Bóveda") con validación mock de IA, control de acceso para usuarios pagados, y actualización del pricing a los nuevos valores (Plan Pro €9.99, Plan Premium €19.99).
 
 ---
 
-## Arquitectura del Nuevo Flujo
+## Arquitectura del Sistema de Documentos
 
 ```text
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                    FLUJO ACTUAL (a modificar)                                 │
-└───────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          DOCUMENT VAULT ARCHITECTURE                            │
+└─────────────────────────────────────────────────────────────────────────────────┘
 
-Landing (/españa/regularizacion)
-         │
-         │ Click "Analizar elegibilidad"
-         ▼
-┌─────────────────────────────────┐
-│  EligibilityModalReg2026        │
-│  Pregunta 1 → Pregunta 2        │
-│  → EligibilityResult (Apto/No)  │
-└─────────────────────────────────┘
-         │
-         │ Si APTO → Continuar
-         ▼
-┌─────────────────────────────────┐
-│  AnalysisModal (Onboarding)     │  ← ACTUALMENTE VA AQUÍ
-│  5 pasos → Dashboard            │
-└─────────────────────────────────┘
-
-
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                    NUEVO FLUJO PROPUESTO                                      │
-└───────────────────────────────────────────────────────────────────────────────┘
-
-Landing (/españa/regularizacion)
-         │
-         │ Click "Analizar elegibilidad"
-         ▼
-┌─────────────────────────────────┐
-│  EligibilityModalReg2026        │
-│  Pregunta 1 → Pregunta 2        │
-└─────────────────────────────────┘
-         │
-         │ Si APTO
-         ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     NUEVA PANTALLA: QualificationSuccess                    │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │  ✓ ¡Perfil Validado!                                                   ││
-│  │  "Tienes el 95% de éxito para tu residencia"                           ││
-│  │                                                                         ││
-│  │  ┌─────────────────────┐  ┌─────────────────────────────────────────┐  ││
-│  │  │ PLAN DIGITAL  49€   │  │ PLAN PREMIUM  149€                      │  ││
-│  │  │ ─────────────       │  │ ─────────────                           │  ││
-│  │  │ ✓ Guía paso a paso  │  │ ✓ Todo del Digital                      │  ││
-│  │  │ ✓ Generador 790-052 │  │ ✓ Revisión humana de documentos         │  ││
-│  │  │ ✓ Checklist docs    │  │ ✓ Carga en plataforma Mercurio         │  ││
-│  │  │                     │  │ [RECOMENDADO] Badge dorado              │  ││
-│  │  │ [Pagar 49€]         │  │ [Pagar 149€]                            │  ││
-│  │  └─────────────────────┘  └─────────────────────────────────────────┘  ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────────────┘
-         │
-         │ Click "Pagar ahora"
-         ▼
-┌─────────────────────────────────┐
-│  RegistrationModal (NUEVO)      │
-│  - Solo nombre + email          │
-│  - Crea cuenta Supabase Auth    │
-│  - Redirige a Stripe Checkout   │
-└─────────────────────────────────┘
-         │
-         │ Pago exitoso en Stripe
-         ▼
-┌─────────────────────────────────┐
-│  /success (MODIFICADO)          │
-│  - Verifica pago                 │
-│  - Actualiza subscription_status │
-│  - Auto-asigna ruta Reg2026     │
-│  - Redirige a Dashboard Pro     │
-└─────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     DASHBOARD PRO (MEJORADO)                                │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │  Banner flotante: "Quedan XX días para apertura (1 abril)"             ││
-│  ├─────────────────────────────────────────────────────────────────────────┤│
-│  │  Barra de progreso visual                                              ││
-│  │  ════════════════════░░░░░░░░░░ 40% completado                        ││
-│  ├─────────────────────────────────────────────────────────────────────────┤│
-│  │  Pasos con File Upload:                                                ││
-│  │  ┌─────────────────────────────────────────────────────────────────┐  ││
-│  │  │ 1. Verificación de Permanencia                                  │  ││
-│  │  │    [📎 Subir empadronamiento]  [✓ Archivo subido]               │  ││
-│  │  ├─────────────────────────────────────────────────────────────────┤  ││
-│  │  │ 2. Antecedentes Penales                                         │  ││
-│  │  │    [📎 Subir certificado]  [📎 Subir apostilla]                 │  ││
-│  │  └─────────────────────────────────────────────────────────────────┘  ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────────────┘
+                    ┌─────────────────────────────────────────┐
+                    │           DocumentVault.tsx             │
+                    │  Organizado por categorías según ruta   │
+                    └───────────────────┬─────────────────────┘
+                                        │
+           ┌────────────────────────────┼────────────────────────────┐
+           │                            │                            │
+           ▼                            ▼                            ▼
+┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
+│    IDENTIDAD        │   │    RESIDENCIA       │   │   ANTECEDENTES      │
+│  ────────────────   │   │  ────────────────   │   │  ────────────────   │
+│  - Pasaporte        │   │  - Padrón Histórico │   │  - Penales país     │
+│                     │   │  - Recibos          │   │    origen           │
+│                     │   │  - Remesas          │   │  - Apostilla        │
+└─────────────────────┘   └─────────────────────┘   └─────────────────────┘
+           │                            │                            │
+           └────────────────────────────┼────────────────────────────┘
+                                        │
+                                        ▼
+                    ┌─────────────────────────────────────────┐
+                    │         DocumentStatusCard.tsx          │
+                    │  Estados visuales con badge de color    │
+                    └───────────────────┬─────────────────────┘
+                                        │
+           ┌────────────────────────────┼─────────────────────────────┐
+           │                            │                             │
+           ▼                            ▼                             ▼
+    ┌─────────────┐           ┌─────────────┐              ┌─────────────┐
+    │  🟠 WAITING │           │ 🔵 ANALYZING│              │ 🟢 VALID    │
+    │  Default    │     →     │  Procesando │      →      │  Aprobado   │
+    └─────────────┘           └─────────────┘              └─────────────┘
+                                                                  │
+                                                                  ▼
+                                                          ┌─────────────┐
+                                                          │ 🔴 ERROR    │
+                                                          │  Rechazado  │
+                                                          └─────────────┘
 ```
 
 ---
 
-## 1. Productos y Precios en Stripe
+## 1. Nueva Tabla de Base de Datos
 
-### Crear Nuevos Productos (One-Time Payments)
+### user_documents
 
-| Producto | Precio | Tipo | Stripe Price ID (a crear) |
-|----------|--------|------|---------------------------|
-| Albus Digital Regularización | 49€ | payment (one-time) | A generar |
-| Albus Premium Regularización | 149€ | payment (one-time) | A generar |
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| id | uuid | Primary key |
+| user_id | uuid | FK to auth.users |
+| category | text | "identidad", "residencia", "antecedentes" |
+| document_type | text | "pasaporte", "padron_historico", "penales", etc. |
+| file_url | text | URL del archivo en storage |
+| file_name | text | Nombre original del archivo |
+| status | text | "waiting", "analyzing", "valid", "error" |
+| validation_message | text | Mensaje de validación (si error) |
+| route_type | text | "regularizacion2026" o "arraigos" |
+| created_at | timestamp | Fecha de creación |
+| updated_at | timestamp | Última actualización |
 
 ---
 
@@ -122,269 +79,393 @@ Landing (/españa/regularizacion)
 
 | Archivo | Descripción |
 |---------|-------------|
-| `src/components/eligibility/QualificationSuccess.tsx` | Pantalla de éxito con tabla de precios |
-| `src/components/eligibility/PricingCard.tsx` | Tarjeta individual de plan |
-| `src/components/eligibility/RegistrationModal.tsx` | Modal de registro rápido (nombre + email) |
-| `src/components/dashboard/UrgencyBanner.tsx` | Banner flotante con countdown |
-| `src/components/dashboard/ProgressBar.tsx` | Barra de progreso visual |
-| `src/components/route-detail/StepFileUpload.tsx` | Componente de subida de archivos por paso |
+| `src/components/dashboard/DocumentVault.tsx` | Contenedor principal de La Bóveda |
+| `src/components/dashboard/DocumentCategory.tsx` | Sección por categoría (Identidad, Residencia, Antecedentes) |
+| `src/components/dashboard/DocumentStatusCard.tsx` | Tarjeta individual de documento con estado |
+| `src/components/dashboard/DocumentUploadButton.tsx` | Botón de upload con soporte PDF/JPG |
+| `src/components/dashboard/SubmitForReviewButton.tsx` | Botón "Enviar a Revisión" |
+| `src/components/dashboard/PremiumFeatureModal.tsx` | Modal de "Esta ruta requiere Plan Pro" |
+| `src/hooks/useDocumentVault.tsx` | Hook para gestión de documentos |
 
 ---
 
-## 3. Edge Functions
-
-### create-one-time-payment (NUEVO)
-
-Función para crear sesiones de pago único (no suscripción):
-
-```typescript
-// supabase/functions/create-one-time-payment/index.ts
-// Diferencias con create-checkout:
-// - mode: "payment" en lugar de "subscription"
-// - Recibe priceId específico del plan seleccionado
-// - Permite checkout sin autenticación previa (guest)
-// - Guarda metadata: plan_type, route_template_id
-```
-
-### verify-payment (NUEVO)
-
-Función para verificar el pago tras redirect de Stripe:
-
-```typescript
-// supabase/functions/verify-payment/index.ts
-// - Recibe session_id de Stripe
-// - Verifica estado de pago
-// - Actualiza subscription_status del usuario
-// - Retorna información del plan comprado
-```
-
----
-
-## 4. Diseño Visual: QualificationSuccess
+## 3. Diseño Visual: Document Vault
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│   [Fondo oscuro/negro con acentos dorados para "Premium"]                  │
-│                                                                             │
-│   ┌─────────────────────────────────────────────────────────────────────┐  │
-│   │                                                                     │  │
-│   │     ✓ (check dorado)                                                │  │
-│   │                                                                     │  │
-│   │     ¡Perfil Validado!                                               │  │
-│   │     ─────────────────                                               │  │
-│   │                                                                     │  │
-│   │     Tienes el 95% de éxito para obtener                            │  │
-│   │     tu residencia en España.                                        │  │
-│   │                                                                     │  │
-│   └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│   ┌───────────────────────────┐   ┌───────────────────────────────────┐   │
-│   │                           │   │  [RECOMENDADO] badge dorado        │   │
-│   │     PLAN DIGITAL          │   │                                   │   │
-│   │     ─────────────         │   │     PLAN PREMIUM                  │   │
-│   │                           │   │     ─────────────                 │   │
-│   │     49€                   │   │                                   │   │
-│   │     pago único            │   │     149€                          │   │
-│   │                           │   │     pago único                    │   │
-│   │     ────────────────────  │   │                                   │   │
-│   │                           │   │     ────────────────────          │   │
-│   │     ✓ Guía paso a paso    │   │                                   │   │
-│   │     ✓ Generador Tasa 790  │   │     ✓ Todo del Plan Digital       │   │
-│   │     ✓ Checklist docs      │   │     ✓ Revisión humana de docs     │   │
-│   │     ✓ Soporte por email   │   │     ✓ Carga en Mercurio           │   │
-│   │                           │   │     ✓ Soporte prioritario         │   │
-│   │                           │   │                                   │   │
-│   │     [  Elegir Digital  ]  │   │     [  Elegir Premium  ] (dorado) │   │
-│   │     (botón outline)       │   │     (botón solido)                │   │
-│   │                           │   │                                   │   │
-│   └───────────────────────────┘   └───────────────────────────────────┘   │
-│                                                                             │
-│                                                                             │
-│            Garantía de devolución de 7 días · Pago seguro                 │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                 │
+│   📁 Tu Bóveda de Documentos                                                   │
+│   ─────────────────────────                                                    │
+│   Organiza y valida tus documentos para la solicitud                           │
+│                                                                                 │
+│   ┌──────────────────── IDENTIDAD ────────────────────┐                        │
+│   │                                                    │                        │
+│   │   ┌────────────────────────────────────────────┐  │                        │
+│   │   │  📄 Pasaporte Completo                     │  │                        │
+│   │   │  Todas las páginas con sellos de entrada   │  │                        │
+│   │   │                                            │  │                        │
+│   │   │  🟠 Esperando archivo     [📎 Subir]      │  │                        │
+│   │   └────────────────────────────────────────────┘  │                        │
+│   │                                                    │                        │
+│   └────────────────────────────────────────────────────┘                        │
+│                                                                                 │
+│   ┌──────────────────── RESIDENCIA ───────────────────┐                        │
+│   │                                                    │                        │
+│   │   ┌────────────────────────────────────────────┐  │                        │
+│   │   │  📄 Padrón Histórico                       │  │                        │
+│   │   │  Certificado con fecha anterior a          │  │                        │
+│   │   │  31/12/2025                                │  │                        │
+│   │   │                                            │  │                        │
+│   │   │  🔵 Analizando documento...               │  │                        │
+│   │   │  ├─ padron_historico.pdf                  │  │                        │
+│   │   └────────────────────────────────────────────┘  │                        │
+│   │                                                    │                        │
+│   │   ┌────────────────────────────────────────────┐  │                        │
+│   │   │  📄 Recibos / Remesas                      │  │                        │
+│   │   │  Comprobantes de alquiler o envíos         │  │                        │
+│   │   │                                            │  │                        │
+│   │   │  🟢 Válido para presentación              │  │                        │
+│   │   │  ├─ recibo_enero.pdf                      │  │                        │
+│   │   │  ├─ remesa_febrero.pdf                    │  │                        │
+│   │   └────────────────────────────────────────────┘  │                        │
+│   │                                                    │                        │
+│   └────────────────────────────────────────────────────┘                        │
+│                                                                                 │
+│   ┌──────────────────── ANTECEDENTES ─────────────────┐                        │
+│   │                                                    │                        │
+│   │   ┌────────────────────────────────────────────┐  │                        │
+│   │   │  📄 Antecedentes Penales                   │  │                        │
+│   │   │  Del país de origen, apostillados          │  │                        │
+│   │   │                                            │  │                        │
+│   │   │  🔴 Error en documento                     │  │                        │
+│   │   │  ⚠️ La apostilla no es legible            │  │                        │
+│   │   └────────────────────────────────────────────┘  │                        │
+│   │                                                    │                        │
+│   └────────────────────────────────────────────────────┘                        │
+│                                                                                 │
+│   ┌─────────────────────────────────────────────────────────────────────────┐  │
+│   │                                                                          │  │
+│   │   [  Enviar a Revisión  ]  (Deshabilitado si hay docs pendientes)       │  │
+│   │                                                                          │  │
+│   └─────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 5. Diseño Visual: UrgencyBanner
+## 4. Status Badges Design
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│   ⏰  Quedan 58 días para la apertura de solicitudes (1 de abril)          │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          STATUS BADGE SYSTEM                                    │
+└─────────────────────────────────────────────────────────────────────────────────┘
 
-Estilo:
-- Fondo negro/oscuro
-- Texto blanco
-- Icono de reloj o calendario
-- Fijo en parte superior del Dashboard (solo para usuarios Pro)
-- Se calcula dinámicamente basado en fecha actual vs 1 abril 2026
+    ┌─────────────────────────────────────────────────────────────┐
+    │  🟠 Esperando archivo                                       │
+    │  ────────────────────                                       │
+    │  Background: orange-100 / Text: orange-700                  │
+    │  Estado por defecto, sin archivo subido                     │
+    └─────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  🔵 Analizando documento...                                 │
+    │  ────────────────────────                                   │
+    │  Background: blue-100 / Text: blue-700                      │
+    │  Animación de spinner, post-upload                          │
+    └─────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  🟢 Válido para presentación                                │
+    │  ───────────────────────────                                │
+    │  Background: green-100 / Text: green-700                    │
+    │  Check icon, validación exitosa                             │
+    └─────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  🔴 Error en documento                                      │
+    │  ────────────────────                                       │
+    │  Background: red-100 / Text: red-700                        │
+    │  X icon + mensaje de error específico                       │
+    └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 6. Archivos a Modificar
+## 5. Mock AI/OCR Validation Logic
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                       AI VALIDATION FLOW (MOCK)                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+User uploads "Padrón Histórico"
+              │
+              ▼
+    ┌─────────────────────┐
+    │  Status → ANALYZING │
+    │  (2-3 sec delay)    │
+    └─────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────┐
+    │  MOCK VALIDATION CHECK:                         │
+    │                                                 │
+    │  IF user.routeType === "regularizacion2026"    │
+    │    AND document_type === "padron_historico"    │
+    │                                                 │
+    │  THEN simulate date check:                     │
+    │    - 70% chance → VALID (date < 31/12/2025)   │
+    │    - 30% chance → ERROR (date validation)     │
+    │                                                 │
+    │  Error message:                                │
+    │  "Atención: Tu padrón no acredita entrada     │
+    │   antes de la fecha de corte (31/12/2025)."   │
+    └─────────────────────────────────────────────────┘
+              │
+              ▼
+    ┌────────────┐     OR     ┌─────────────┐
+    │  🟢 VALID  │            │  🔴 ERROR   │
+    └────────────┘            └─────────────┘
+```
+
+---
+
+## 6. Updated Pricing Structure
+
+### Cambios en Planes
+
+| Plan | Precio Anterior | Precio Nuevo | Cambios |
+|------|-----------------|--------------|---------|
+| Digital | 49€ (one-time) | **Pro €9.99** (monthly) | Renombrado + nuevo precio |
+| Premium | 149€ (one-time) | **Premium €19.99** (monthly) | Nuevo precio |
+
+### Features por Plan
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              PLAN PRO (€9.99/mes)                               │
+│  ─────────────────────────────────────────────────────────────────────────────  │
+│  ✓ Acceso a rutas Regularización 2026 y Arraigos                               │
+│  ✓ Document Vault (La Bóveda)                                                  │
+│  ✓ Soporte Prioritario                                                         │
+│  ✓ Base de datos de abogados especializados (Coming Soon)                      │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           PLAN PREMIUM (€19.99/mes)                             │
+│                                [RECOMENDADO] 🏆                                 │
+│  ─────────────────────────────────────────────────────────────────────────────  │
+│  ✓ Todo del Plan Pro                                                            │
+│  ✓ Revisión humana de documentos                                                │
+│  ✓ Pre-check antes de presentar solicitud                                       │
+│  ✓ Asistente IA personalizado                                                   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 7. Access Control Flow
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        ACCESS CONTROL FOR RESTRICTED ROUTES                     │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+User (Free) selects "Regularización 2026" or "Arraigos"
+                              │
+                              ▼
+              ┌───────────────────────────────┐
+              │  CHECK: isPremium === true?   │
+              └───────────────────────────────┘
+                      │              │
+                     NO             YES
+                      │              │
+                      ▼              ▼
+    ┌───────────────────────┐   ┌───────────────────────┐
+    │  PremiumFeatureModal  │   │  Continue to route    │
+    │  ──────────────────   │   │  with full access     │
+    │                       │   │                       │
+    │  "Esta ruta requiere  │   └───────────────────────┘
+    │   el Plan Pro para    │
+    │   garantizar tu       │
+    │   éxito legal."       │
+    │                       │
+    │  [Upgrade] [Cancelar] │
+    └───────────────────────┘
+                │
+                │ Click Upgrade
+                ▼
+    ┌───────────────────────┐
+    │  Stripe Checkout      │
+    │  Pro €9.99/mes        │
+    └───────────────────────┘
+```
+
+---
+
+## 8. Archivos a Crear
+
+| Archivo | Propósito |
+|---------|-----------|
+| `src/components/dashboard/DocumentVault.tsx` | Contenedor principal con categorías |
+| `src/components/dashboard/DocumentCategory.tsx` | Sección por categoría con header |
+| `src/components/dashboard/DocumentStatusCard.tsx` | Tarjeta de documento con badges |
+| `src/components/dashboard/StatusBadge.tsx` | Componente de badge de estado |
+| `src/components/dashboard/PremiumFeatureModal.tsx` | Modal para rutas restringidas |
+| `src/hooks/useDocumentVault.tsx` | Hook para CRUD de documentos |
+| `src/lib/mockDocumentValidation.ts` | Lógica mock de validación AI |
+
+---
+
+## 9. Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/components/eligibility/EligibilityModalReg2026.tsx` | Mostrar QualificationSuccess en lugar de EligibilityResult cuando apto |
-| `src/components/eligibility/EligibilityModalArraigos.tsx` | Mismo cambio para arraigos |
-| `src/pages/espana/Regularizacion2026.tsx` | Integrar nuevo flujo con registration modal |
-| `src/pages/espana/Arraigos.tsx` | Integrar nuevo flujo |
-| `src/pages/Success.tsx` | Verificar pago y auto-asignar ruta |
-| `src/pages/Dashboard.tsx` | Agregar UrgencyBanner y mejorar progress |
-| `src/pages/RouteDetail.tsx` | Integrar file upload mejorado |
-| `src/components/route-detail/StepCard.tsx` | Agregar sección de file upload integrada |
+| `src/components/eligibility/QualificationSuccess.tsx` | Actualizar precios Pro €9.99 / Premium €19.99 |
+| `src/components/eligibility/PricingCard.tsx` | Cambiar "pago único" → "mes", renombrar Digital→Pro |
+| `src/components/dashboard/DocumentsSection.tsx` | Reemplazar con nuevo DocumentVault |
+| `src/pages/Dashboard.tsx` | Integrar DocumentVault en lugar de DocumentsSection |
+| `src/hooks/useSubscription.tsx` | Agregar lógica de access control |
+| `src/pages/espana/Regularizacion2026.tsx` | Agregar modal de feature restringida |
+| `src/pages/espana/Arraigos.tsx` | Agregar modal de feature restringida |
+| `supabase/functions/create-one-time-payment/index.ts` | Convertir a subscription mode |
+
+---
+
+## 10. Nuevos Stripe Products
+
+| Producto | Precio | Tipo | Price ID |
+|----------|--------|------|----------|
+| Albus Pro | €9.99 | subscription/month | A crear |
+| Albus Premium | €19.99 | subscription/month | A crear |
 
 ---
 
 ## Sección Técnica
 
-### Estructura de QualificationSuccess.tsx
-
-```typescript
-interface QualificationSuccessProps {
-  routeType: "regularizacion2026" | "arraigo_social" | "arraigo_laboral" | "arraigo_formativo";
-  onSelectPlan: (plan: "digital" | "premium") => void;
-  onClose: () => void;
-}
-
-const plans = [
-  {
-    id: "digital",
-    name: "Plan Digital",
-    price: 49,
-    priceId: "price_XXXXX", // A crear
-    features: [
-      "Guía paso a paso completa",
-      "Generador de Tasa 790-052",
-      "Checklist de documentos",
-      "Soporte por email",
-    ],
-    highlighted: false,
-  },
-  {
-    id: "premium",
-    name: "Plan Premium",
-    price: 149,
-    priceId: "price_YYYYY", // A crear
-    features: [
-      "Todo del Plan Digital",
-      "Revisión humana de documentos",
-      "Carga en plataforma Mercurio",
-      "Soporte prioritario",
-    ],
-    highlighted: true,
-    badge: "Recomendado",
-  },
-];
-```
-
-### Edge Function: create-one-time-payment
-
-```typescript
-// supabase/functions/create-one-time-payment/index.ts
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@18.5.0";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version",
-};
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    const { priceId, email, name, routeTemplateId, planType } = await req.json();
-
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2025-08-27.basil",
-    });
-
-    // Check/create customer
-    const customers = await stripe.customers.list({ email, limit: 1 });
-    let customerId;
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-    } else {
-      const customer = await stripe.customers.create({
-        email,
-        name,
-        metadata: { route_template_id: routeTemplateId },
-      });
-      customerId = customer.id;
-    }
-
-    // Create one-time payment session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      mode: "payment", // One-time, NOT subscription
-      success_url: `${req.headers.get("origin")}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.get("origin")}/españa/regularizacion`,
-      metadata: {
-        plan_type: planType,
-        route_template_id: routeTemplateId,
-        user_email: email,
-        user_name: name,
-      },
-    });
-
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
-  }
-});
-```
-
-### Storage Bucket para Documentos de Usuario
+### Database Migration
 
 ```sql
--- Crear bucket para documentos de usuario
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('user-documents', 'user-documents', false);
+-- Create user_documents table
+CREATE TABLE user_documents (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('identidad', 'residencia', 'antecedentes')),
+  document_type TEXT NOT NULL,
+  file_url TEXT,
+  file_name TEXT,
+  status TEXT DEFAULT 'waiting' CHECK (status IN ('waiting', 'analyzing', 'valid', 'error')),
+  validation_message TEXT,
+  route_type TEXT CHECK (route_type IN ('regularizacion2026', 'arraigos')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- RLS: Users can only access their own documents
-CREATE POLICY "Users can upload their documents"
-ON storage.objects FOR INSERT
-TO authenticated
-WITH CHECK (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = auth.uid()::text);
+-- Enable RLS
+ALTER TABLE user_documents ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their documents"
-ON storage.objects FOR SELECT
+-- RLS Policies
+CREATE POLICY "Users can view their own documents"
+ON user_documents FOR SELECT
 TO authenticated
-USING (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = auth.uid()::text);
+USING (user_id = auth.uid());
 
-CREATE POLICY "Users can delete their documents"
-ON storage.objects FOR DELETE
+CREATE POLICY "Users can insert their own documents"
+ON user_documents FOR INSERT
 TO authenticated
-USING (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = auth.uid()::text);
+WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Users can update their own documents"
+ON user_documents FOR UPDATE
+TO authenticated
+USING (user_id = auth.uid());
+
+CREATE POLICY "Users can delete their own documents"
+ON user_documents FOR DELETE
+TO authenticated
+USING (user_id = auth.uid());
+
+-- Index for faster queries
+CREATE INDEX idx_user_documents_user_id ON user_documents(user_id);
+CREATE INDEX idx_user_documents_route_type ON user_documents(route_type);
 ```
 
-### Countdown Logic para UrgencyBanner
+### Document Types Configuration
 
 ```typescript
-// src/components/dashboard/UrgencyBanner.tsx
-const calculateDaysUntilDeadline = () => {
-  const deadline = new Date("2026-04-01");
-  const today = new Date();
-  const diffTime = deadline.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays > 0 ? diffDays : 0;
+// src/lib/documentConfig.ts
+export const DOCUMENT_CATEGORIES = {
+  regularizacion2026: {
+    identidad: [
+      {
+        type: "pasaporte",
+        name: "Pasaporte Completo",
+        description: "Todas las páginas con sellos de entrada",
+        required: true,
+      },
+    ],
+    residencia: [
+      {
+        type: "padron_historico",
+        name: "Padrón Histórico",
+        description: "Certificado con fecha anterior a 31/12/2025",
+        required: true,
+        hasAiValidation: true,
+      },
+      {
+        type: "recibos_remesas",
+        name: "Recibos / Remesas",
+        description: "Comprobantes de alquiler o envíos de dinero",
+        required: false,
+      },
+    ],
+    antecedentes: [
+      {
+        type: "penales_origen",
+        name: "Antecedentes Penales",
+        description: "Del país de origen, apostillados",
+        required: true,
+      },
+    ],
+  },
+  arraigos: {
+    // Similar structure for Arraigos
+  },
+};
+```
+
+### Mock Validation Logic
+
+```typescript
+// src/lib/mockDocumentValidation.ts
+export const validateDocument = async (
+  documentType: string,
+  routeType: string
+): Promise<{ status: 'valid' | 'error'; message?: string }> => {
+  // Simulate processing delay
+  await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+  // Special validation for Padrón Histórico in Reg2026
+  if (routeType === 'regularizacion2026' && documentType === 'padron_historico') {
+    // 70% success rate for mock
+    const isValid = Math.random() > 0.3;
+    
+    if (isValid) {
+      return { status: 'valid' };
+    } else {
+      return {
+        status: 'error',
+        message: 'Atención: Tu padrón no acredita entrada antes de la fecha de corte (31/12/2025).',
+      };
+    }
+  }
+
+  // Default: 90% success rate
+  const isValid = Math.random() > 0.1;
+  return isValid
+    ? { status: 'valid' }
+    : { status: 'error', message: 'El documento no cumple con los requisitos mínimos.' };
 };
 ```
 
@@ -392,20 +473,22 @@ const calculateDaysUntilDeadline = () => {
 
 ## Orden de Implementación
 
-1. **Crear productos Stripe** - Digital (49€) y Premium (149€) con precios one-time
-2. **create-one-time-payment** - Edge function para pagos únicos
-3. **QualificationSuccess.tsx** - Pantalla de éxito con pricing table
-4. **PricingCard.tsx** - Componente de tarjeta de precio
-5. **RegistrationModal.tsx** - Modal de registro rápido
-6. **Modificar EligibilityModalReg2026** - Integrar nuevo flujo
-7. **Modificar EligibilityModalArraigos** - Integrar nuevo flujo
-8. **UrgencyBanner.tsx** - Banner de countdown
-9. **ProgressBar.tsx** - Barra de progreso visual
-10. **StepFileUpload.tsx** - Upload de archivos por paso
-11. **Storage bucket** - Configurar user-documents
-12. **Modificar Success.tsx** - Verificar pago y crear cuenta
-13. **Modificar Dashboard.tsx** - Integrar urgency banner
-14. **Modificar StepCard.tsx** - Integrar file upload
+1. **Database migration** - Crear tabla user_documents con RLS
+2. **Crear nuevos productos Stripe** - Pro (€9.99) y Premium (€19.99) mensuales
+3. **documentConfig.ts** - Configuración de documentos por ruta
+4. **mockDocumentValidation.ts** - Lógica de validación mock
+5. **StatusBadge.tsx** - Componente de badge de estado
+6. **DocumentStatusCard.tsx** - Tarjeta de documento
+7. **DocumentCategory.tsx** - Sección por categoría
+8. **DocumentVault.tsx** - Contenedor principal
+9. **useDocumentVault.tsx** - Hook de gestión
+10. **PremiumFeatureModal.tsx** - Modal de acceso restringido
+11. **Actualizar QualificationSuccess.tsx** - Nuevos precios
+12. **Actualizar PricingCard.tsx** - Naming y formato
+13. **Actualizar Dashboard.tsx** - Integrar DocumentVault
+14. **Actualizar Regularizacion2026.tsx** - Access control
+15. **Actualizar Arraigos.tsx** - Access control
+16. **Actualizar create-checkout** - Para subscriptions
 
 ---
 
@@ -413,12 +496,12 @@ const calculateDaysUntilDeadline = () => {
 
 | Escenario | Resultado Esperado |
 |-----------|-------------------|
-| Usuario apto en Reg2026 | Ve QualificationSuccess con 2 planes |
-| Click "Elegir Digital" | Modal de registro → Stripe checkout 49€ |
-| Click "Elegir Premium" | Modal de registro → Stripe checkout 149€ |
-| Pago exitoso | Crea cuenta → Asigna ruta → Dashboard Pro |
-| Dashboard Pro user | Ve UrgencyBanner con días restantes |
-| Dashboard Pro user | Ve barra de progreso general |
-| Route Detail Pro | Puede subir archivos por paso |
-| Usuario cancela pago | Vuelve a landing, puede reintentar |
-| Usuario Free en Dashboard | No ve UrgencyBanner |
+| Usuario Free ve DocumentVault | Ve placeholders con botón de upgrade |
+| Usuario Free selecciona Reg2026/Arraigos | Ve PremiumFeatureModal |
+| Usuario Pro sube Padrón | Badge cambia: waiting → analyzing → valid/error |
+| Padrón con fecha inválida | Muestra error con mensaje específico |
+| Todos docs en verde | Botón "Enviar a Revisión" se activa |
+| Docs pendientes/error | Botón "Enviar" deshabilitado |
+| Landing Reg2026 pricing | Muestra Pro €9.99 y Premium €19.99 |
+| Click upgrade | Redirige a Stripe Checkout (subscription) |
+| Usuario Pro ve "Abogados" | Ve sección "Coming Soon" |
