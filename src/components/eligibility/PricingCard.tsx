@@ -4,12 +4,13 @@ import { cn } from "@/lib/utils";
 
 interface PricingCardProps {
   plan: {
-    id: "digital" | "premium";
+    id: "pro" | "premium";
     name: string;
     price: number;
     features: string[];
     highlighted?: boolean;
     badge?: string;
+    isSubscription?: boolean;
   };
   onSelect: () => void;
 }
@@ -55,7 +56,7 @@ export const PricingCard = ({ plan, onSelect }: PricingCardProps) => {
               "text-sm",
               isHighlighted ? "text-primary-foreground/80" : "text-muted-foreground"
             )}>
-              pago único
+              {plan.isSubscription ? "/mes" : "pago único"}
             </span>
           </div>
         </div>

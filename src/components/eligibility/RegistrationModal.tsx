@@ -20,6 +20,7 @@ interface RegistrationModalProps {
     name: string;
     price: number;
     priceId: string;
+    isSubscription?: boolean;
   };
   routeType: string;
   routeTemplateSlug: string;
@@ -101,7 +102,7 @@ export const RegistrationModal = ({
 
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="text-center text-sm text-muted-foreground">
-            Para continuar con el <span className="font-medium text-foreground">{plan.name}</span> ({plan.price}€)
+            Para continuar con el <span className="font-medium text-foreground">{plan.name}</span> ({plan.price}€{plan.isSubscription ? "/mes" : ""})
           </div>
 
           <div className="space-y-4">
@@ -138,6 +139,8 @@ export const RegistrationModal = ({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Procesando...
               </>
+            ) : plan.isSubscription ? (
+              `Suscribirse por ${plan.price}€/mes`
             ) : (
               `Pagar ${plan.price}€ y empezar`
             )}

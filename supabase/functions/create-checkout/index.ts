@@ -60,10 +60,10 @@ serve(async (req) => {
       customerId = customer.id;
     }
 
-    // Default price ID for Albus Pro (can be overridden)
-    const checkoutPriceId = priceId || "price_1SrR94GVNlA5jALgt0dXtErL";
+    // Default price ID for Albus Pro subscription
+    const checkoutPriceId = priceId || "price_1SwlHBGVNlA5jALg4s8gArUM";
 
-    // Create checkout session
+    // Create checkout session - mode based on price
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [
