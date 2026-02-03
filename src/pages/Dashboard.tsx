@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { TaskList } from "@/components/dashboard/TaskList";
 import { AuthBanner } from "@/components/dashboard/AuthBanner";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
+import { DocumentVault } from "@/components/dashboard/DocumentVault";
 import { ResourcesSection } from "@/components/dashboard/ResourcesSection";
 import { SupportModal } from "@/components/dashboard/SupportModal";
 import { RouteSelector } from "@/components/dashboard/RouteSelector";
@@ -24,6 +25,7 @@ import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import type { RouteType } from "@/lib/documentConfig";
 
 interface UserData {
   name: string;
@@ -316,10 +318,38 @@ const Dashboard = () => {
     setShowConfetti(false);
   }, []);
 
+  // Determine active route type for Document Vault
+  const activeRouteType: RouteType | null = useMemo(() => {
+    if (activeRoutes.length === 0) return null;
+    
+    // Check the first active route's template name
+    const firstRoute = activeRoutes[0];
+    const templateName = firstRoute.template?.name?.toLowerCase() || "";
+    
+    if (templateName.includes("regularización 2026") || templateName.includes("regularizacion")) {
+      return "regularizacion2026";
+    }
+    if (templateName.includes("arraigo")) {
+      return "arraigos";
+    }
+    
+    return null;
+  }, [activeRoutes]);
+
   // Render the active section content
   const renderContent = () => {
     switch (activeNavItem) {
       case "documents":
+        // Use new DocumentVault for reg2026/arraigos routes
+        if (activeRouteType) {
+          return (
+            <DocumentVault
+              routeType={activeRouteType}
+              isPremium={isPremium}
+            />
+          );
+        }
+        // Fallback to old DocumentsSection for other visa types
         return (
           <DocumentsSection
             visaType={userData.visaType}

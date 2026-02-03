@@ -12,31 +12,33 @@ interface QualificationSuccessProps {
 
 const PLANS = [
   {
-    id: "digital" as const,
-    name: "Plan Digital",
-    price: 49,
-    priceId: "price_1Sw4A8GVNlA5jALg0eENyQQE",
+    id: "pro" as const,
+    name: "Plan Pro",
+    price: 9.99,
+    priceId: "price_1SwlHBGVNlA5jALg4s8gArUM",
     features: [
-      "Guía paso a paso completa",
-      "Generador de Tasa 790-052",
-      "Checklist de documentos",
-      "Soporte por email",
+      "Acceso a rutas Regularización 2026 y Arraigos",
+      "Document Vault (La Bóveda)",
+      "Soporte Prioritario",
+      "Base de datos de abogados (Coming Soon)",
     ],
     highlighted: false,
+    isSubscription: true,
   },
   {
     id: "premium" as const,
     name: "Plan Premium",
-    price: 149,
-    priceId: "price_1Sw4PkGVNlA5jALgylRm8JEG",
+    price: 19.99,
+    priceId: "price_1SwlHgGVNlA5jALgqLsLJbSD",
     features: [
-      "Todo del Plan Digital",
+      "Todo del Plan Pro",
       "Revisión humana de documentos",
-      "Carga en plataforma Mercurio",
-      "Soporte prioritario",
+      "Pre-check antes de presentar solicitud",
+      "Asistente IA personalizado",
     ],
     highlighted: true,
     badge: "Recomendado",
+    isSubscription: true,
   },
 ];
 
@@ -51,7 +53,7 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
   const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[number] | null>(null);
   const [showRegistration, setShowRegistration] = useState(false);
 
-  const handleSelectPlan = (planId: "digital" | "premium") => {
+  const handleSelectPlan = (planId: "pro" | "premium") => {
     const plan = PLANS.find((p) => p.id === planId);
     if (plan) {
       setSelectedPlan(plan);
