@@ -158,6 +158,7 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onSuccess={() => navigate("/dashboard")}
+        defaultMode="login"
       />
 
       {/* Waitlist Modal */}
