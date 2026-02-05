@@ -24,7 +24,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Compass, ArrowRight } from "lucide-react";
 import type { RouteType } from "@/lib/documentConfig";
 
 interface UserData {
@@ -400,27 +400,15 @@ const Dashboard = () => {
         return (
           <div className="space-y-6">
             {/* Active Routes List */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="space-y-4">
+              <div>
                 <h3 className="text-lg font-semibold">Mis Rutas Activas</h3>
-                {canAddRoute && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveNavItem("explorer")}
-                    className="gap-1"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Añadir ruta
-                  </Button>
-                )}
+                <p className="text-sm text-muted-foreground mt-1">
+                  Haz clic en una ruta para ver los pasos, agregar notas y adjuntar documentos.
+                </p>
               </div>
 
-              <p className="text-sm text-muted-foreground">
-                Haz clic en una ruta para ver los pasos, agregar notas y adjuntar documentos.
-              </p>
-
-              <div className="grid gap-3">
+              <div className="grid gap-4">
                 {activeRoutes.map((route) => (
                   <ActiveRouteCard
                     key={route.id}
@@ -429,6 +417,34 @@ const Dashboard = () => {
                     onDelete={() => handleDeleteRouteClick(route)}
                   />
                 ))}
+
+                {/* Explore More Routes Card */}
+                {canAddRoute && (
+                  <div
+                    className="group relative rounded-2xl border border-dashed border-border p-6 
+                               transition-all hover:shadow-lg hover:border-primary/30 
+                               bg-background/50 cursor-pointer"
+                    onClick={() => setActiveNavItem("explorer")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Compass className="w-5 h-5 text-primary" />
+                          <h4 className="font-semibold group-hover:text-primary transition-colors">
+                            Explorar más rutas
+                          </h4>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Descubre todas las rutas migratorias disponibles
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="gap-1 group-hover:bg-primary/10">
+                        Ver rutas
+                        <ArrowRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

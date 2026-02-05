@@ -21,6 +21,7 @@ interface AuthModalProps {
   defaultEmail?: string;
   leadId?: string;
   onSuccess?: () => void;
+  defaultMode?: "signup" | "login";
 }
 
 export const AuthModal = ({
@@ -29,11 +30,19 @@ export const AuthModal = ({
   defaultEmail = "",
   leadId,
   onSuccess,
+  defaultMode = "signup",
 }: AuthModalProps) => {
   const { signUp, signIn } = useAuth();
   const { toast } = useToast();
 
-  const [mode, setMode] = useState<"signup" | "login">("signup");
+  const [mode, setMode] = useState<"signup" | "login">(defaultMode);
+
+  // Sync mode with defaultMode when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setMode(defaultMode);
+    }
+  }, [isOpen, defaultMode]);
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
