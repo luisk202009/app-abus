@@ -1,174 +1,178 @@
 
+# Plan: F02 - Simulador Fiscal de Salario Neto para Usuarios Regularizados
 
-# Plan: F01 - Document Upload Activation, Profile View, and Final UX Polish
+## Resumen
 
-## Summary
-
-The document upload infrastructure already exists and works (storage bucket, RLS, upload logic in `useDocumentVault`). The main gaps are: file size validation, a real Profile view, logout button, and minor polish items.
-
----
-
-## 1. File Size Validation (5MB limit)
-
-### Modify: `src/components/dashboard/DocumentStatusCard.tsx`
-
-Add validation in `handleFileChange` before calling `onUpload`:
-- Check `file.size > 5 * 1024 * 1024`
-- If too large, show toast error: "El archivo no puede superar los 5MB"
-- Accept types already correct: `.pdf,.jpg,.jpeg,.png`
-
-This is a small change (5 lines) in the existing handler.
+Crear un simulador de salario neto integrado en el dashboard, accesible para usuarios Pro y Premium. Incluye calculo de IRPF progresivo espanol, Seguridad Social, y desglose visual con barras de progreso. Los usuarios gratuitos veran un modal de upsell al intentar acceder.
 
 ---
 
-## 2. Build Profile Section
+## 1. Nuevo archivo: `src/components/dashboard/FiscalSimulator.tsx`
 
-### Replace the "Proximamente" toast in `Dashboard.tsx`
+Componente principal del simulador con las siguientes secciones:
 
-When `activeNavItem === "profile"`, render a new `ProfileSection` component instead of showing a toast.
+### Seccion informativa: "Tu nueva vida como contribuyente"
+- Texto explicativo sobre el derecho a trabajar tras la admision a tramite (max 15 dias)
+- Destacar la "Cuota Cero" para autonomos nuevos
+- Icono `Info` con fondo `bg-muted`, texto `text-muted-foreground`
 
-### New file: `src/components/dashboard/ProfileSection.tsx`
+### Formulario de entrada
+- **Salario Bruto Anual**: Input numerico con formato de euros
+- **Situacion Familiar**: Select con opciones: Soltero/a, Casado/a, Con hijos (1), Con hijos (2+)
+- **Comunidad Autonoma**: Select con las 17 comunidades (Madrid, Cataluna, Andalucia, etc.)
 
-Professional profile view with the B&W Albus aesthetic:
+### Logica de calculo (todo client-side)
 
-**User Info Card:**
-- Full Name (from `onboarding_submissions.full_name`)
-- Email (from auth user)
-- Nationality (from `onboarding_submissions.nationality`)
-- Plan Status badge: Free (outline gray), Pro (black with Crown), Premium (black with Crown)
+**Seguridad Social empleado**: 6.35% del bruto
 
-**Actions:**
-- "Editar Perfil" button: Opens inline edit form for full_name and nationality, saves to `onboarding_submissions`
-- "Cambiar Contrasena" button: Calls `supabase.auth.resetPasswordForEmail()` and shows confirmation toast
+**IRPF 2025/2026 tramos estatales:**
 
-**Billing History:**
-- Simple list of recent payments
-- Since Stripe payment data is managed by webhooks, we show a simplified view from `onboarding_submissions.subscription_status` and the plan info
-- Show current plan details with price from `plans` table
-- Link to Stripe customer portal (if available) or simple status display
+| Tramo | Tipo |
+|-------|------|
+| 0 - 12,450 EUR | 19% |
+| 12,450 - 20,200 EUR | 24% |
+| 20,200 - 35,200 EUR | 30% |
+| 35,200 - 60,000 EUR | 37% |
+| 60,000 - 300,000 EUR | 45% |
+| 300,000+ EUR | 47% |
 
----
+Nota: Estos tramos combinan estatal + autonomico medio. Para simplificar, se usa una tabla unica con ajustes minimos por comunidad (Madrid ligeramente menor, Cataluna ligeramente mayor).
 
-## 3. Logout Button in Sidebar
+**Deducciones por situacion familiar:**
+- Soltero/a: minimo personal 5,550 EUR
+- Casado/a: +3,400 EUR
+- Con hijos: +2,400 por primer hijo, +2,700 por segundo
 
-### Modify: `src/components/dashboard/DashboardSidebar.tsx`
+### Seccion de resultados
+- **Sueldo Neto Mensual** (12 pagas y 14 pagas)
+- **Desglose visual** con barras de progreso:
+  - Barra "Salario Neto" (verde/gris oscuro)
+  - Barra "Seguridad Social" (azul)
+  - Barra "IRPF" (rojo/gris)
+- Porcentajes y cantidades absolutas
 
-- Import `LogOut` icon and `useAuth`
-- Add "Cerrar Sesion" button below the admin section, above footer
-- Only visible when `isLoggedIn === true`
-- Call `signOut()` and navigate to `/`
-- Update footer copyright from "2024" to "2026"
-
-### Also add `signOut` prop or use `useAuth` directly
-
-Since the sidebar is a child component, pass `onLogout` callback from Dashboard or import `useAuth` directly.
-
----
-
-## 4. Plan Badge Always Visible
-
-### Modify: `src/components/dashboard/DashboardSidebar.tsx`
-
-- Currently the user info section only shows for `isPremium` users
-- Change to show for ALL logged-in users
-- Display appropriate badge: "Gratis" (outline), "Pro" (black), "Premium" (black)
-- Add `subscriptionStatus` prop to distinguish between plans
+### CTA Premium (solo para usuarios Pro)
+Si `subscriptionStatus === "pro"`:
+- Mostrar banner: "Necesitas ayuda con tu primera nomina o alta de autonomo? Mejora al Plan Premium para soporte legal directo."
+- Boton "Mejorar a Premium" que abre `PremiumFeatureModal`
 
 ---
 
-## 5. CountdownBanner
+## 2. Nuevo archivo: `src/lib/fiscalCalculator.ts`
 
-Already correctly targets June 30, 2026. No changes needed.
-
----
-
-## 6. Footer Legal Links
-
-Already has links to `/terminos` and `/privacidad` and "Copyright 2026 Albus". No changes needed.
-
----
-
-## Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/components/dashboard/ProfileSection.tsx` | User profile view with edit, password change, billing |
-
-## Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/components/dashboard/DocumentStatusCard.tsx` | Add 5MB file size validation |
-| `src/components/dashboard/DashboardSidebar.tsx` | Add logout button, plan badge for all users, fix copyright year |
-| `src/pages/Dashboard.tsx` | Render ProfileSection instead of toast, pass subscriptionStatus to sidebar |
-
----
-
-## Technical Details
-
-### DocumentStatusCard - File validation
+Modulo con la logica pura de calculo (sin UI):
 
 ```typescript
-const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  
-  const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-  if (file.size > MAX_SIZE) {
-    toast({ variant: "destructive", title: "Archivo muy grande", 
-            description: "El archivo no puede superar los 5MB." });
-    return;
-  }
-  onUpload(file);
-};
-```
-
-### ProfileSection - Data fetching
-
-```typescript
-// Fetch from onboarding_submissions
-const { data } = await supabase
-  .from("onboarding_submissions")
-  .select("full_name, nationality, subscription_status, email")
-  .eq("user_id", user.id)
-  .maybeSingle();
-
-// Fetch plan details
-const { data: plan } = await supabase
-  .from("plans")
-  .select("name, price_cents, currency, interval")
-  .eq("slug", subscriptionStatus)
-  .eq("is_active", true)
-  .maybeSingle();
-```
-
-### DashboardSidebar - Logout
-
-```typescript
-// Add onLogout prop
-interface DashboardSidebarProps {
-  // ...existing
-  onLogout?: () => void;
-  subscriptionStatus?: string;
+interface FiscalInput {
+  grossSalary: number;
+  familyStatus: "single" | "married" | "children_1" | "children_2plus";
+  community: string;
 }
 
-// In the component, before footer:
-{isLoggedIn && onLogout && (
-  <div className="px-4 pb-2">
-    <Button variant="ghost" className="w-full gap-2 text-muted-foreground" onClick={onLogout}>
-      <LogOut className="w-4 h-4" />
-      Cerrar Sesion
-    </Button>
-  </div>
-)}
+interface FiscalResult {
+  grossAnnual: number;
+  socialSecurity: number;
+  irpf: number;
+  netAnnual: number;
+  netMonthly12: number;
+  netMonthly14: number;
+  effectiveRate: number;
+  breakdown: {
+    label: string;
+    amount: number;
+    percentage: number;
+    color: string;
+  }[];
+}
+
+export function calculateNetSalary(input: FiscalInput): FiscalResult;
 ```
+
+Funciones auxiliares:
+- `calculateIRPF(taxableBase: number, community: string): number`
+- `getPersonalMinimum(familyStatus: string): number`
+- `COMMUNITY_ADJUSTMENTS`: objeto con factor de ajuste por comunidad
 
 ---
 
-## Implementation Order
+## 3. Modificar: `src/components/dashboard/DashboardSidebar.tsx`
 
-1. `DocumentStatusCard.tsx` - Add file size validation
-2. `ProfileSection.tsx` - Build profile view
-3. `DashboardSidebar.tsx` - Logout button + plan badge + copyright fix
-4. `Dashboard.tsx` - Wire profile section, logout, and subscriptionStatus
+Agregar nuevo item de navegacion:
 
+```typescript
+{ id: "simulator", label: "Simulador Fiscal", icon: <Calculator className="w-5 h-5" /> }
+```
+
+Ubicarlo despues de "Recursos" y antes de "Perfil".
+
+---
+
+## 4. Modificar: `src/pages/Dashboard.tsx`
+
+Agregar caso en `renderContent()`:
+
+```typescript
+case "simulator":
+  if (!isPremium) {
+    // Show premium gate modal
+    return <PremiumGate />;
+  }
+  return <FiscalSimulator subscriptionStatus={subscriptionStatus} />;
+```
+
+Importar el componente `FiscalSimulator`.
+
+Para usuarios gratuitos: mostrar el `PremiumFeatureModal` existente con `feature="el Simulador Fiscal"`.
+
+---
+
+## Archivos a Crear
+
+| Archivo | Proposito |
+|---------|-----------|
+| `src/lib/fiscalCalculator.ts` | Logica pura de calculo IRPF y SS |
+| `src/components/dashboard/FiscalSimulator.tsx` | Interfaz completa del simulador |
+
+## Archivos a Modificar
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/components/dashboard/DashboardSidebar.tsx` | Agregar nav item "Simulador Fiscal" con icono Calculator |
+| `src/pages/Dashboard.tsx` | Agregar case "simulator" en renderContent, gate con premium check |
+
+---
+
+## Detalles Tecnicos
+
+### Estetica B&W Albus
+
+- Cards con `bg-background border border-border rounded-2xl`
+- Barras de progreso usando el componente `Progress` existente de shadcn
+- Colores de desglose: Neto en `bg-primary` (negro), SS en `bg-muted-foreground`, IRPF en `bg-muted`
+- Resultados destacados con `text-3xl font-bold`
+
+### Comunidades Autonomas (dropdown)
+
+Lista simplificada con las 17 comunidades. Cada una tiene un factor de ajuste sobre el IRPF base:
+- Madrid: -0.5% (tipo mas bajo)
+- Cataluna/Valencia: +0.5%
+- Resto: 0% (base)
+
+### Responsive
+
+- En mobile: formulario stacked, resultados debajo
+- En desktop: formulario a la izquierda, resultados a la derecha (grid 2 columnas)
+
+### Formato numeros
+
+- Usar `Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' })` para mostrar cantidades
+- Input con `type="number"` y step de 100
+
+---
+
+## Orden de Implementacion
+
+1. `src/lib/fiscalCalculator.ts` - Logica de calculo
+2. `src/components/dashboard/FiscalSimulator.tsx` - Interfaz completa
+3. `src/components/dashboard/DashboardSidebar.tsx` - Nav item
+4. `src/pages/Dashboard.tsx` - Routing y premium gate
