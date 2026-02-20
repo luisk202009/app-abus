@@ -1,109 +1,80 @@
 
-# Plan: F02 - Simulador Fiscal de Salario Neto para Usuarios Regularizados
+
+# Plan: F03 - Appointment & TIE Management Module
 
 ## Resumen
 
-Crear un simulador de salario neto integrado en el dashboard, accesible para usuarios Pro y Premium. Incluye calculo de IRPF progresivo espanol, Seguridad Social, y desglose visual con barras de progreso. Los usuarios gratuitos veran un modal de upsell al intentar acceder.
+Crear un modulo post-aprobacion en el dashboard para gestionar la cita de huellas y el seguimiento de la Tarjeta de Identidad de Extranjero (TIE). Incluye tracker de cita, checklist policial, estado del TIE, y notificacion celebratoria cuando el Partner/Admin marca la solicitud como "Aprobada".
 
 ---
 
-## 1. Nuevo archivo: `src/components/dashboard/FiscalSimulator.tsx`
+## 1. Nueva tabla: `user_appointments`
 
-Componente principal del simulador con las siguientes secciones:
+Migracion SQL para almacenar datos de cita y estado TIE por usuario:
 
-### Seccion informativa: "Tu nueva vida como contribuyente"
-- Texto explicativo sobre el derecho a trabajar tras la admision a tramite (max 15 dias)
-- Destacar la "Cuota Cero" para autonomos nuevos
-- Icono `Info` con fondo `bg-muted`, texto `text-muted-foreground`
+```sql
+CREATE TABLE user_appointments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  appointment_date DATE,
+  appointment_time TEXT,
+  police_station_address TEXT,
+  lot_number TEXT,
+  tie_status TEXT DEFAULT 'pending',
+  application_status TEXT DEFAULT 'en_tramite',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 
-### Formulario de entrada
-- **Salario Bruto Anual**: Input numerico con formato de euros
-- **Situacion Familiar**: Select con opciones: Soltero/a, Casado/a, Con hijos (1), Con hijos (2+)
-- **Comunidad Autonoma**: Select con las 17 comunidades (Madrid, Cataluna, Andalucia, etc.)
-
-### Logica de calculo (todo client-side)
-
-**Seguridad Social empleado**: 6.35% del bruto
-
-**IRPF 2025/2026 tramos estatales:**
-
-| Tramo | Tipo |
-|-------|------|
-| 0 - 12,450 EUR | 19% |
-| 12,450 - 20,200 EUR | 24% |
-| 20,200 - 35,200 EUR | 30% |
-| 35,200 - 60,000 EUR | 37% |
-| 60,000 - 300,000 EUR | 45% |
-| 300,000+ EUR | 47% |
-
-Nota: Estos tramos combinan estatal + autonomico medio. Para simplificar, se usa una tabla unica con ajustes minimos por comunidad (Madrid ligeramente menor, Cataluna ligeramente mayor).
-
-**Deducciones por situacion familiar:**
-- Soltero/a: minimo personal 5,550 EUR
-- Casado/a: +3,400 EUR
-- Con hijos: +2,400 por primer hijo, +2,700 por segundo
-
-### Seccion de resultados
-- **Sueldo Neto Mensual** (12 pagas y 14 pagas)
-- **Desglose visual** con barras de progreso:
-  - Barra "Salario Neto" (verde/gris oscuro)
-  - Barra "Seguridad Social" (azul)
-  - Barra "IRPF" (rojo/gris)
-- Porcentajes y cantidades absolutas
-
-### CTA Premium (solo para usuarios Pro)
-Si `subscriptionStatus === "pro"`:
-- Mostrar banner: "Necesitas ayuda con tu primera nomina o alta de autonomo? Mejora al Plan Premium para soporte legal directo."
-- Boton "Mejorar a Premium" que abre `PremiumFeatureModal`
-
----
-
-## 2. Nuevo archivo: `src/lib/fiscalCalculator.ts`
-
-Modulo con la logica pura de calculo (sin UI):
-
-```typescript
-interface FiscalInput {
-  grossSalary: number;
-  familyStatus: "single" | "married" | "children_1" | "children_2plus";
-  community: string;
-}
-
-interface FiscalResult {
-  grossAnnual: number;
-  socialSecurity: number;
-  irpf: number;
-  netAnnual: number;
-  netMonthly12: number;
-  netMonthly14: number;
-  effectiveRate: number;
-  breakdown: {
-    label: string;
-    amount: number;
-    percentage: number;
-    color: string;
-  }[];
-}
-
-export function calculateNetSalary(input: FiscalInput): FiscalResult;
+ALTER TABLE user_appointments ENABLE ROW LEVEL SECURITY;
 ```
 
-Funciones auxiliares:
-- `calculateIRPF(taxableBase: number, community: string): number`
-- `getPersonalMinimum(familyStatus: string): number`
-- `COMMUNITY_ADJUSTMENTS`: objeto con factor de ajuste por comunidad
+**Valores de `application_status`**: `en_tramite`, `aprobada`, `denegada`
+**Valores de `tie_status`**: `pending`, `appointment_scheduled`, `fingerprints_done`, `card_ready`, `collected`
+
+**RLS Policies:**
+- Users can CRUD their own records (`user_id = auth.uid()`)
+- Admin can view/update all records (`is_admin()`)
+- Partners can view/update assigned user records (`is_assigned_to_partner(user_id)`)
+
+---
+
+## 2. Nuevo archivo: `src/components/dashboard/AppointmentManager.tsx`
+
+Componente principal con tres secciones, usando una paleta de tonos verdes/dorados para reflejar el resultado positivo:
+
+### Seccion A: Estado de Solicitud
+- Banner celebratorio verde cuando `application_status === 'aprobada'`:
+  "Enhorabuena! Tu residencia ha sido concedida. Empecemos con la gestion de tu TIE."
+- Estado normal (en tramite): Informacion de espera con icono reloj
+
+### Seccion B: Appointment Tracker
+- Campos editables: Fecha (DatePicker), Hora (Input), Direccion comisaria (Input)
+- Countdown: "Faltan X dias para tu cita de huellas" (solo si fecha > hoy)
+- Boton "Guardar Cita" que persiste en `user_appointments`
+
+### Seccion C: TIE Status Tracker
+- Campo "Numero de Lote" editable
+- Info box con enlace externo: "Consulta aqui si tu tarjeta esta lista para recoger" -> enlace al sede electronica
+- Progreso visual con steps: Solicitud Aprobada > Cita Programada > Huellas Tomadas > Tarjeta Lista > Recogida
+
+### Seccion D: Checklist Policial (TIE)
+Checklist estatica de documentos necesarios para la cita:
+- Formulario EX-17 (con enlace a descarga oficial)
+- Tasa 790-012 (con boton que llama al generador existente `generateTasa790PDF`)
+- Resolucion de concesion (con nota: "Descargable desde la Boveda si tu abogado la subio")
+- Certificado de Empadronamiento (nota: "Actualizado, maximo 3 meses")
+- Cada item con checkbox local (no persiste, visual de referencia)
 
 ---
 
 ## 3. Modificar: `src/components/dashboard/DashboardSidebar.tsx`
 
-Agregar nuevo item de navegacion:
+Agregar nuevo item de navegacion despues de "Simulador Fiscal":
 
 ```typescript
-{ id: "simulator", label: "Simulador Fiscal", icon: <Calculator className="w-5 h-5" /> }
+{ id: "appointment", label: "Gestion de Cita", icon: <CalendarCheck className="w-5 h-5" /> }
 ```
-
-Ubicarlo despues de "Recursos" y antes de "Perfil".
 
 ---
 
@@ -112,17 +83,40 @@ Ubicarlo despues de "Recursos" y antes de "Perfil".
 Agregar caso en `renderContent()`:
 
 ```typescript
-case "simulator":
+case "appointment":
   if (!isPremium) {
-    // Show premium gate modal
-    return <PremiumGate />;
+    return <PremiumGate feature="Gestion de Cita" />;
   }
-  return <FiscalSimulator subscriptionStatus={subscriptionStatus} />;
+  return <AppointmentManager userId={user?.id} />;
 ```
 
-Importar el componente `FiscalSimulator`.
+Agregar logica para detectar cuando `application_status` cambia a `aprobada` y disparar confetti + toast celebratorio.
 
-Para usuarios gratuitos: mostrar el `PremiumFeatureModal` existente con `feature="el Simulador Fiscal"`.
+---
+
+## 5. Interaccion Legal Team (Partner/Admin)
+
+### Modificar: `src/components/partner/PartnerClientList.tsx`
+
+Agregar un nuevo estado al dropdown de `case_status`: "aprobada" (con icono de check verde).
+
+Cuando el Partner cambia el estado a "aprobada":
+- Actualizar `partner_assignments.case_status` a `aprobada`
+- Insertar/actualizar `user_appointments` del usuario con `application_status = 'aprobada'`
+
+### Modificar: `src/components/admin/AdminUsersTab.tsx`
+
+Agregar una accion similar para que el Admin pueda marcar una solicitud como "Aprobada" directamente.
+
+---
+
+## 6. Notificacion Celebratoria
+
+### Modificar: `src/hooks/useNotifications.tsx`
+
+Agregar deteccion de `application_status === 'aprobada'` en `user_appointments`:
+- Mostrar banner verde: "Enhorabuena! Tu residencia ha sido concedida."
+- Disparar confetti automaticamente al entrar al dashboard si el estado cambio recientemente
 
 ---
 
@@ -130,49 +124,77 @@ Para usuarios gratuitos: mostrar el `PremiumFeatureModal` existente con `feature
 
 | Archivo | Proposito |
 |---------|-----------|
-| `src/lib/fiscalCalculator.ts` | Logica pura de calculo IRPF y SS |
-| `src/components/dashboard/FiscalSimulator.tsx` | Interfaz completa del simulador |
+| `src/components/dashboard/AppointmentManager.tsx` | Modulo completo de gestion cita + TIE |
 
 ## Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/components/dashboard/DashboardSidebar.tsx` | Agregar nav item "Simulador Fiscal" con icono Calculator |
-| `src/pages/Dashboard.tsx` | Agregar case "simulator" en renderContent, gate con premium check |
+| `src/components/dashboard/DashboardSidebar.tsx` | Agregar nav item "Gestion de Cita" |
+| `src/pages/Dashboard.tsx` | Agregar case "appointment", premium gate, confetti trigger |
+| `src/components/partner/PartnerClientList.tsx` | Agregar estado "aprobada" al dropdown |
+| `src/components/admin/AdminUsersTab.tsx` | Agregar accion "Marcar como Aprobada" |
+| `src/hooks/useNotifications.tsx` | Detectar aprobacion y notificar |
+
+## Migracion SQL
+
+| Migracion | Proposito |
+|-----------|-----------|
+| `user_appointments` table + RLS | Almacenar datos de cita y estado TIE |
 
 ---
 
 ## Detalles Tecnicos
 
-### Estetica B&W Albus
+### Paleta de colores (Success theme)
 
-- Cards con `bg-background border border-border rounded-2xl`
-- Barras de progreso usando el componente `Progress` existente de shadcn
-- Colores de desglose: Neto en `bg-primary` (negro), SS en `bg-muted-foreground`, IRPF en `bg-muted`
-- Resultados destacados con `text-3xl font-bold`
+Las clases de color para este modulo usan tonos verdes/dorados dentro de Tailwind:
+- Banners de exito: `bg-emerald-50 border-emerald-200 text-emerald-800`
+- Progress steps completados: `bg-emerald-500`
+- Iconos de celebracion: `text-amber-500` (gold)
+- Fondo general del modulo: mantiene `bg-background` con acentos verdes
 
-### Comunidades Autonomas (dropdown)
+### Appointment Countdown
 
-Lista simplificada con las 17 comunidades. Cada una tiene un factor de ajuste sobre el IRPF base:
-- Madrid: -0.5% (tipo mas bajo)
-- Cataluna/Valencia: +0.5%
-- Resto: 0% (base)
+```typescript
+const daysUntilAppointment = Math.ceil(
+  (appointmentDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+);
+// "Faltan 12 dias para tu cita de huellas"
+```
 
-### Responsive
+### TIE Progress Steps
 
-- En mobile: formulario stacked, resultados debajo
-- En desktop: formulario a la izquierda, resultados a la derecha (grid 2 columnas)
+```typescript
+const TIE_STEPS = [
+  { id: "aprobada", label: "Solicitud Aprobada", icon: CheckCircle },
+  { id: "appointment_scheduled", label: "Cita Programada", icon: Calendar },
+  { id: "fingerprints_done", label: "Huellas Tomadas", icon: Fingerprint },
+  { id: "card_ready", label: "Tarjeta Lista", icon: CreditCard },
+  { id: "collected", label: "Recogida", icon: PartyPopper },
+];
+```
 
-### Formato numeros
+### Enlace externo TIE
 
-- Usar `Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' })` para mostrar cantidades
-- Input con `type="number"` y step de 100
+URL oficial para consulta de estado: `https://sede.administracionespublicas.gob.es/`
+
+### Confetti en aprobacion
+
+Reutilizar el componente `SuccessConfetti` existente pero con colores verdes/dorados en lugar de B&W:
+
+```typescript
+const celebrationColors = ["#10b981", "#059669", "#f59e0b", "#d97706", "#ffffff"];
+```
 
 ---
 
 ## Orden de Implementacion
 
-1. `src/lib/fiscalCalculator.ts` - Logica de calculo
-2. `src/components/dashboard/FiscalSimulator.tsx` - Interfaz completa
-3. `src/components/dashboard/DashboardSidebar.tsx` - Nav item
-4. `src/pages/Dashboard.tsx` - Routing y premium gate
+1. Migracion SQL: tabla `user_appointments` + RLS
+2. `AppointmentManager.tsx` - Componente completo
+3. `DashboardSidebar.tsx` - Nav item
+4. `Dashboard.tsx` - Routing, premium gate, confetti trigger
+5. `PartnerClientList.tsx` + `AdminUsersTab.tsx` - Accion "Aprobada"
+6. `useNotifications.tsx` - Deteccion de aprobacion
+
