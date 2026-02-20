@@ -1,126 +1,92 @@
 
-# Plan: E03 - Trust Architecture, Social Proof y Red de Expertos
+# Plan: E04 - Conversion Tracking, Exit Intent y Lead Recovery
 
 ## Resumen
 
-Crear componentes de confianza y prueba social para aumentar la conversion: seccion de expertos legales, carrusel de testimonios, barra de confianza contextual y roadmap visual de 4 pasos. Todo en estetica Albus B&W.
+Implementar un sistema de tracking de eventos de conversion, un popup de exit intent para recuperar visitantes, filtro de "Pagos Pendientes" en el admin panel, y la infraestructura base para Meta Pixel y Google Tag Manager.
 
 ---
 
-## 1. Expert Network Preview
+## 1. Servicio de Tracking de Eventos
 
-### Nuevo archivo: `src/components/ExpertNetworkPreview.tsx`
+### Nuevo archivo: `src/lib/trackingService.ts`
 
-Grid de 3 tarjetas de abogados placeholder con foto, nombre y especializacion.
+Servicio centralizado que registra eventos de conversion tanto en consola como en la tabla `onboarding_submissions`.
 
-**Datos:**
+**Eventos soportados:**
 
-| Nombre | Especializacion |
-|--------|----------------|
-| Dra. Laura Martinez | Experta en Regularizacion 2026 |
-| Dr. Carlos Fernandez | Experto en Arraigo Social y Laboral |
-| Dra. Sofia Navarro | Experta en Derecho Migratorio |
+| Evento | Trigger | Accion |
+|--------|---------|--------|
+| `lead_captured` | Usuario envia formulario del checklist (E02) | Log + tag CRM |
+| `onboarding_started` | Usuario selecciona ruta en AnalysisModal | Log + tag CRM |
+| `payment_success` | Usuario completa checkout Stripe | Log (ya gestionado por webhook) |
+| `track_eligibility_check` | Usuario usa la calculadora | Log + evento analytics |
 
-**Estructura de cada tarjeta:**
-- Avatar circular con iniciales (usando componente Avatar existente)
-- Nombre en negrita
-- Especializacion en texto muted
-- Badge "Verificado por Albus" con icono ShieldCheck
+**Funciones:**
+- `trackEvent(eventName, metadata)`: Log a consola + dispara evento `window.dataLayer.push` para GTM y `fbq` para Meta Pixel
+- Integracion con los custom events de GTM/Meta
 
-**Diseno:** Fondo `bg-secondary/30`, tarjetas con borde `border-border`, badge en negro con texto blanco.
-
----
-
-## 2. Testimonials Carousel
-
-### Nuevo archivo: `src/components/TestimonialsCarousel.tsx`
-
-Carrusel horizontal usando Embla Carousel (ya instalado) con 3 testimonios.
-
-**Testimonios:**
-
-| Autor | Cita |
-|-------|------|
-| Carlos M. | "La calculadora de plazos me dio la tranquilidad que necesitaba. Ya tengo mis penales listos." |
-| Elena R. | "El plan Pro de 9.99 euros es la mejor inversion. La boveda organiza todo por ti." |
-| Miguel A. | "Saber que un abogado revisa mis documentos antes de enviarlos me quita un peso de encima." |
-
-**Estructura:** Card con comillas decorativas, texto de la cita, nombre del autor, y estrellas (5/5). Navegacion con puntos indicadores.
+### Modificaciones en componentes existentes:
+- `EligibilityCalculator.tsx`: Llamar `trackEvent('track_eligibility_check')` en `handleCheck` y `trackEvent('lead_captured')` en `handleLeadSubmit`
+- `AnalysisModal.tsx`: Llamar `trackEvent('onboarding_started')` cuando el usuario selecciona una ruta
 
 ---
 
-## 3. Trust Bar Contextual
+## 2. Exit Intent Modal
 
-### Nuevo archivo: `src/components/TrustBadgesBar.tsx`
+### Nuevo archivo: `src/components/ExitIntentModal.tsx`
 
-Barra de confianza con 3 badges para paginas de regularizacion y arraigos.
+Modal que se activa cuando:
+- **Desktop**: El mouse sale de la ventana del navegador (`mouseleave` en `document.documentElement`)
+- **Mobile**: Despues de 30 segundos de inactividad (sin scroll, click o touch)
 
-**Badges:**
+**Restricciones:**
+- Solo se muestra 1 vez por sesion (controlado via `sessionStorage`)
+- Solo en paginas de pricing/regularizacion
 
-| Icono | Texto |
-|-------|-------|
-| Shield | Proteccion de Datos Nivel Bancario |
-| RefreshCw | Contenido Actualizado Enero 2026 |
-| Clock | Respuesta en menos de 24h |
+**Contenido del modal:**
+- Titulo: "No pierdas tu oportunidad!"
+- Texto: "El proceso de Regularizacion 2026 es limitado. Tienes dudas? Descarga nuestra guia gratuita antes de irte."
+- CTA Primario: Boton que hace scroll al EligibilityCalculator (lead magnet de E02)
+- CTA Secundario: "No gracias, ya volveré"
 
-**Diseno:** Similar al TrustBar existente - fondo `bg-secondary`, items con icono + texto en cards con borde sutil.
-
----
-
-## 4. Visual Process Roadmap
-
-### Nuevo archivo: `src/components/ProcessRoadmap.tsx`
-
-Infografia de 4 pasos con conexiones visuales y tags de plan.
-
-**Pasos:**
-
-| Paso | Titulo | Plan | Descripcion |
-|------|--------|------|-------------|
-| 1 | Valida tu perfil | Gratis | Analiza tu elegibilidad en minutos |
-| 2 | Organiza tus documentos | Pro | Boveda segura con validacion automatica |
-| 3 | Revision por experto | Premium | Un abogado revisa todo antes de enviar |
-| 4 | Presentacion oficial | Abril 2026 | Envia tu solicitud con confianza |
-
-**Diseno:** Timeline vertical en mobile, horizontal en desktop. Cada paso con numero, icono, titulo, badge de plan (outline para Gratis, filled para Pro/Premium), y linea conectora.
+### Integracion:
+- Agregar en `Index.tsx`, `Regularizacion2026.tsx` y `PricingSection` parent pages
 
 ---
 
-## 5. Integracion en Paginas
+## 3. Filtro "Pagos Pendientes" en Admin
 
-### `src/pages/Index.tsx`
+### Modificar: `src/components/admin/AdminUsersTab.tsx`
 
-Insertar en este orden:
-1. HeroSection
-2. TrustBar (existente)
-3. HowItWorksSection
-4. EligibilityCalculator
-5. **ProcessRoadmap** (nuevo)
-6. **ExpertNetworkPreview** (nuevo)
-7. **TestimonialsCarousel** (nuevo)
-8. FeaturesSection
-9. ResourcesSection
-10. PricingSection
+Agregar un sistema de filtros con tabs o botones encima de la tabla de usuarios:
 
-### `src/pages/espana/Regularizacion2026.tsx`
+**Filtros:**
+- "Todos" (default)
+- "Pagos Pendientes": Usuarios que tienen `crm_tag` relacionado a una ruta (contiene `regularizacion` o `arraigo`) pero `subscription_status` = `free` o `null`, y tienen `user_id` (se registraron pero no pagaron)
+- "Leads sin registro": Usuarios sin `user_id`
 
-Insertar `TrustBadgesBar` despues del hero (antes de Requirements):
-```
-<HeroReg2026 />
-<TrustBadgesBar />
-<section>Requirements...</section>
-```
+**Boton "Recordatorio Manual":**
+- Aparece en cada fila del filtro "Pagos Pendientes"
+- Al hacer clic: muestra un toast de confirmacion "Recordatorio enviado a [email]" (simulado)
+- Registra el evento en consola via `trackEvent('reminder_sent', { email })`
 
-Insertar `TestimonialsCarousel` antes del footer.
+---
 
-### `src/pages/espana/Arraigos.tsx`
+## 4. Analytics Infrastructure
 
-Insertar `TrustBadgesBar` despues del hero (antes de Pillars):
-```
-<HeroArraigos />
-<TrustBadgesBar />
-<section>Pillars...</section>
-```
+### Nuevo archivo: `src/components/AnalyticsProvider.tsx`
+
+Componente wrapper que inyecta los scripts de Meta Pixel y GTM como placeholders.
+
+**Contenido:**
+- Script de GTM con placeholder `YOUR_GTM_ID`
+- Script de Meta Pixel con placeholder `YOUR_PIXEL_ID`
+- Helper global `window.trackAlbusEvent` que unifica `dataLayer.push` + `fbq('trackCustom', ...)`
+- Se renderiza como children wrapper (no visual)
+
+### Integracion en `src/App.tsx`:
+- Envolver el contenido principal con `<AnalyticsProvider>`
 
 ---
 
@@ -128,46 +94,81 @@ Insertar `TrustBadgesBar` despues del hero (antes de Pillars):
 
 | Archivo | Proposito |
 |---------|-----------|
-| `src/components/ExpertNetworkPreview.tsx` | Grid de expertos legales |
-| `src/components/TestimonialsCarousel.tsx` | Carrusel de testimonios |
-| `src/components/TrustBadgesBar.tsx` | Barra de badges de confianza |
-| `src/components/ProcessRoadmap.tsx` | Roadmap visual de 4 pasos |
+| `src/lib/trackingService.ts` | Servicio centralizado de tracking |
+| `src/components/ExitIntentModal.tsx` | Popup de exit intent |
+| `src/components/AnalyticsProvider.tsx` | Wrapper con GTM + Meta Pixel |
 
 ## Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/pages/Index.tsx` | Agregar ProcessRoadmap, ExpertNetworkPreview, TestimonialsCarousel |
-| `src/pages/espana/Regularizacion2026.tsx` | Agregar TrustBadgesBar y TestimonialsCarousel |
-| `src/pages/espana/Arraigos.tsx` | Agregar TrustBadgesBar |
+| `src/components/eligibility/EligibilityCalculator.tsx` | Agregar trackEvent en handleCheck y handleLeadSubmit |
+| `src/components/AnalysisModal.tsx` | Agregar trackEvent en seleccion de ruta |
+| `src/components/admin/AdminUsersTab.tsx` | Agregar filtros y boton "Recordatorio Manual" |
+| `src/App.tsx` | Envolver con AnalyticsProvider |
+| `src/pages/Index.tsx` | Agregar ExitIntentModal |
+| `src/pages/espana/Regularizacion2026.tsx` | Agregar ExitIntentModal |
 
 ---
 
 ## Detalles Tecnicos
 
-### ExpertNetworkPreview
+### trackingService.ts
 
-Usa componentes `Avatar` y `Badge` existentes de Shadcn. Las fotos son placeholders con iniciales (AvatarFallback). El badge "Verificado por Albus" usa `ShieldCheck` de Lucide.
+```typescript
+export const trackEvent = (eventName: string, metadata?: Record<string, any>) => {
+  // Console log for development
+  console.log(`[Albus Track] ${eventName}`, metadata);
 
-### TestimonialsCarousel
+  // GTM dataLayer
+  if (typeof window !== 'undefined' && (window as any).dataLayer) {
+    (window as any).dataLayer.push({ event: eventName, ...metadata });
+  }
 
-Usa `embla-carousel-react` (ya instalado). Autoplay con intervalo de 5 segundos. Navegacion con dots indicators. Cada slide es un Card con Quote icon decorativo.
+  // Meta Pixel
+  if (typeof window !== 'undefined' && (window as any).fbq) {
+    (window as any).fbq('trackCustom', eventName, metadata);
+  }
+};
+```
 
-### ProcessRoadmap
+### ExitIntentModal - Logica de deteccion
 
-Grid responsive: `grid-cols-1 md:grid-cols-4`. Lineas conectoras con pseudo-elementos CSS o divs con bordes. Badges de plan usan el componente Badge existente con variantes `outline` y `default`.
+```typescript
+// Desktop: mouseleave en documentElement
+document.documentElement.addEventListener('mouseleave', showModal);
 
-### TrustBadgesBar
+// Mobile: 30s inactivity timer, reset on scroll/touch/click
+let inactivityTimer = setTimeout(showModal, 30000);
+['scroll', 'touchstart', 'click'].forEach(evt => 
+  window.addEventListener(evt, () => {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(showModal, 30000);
+  })
+);
+```
 
-Componente simple con flex wrap, similar al patron del TrustBar existente pero con contenido de confianza/compliance.
+Control con `sessionStorage.getItem('exit_intent_shown')`.
+
+### AdminUsersTab - Filtro "Pagos Pendientes"
+
+Logica de filtrado:
+```typescript
+const pendingPayments = users.filter(u => 
+  u.user_id && 
+  u.crm_tag && 
+  (u.crm_tag.includes('regularizacion') || u.crm_tag.includes('arraigo') || u.crm_tag.includes('lead_checklist')) &&
+  (!u.subscription_status || u.subscription_status === 'free')
+);
+```
 
 ---
 
 ## Orden de Implementacion
 
-1. TrustBadgesBar (componente mas simple)
-2. ExpertNetworkPreview (grid de expertos)
-3. TestimonialsCarousel (carrusel con Embla)
-4. ProcessRoadmap (infografia de 4 pasos)
-5. Integrar en Index.tsx
-6. Integrar en Regularizacion2026.tsx y Arraigos.tsx
+1. `trackingService.ts` - Servicio base de tracking
+2. `AnalyticsProvider.tsx` - Wrapper GTM + Meta Pixel
+3. `ExitIntentModal.tsx` - Popup de exit intent
+4. Modificar `EligibilityCalculator.tsx` y `AnalysisModal.tsx` con tracking
+5. Modificar `AdminUsersTab.tsx` con filtros y recordatorio
+6. Integrar AnalyticsProvider en App.tsx y ExitIntentModal en paginas
