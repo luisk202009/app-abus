@@ -1,0 +1,1 @@
+DROP POLICY "Allow authenticated insert referrals" ON public.referrals;

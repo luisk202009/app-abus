@@ -643,7 +643,9 @@ const Dashboard = () => {
           </div>
 
           {/* Dynamic Content */}
-          {renderContent()}
+          <div key={activeNavItem} className="animate-in fade-in duration-300">
+            {renderContent()}
+          </div>
         </div>
         </PullToRefresh>
       </main>

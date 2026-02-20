@@ -5,13 +5,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Users, Package, FileText, Map, Loader2, FolderOpen, BarChart3 } from "lucide-react";
+import { ArrowLeft, Users, Package, FileText, Map, Loader2, FolderOpen, BarChart3, BookOpen } from "lucide-react";
 import { AdminUsersTab } from "@/components/admin/AdminUsersTab";
 import { AdminPlansTab } from "@/components/admin/AdminPlansTab";
 import { AdminResourcesTab } from "@/components/admin/AdminResourcesTab";
 import { AdminRoutesTab } from "@/components/admin/AdminRoutesTab";
 import { AdminDocumentsTab } from "@/components/admin/AdminDocumentsTab";
 import { AdminAnalyticsTab } from "@/components/admin/AdminAnalyticsTab";
+import { AdminSystemStatus } from "@/components/admin/AdminSystemStatus";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 
 const ADMIN_EMAIL = "l@albus.com.co";
@@ -80,12 +81,19 @@ const Admin = () => {
               <span className="font-semibold">Admin Panel</span>
             </div>
           </div>
-          <span className="text-sm text-muted-foreground">{user?.email}</span>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => navigate("/admin/manual")} className="gap-1.5">
+              <BookOpen className="w-4 h-4" />
+              Manual
+            </Button>
+            <span className="text-sm text-muted-foreground">{user?.email}</span>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto py-8">
+      <main className="container mx-auto py-8 space-y-6">
+        <AdminSystemStatus />
         <Tabs defaultValue="analytics" className="space-y-6">
           <TabsList className="bg-background border border-border">
             <TabsTrigger value="analytics" className="gap-2">
