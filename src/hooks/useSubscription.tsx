@@ -60,7 +60,7 @@ export const useSubscription = (): UseSubscriptionReturn => {
     fetchSubscriptionStatus();
   }, [user]);
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (referralCode?: string) => {
     if (!user) {
       toast({
         variant: "destructive",
@@ -85,6 +85,7 @@ export const useSubscription = (): UseSubscriptionReturn => {
           },
           body: JSON.stringify({
             returnUrl: window.location.origin,
+            ...(referralCode ? { referralCode } : {}),
           }),
         }
       );

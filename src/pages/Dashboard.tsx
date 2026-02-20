@@ -25,6 +25,8 @@ import { NotificationBanner } from "@/components/dashboard/NotificationBanner";
 import { ProgressBar } from "@/components/dashboard/ProgressBar";
 import { InstallAppBanner } from "@/components/dashboard/InstallAppBanner";
 import { PullToRefresh } from "@/components/dashboard/PullToRefresh";
+import { ReferralDashboard } from "@/components/dashboard/ReferralDashboard";
+import { ReferralBanner } from "@/components/dashboard/ReferralBanner";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -469,6 +471,13 @@ const Dashboard = () => {
             }}
           />
         );
+      case "referrals":
+        return (
+          <ReferralDashboard
+            isPremium={isPremium}
+            onUpgrade={handleCheckout}
+          />
+        );
       case "roadmap":
       default:
         // Show route selector if no active routes
@@ -603,6 +612,11 @@ const Dashboard = () => {
                 Activar
               </Button>
             </div>
+          )}
+
+          {/* Referral Banner */}
+          {isPremium && activeNavItem === "roadmap" && (
+            <ReferralBanner onNavigate={() => setActiveNavItem("referrals")} />
           )}
 
           {/* Urgency Banner - for all users with active routes */}
