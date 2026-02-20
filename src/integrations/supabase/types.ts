@@ -398,6 +398,45 @@ export type Database = {
           },
         ]
       }
+      user_appointments: {
+        Row: {
+          application_status: string | null
+          appointment_date: string | null
+          appointment_time: string | null
+          created_at: string | null
+          id: string
+          lot_number: string | null
+          police_station_address: string | null
+          tie_status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          application_status?: string | null
+          appointment_date?: string | null
+          appointment_time?: string | null
+          created_at?: string | null
+          id?: string
+          lot_number?: string | null
+          police_station_address?: string | null
+          tie_status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          application_status?: string | null
+          appointment_date?: string | null
+          appointment_time?: string | null
+          created_at?: string | null
+          id?: string
+          lot_number?: string | null
+          police_station_address?: string | null
+          tie_status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_documents: {
         Row: {
           category: string

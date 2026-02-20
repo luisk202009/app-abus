@@ -25,6 +25,26 @@ export const useNotifications = () => {
       const notifs: Notification[] = [];
 
       try {
+        // Check for approved application
+        const { data: appointment } = await supabase
+          .from("user_appointments")
+          .select("application_status, updated_at")
+          .eq("user_id", user.id)
+          .eq("application_status", "aprobada")
+          .maybeSingle();
+
+        if (appointment) {
+          const updatedAt = new Date(appointment.updated_at);
+          const hoursSinceApproval = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60);
+          if (hoursSinceApproval < 72) {
+            notifs.push({
+              id: "application_approved",
+              type: "approval",
+              message: "¡Enhorabuena! Tu residencia ha sido concedida. Ve a Gestión de Cita para empezar con tu TIE.",
+              icon: "success",
+            });
+          }
+        }
         // Check for validated documents
         const { data: validDocs } = await supabase
           .from("user_documents")

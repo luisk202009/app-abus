@@ -126,10 +126,32 @@ export const usePartnerData = () => {
   };
 
   const updateCaseStatus = async (assignmentId: string, newStatus: string) => {
+    // Find the user_id for this assignment
+    const assignment = clients.find((c) => c.assignment.id === assignmentId);
+    
     const { error } = await supabase
       .from("partner_assignments")
       .update({ case_status: newStatus })
       .eq("id", assignmentId);
+
+    // When marked as "aprobada", create/update user_appointments
+    if (!error && newStatus === "aprobada" && assignment) {
+      const userId = assignment.assignment.user_id;
+      const { data: existing } = await supabase
+        .from("user_appointments")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase.from("user_appointments")
+          .update({ application_status: "aprobada", updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("user_appointments")
+          .insert({ user_id: userId, application_status: "aprobada" });
+      }
+    }
 
     if (!error && partnerId) await loadClients(partnerId);
     return { error };
