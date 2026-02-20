@@ -100,6 +100,62 @@ export type Database = {
         }
         Relationships: []
       }
+      partner_assignments: {
+        Row: {
+          assigned_at: string
+          case_status: string
+          id: string
+          notes: string | null
+          partner_id: string
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          case_status?: string
+          id?: string
+          notes?: string | null
+          partner_id: string
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string
+          case_status?: string
+          id?: string
+          notes?: string | null
+          partner_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_assignments_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partners: {
+        Row: {
+          created_at: string
+          id: string
+          team_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          team_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          team_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       plans: {
         Row: {
           created_at: string
@@ -490,6 +546,8 @@ export type Database = {
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }
+      is_assigned_to_partner: { Args: { _user_id: string }; Returns: boolean }
+      is_partner: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

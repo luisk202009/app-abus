@@ -4,9 +4,9 @@ import { useAuth } from "@/hooks/useAuth";
 
 export interface Notification {
   id: string;
-  type: "retention" | "approval";
+  type: "retention" | "approval" | "partner_comment";
   message: string;
-  icon: "alert" | "success";
+  icon: "alert" | "success" | "info";
 }
 
 export const useNotifications = () => {
@@ -68,6 +68,31 @@ export const useNotifications = () => {
                 icon: "alert",
               });
             }
+          }
+        }
+        // Check for recent partner comments on user's documents
+        const { data: userDocs } = await supabase
+          .from("user_documents")
+          .select("id")
+          .eq("user_id", user.id);
+
+        if (userDocs && userDocs.length > 0) {
+          const docIds = userDocs.map((d) => d.id);
+          const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+          const { data: recentComments } = await supabase
+            .from("document_comments")
+            .select("id, author_email")
+            .in("document_id", docIds)
+            .gte("created_at", cutoff)
+            .neq("author_email", user.email || "");
+
+          if (recentComments && recentComments.length > 0) {
+            notifs.push({
+              id: "partner_comment",
+              type: "partner_comment",
+              message: `Tu equipo legal ha dejado ${recentComments.length} comentario${recentComments.length > 1 ? "s" : ""} en tus documentos.`,
+              icon: "info",
+            });
           }
         }
       } catch (err) {
