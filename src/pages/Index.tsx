@@ -3,6 +3,7 @@ import { Navbar } from "@/components/Navbar";
 import { HeroSection } from "@/components/HeroSection";
 import { TrustBar } from "@/components/TrustBar";
 import { HowItWorksSection } from "@/components/HowItWorksSection";
+import { EligibilityCalculator } from "@/components/eligibility/EligibilityCalculator";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { ResourcesSection } from "@/components/ResourcesSection";
 import { PricingSection } from "@/components/PricingSection";
@@ -19,6 +20,7 @@ const Index = () => {
         <HeroSection onAnalyzeClick={() => setIsModalOpen(true)} />
         <TrustBar />
         <HowItWorksSection />
+        <EligibilityCalculator onStartProcess={() => setIsModalOpen(true)} />
         <FeaturesSection />
         <ResourcesSection />
         <PricingSection onStartFree={() => setIsModalOpen(true)} />

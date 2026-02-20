@@ -72,12 +72,12 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-8">
               <DestinosDropdown onCountrySelect={handleCountrySelect} />
-              <button
-                onClick={() => scrollToSection("recursos")}
+              <a
+                href="/recursos"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 Recursos
-              </button>
+              </a>
               <button
                 onClick={() => scrollToSection("precios")}
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -119,12 +119,12 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
                     handleCountrySelect(country);
                   }} />
                 </div>
-                <button
-                  onClick={() => scrollToSection("recursos")}
-                  className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2 text-left"
+                <a
+                  href="/recursos"
+                  className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2 text-left block"
                 >
                   Recursos
-                </button>
+                </a>
                 <button
                   onClick={() => scrollToSection("precios")}
                   className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2 text-left"
