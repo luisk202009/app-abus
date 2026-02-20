@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AdminModeProvider } from "@/contexts/AdminModeContext";
+import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import RouteDetail from "./pages/RouteDetail";
@@ -27,30 +28,32 @@ const App = () => (
     <TooltipProvider>
       <AuthProvider>
         <AdminModeProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/dashboard/route/:routeId" element={<RouteDetail />} />
-              <Route path="/explorar" element={<Explorar />} />
-              {/* España routes */}
-              <Route path="/españa/regularizacion" element={<Regularizacion2026 />} />
-              <Route path="/españa/regularizacion/:paisId" element={<RegularizacionPais />} />
-              <Route path="/españa/arraigos" element={<Arraigos />} />
-              <Route path="/recursos" element={<Recursos />} />
-              {/* Legacy redirect */}
-              <Route path="/regularizacion" element={<Navigate to="/españa/arraigos" replace />} />
-              <Route path="/success" element={<Success />} />
-              <Route path="/terminos" element={<Terms />} />
-              <Route path="/privacidad" element={<Privacy />} />
-              <Route path="/destinos/:countryId" element={<ComingSoon />} />
-              <Route path="/admin" element={<Admin />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+          <AnalyticsProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dashboard/route/:routeId" element={<RouteDetail />} />
+                <Route path="/explorar" element={<Explorar />} />
+                {/* España routes */}
+                <Route path="/españa/regularizacion" element={<Regularizacion2026 />} />
+                <Route path="/españa/regularizacion/:paisId" element={<RegularizacionPais />} />
+                <Route path="/españa/arraigos" element={<Arraigos />} />
+                <Route path="/recursos" element={<Recursos />} />
+                {/* Legacy redirect */}
+                <Route path="/regularizacion" element={<Navigate to="/españa/arraigos" replace />} />
+                <Route path="/success" element={<Success />} />
+                <Route path="/terminos" element={<Terms />} />
+                <Route path="/privacidad" element={<Privacy />} />
+                <Route path="/destinos/:countryId" element={<ComingSoon />} />
+                <Route path="/admin" element={<Admin />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </AnalyticsProvider>
         </AdminModeProvider>
       </AuthProvider>
     </TooltipProvider>

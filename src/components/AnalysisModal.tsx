@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { trackEvent } from "@/lib/trackingService";
 import { useNavigate } from "react-router-dom";
 import { X, ArrowRight, ArrowLeft, CheckCircle, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -184,6 +185,7 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
       // Success - show success screen
       setIsAnalyzing(false);
       setShowSuccess(true);
+      trackEvent("onboarding_started", { visa_type: aiRecommendation.visa_type, source: source || "general" });
     } catch (error) {
       console.error("Error submitting form:", error);
       toast({
