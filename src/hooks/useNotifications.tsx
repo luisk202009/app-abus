@@ -45,6 +45,27 @@ export const useNotifications = () => {
             });
           }
         }
+
+        // Check for recent SSN addition (lot_number set within 24h)
+        const { data: ssnAppointment } = await supabase
+          .from("user_appointments")
+          .select("lot_number, updated_at")
+          .eq("user_id", user.id)
+          .not("lot_number", "is", null)
+          .maybeSingle();
+
+        if (ssnAppointment && ssnAppointment.lot_number) {
+          const updatedAt = new Date(ssnAppointment.updated_at);
+          const hoursSinceSSN = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60);
+          if (hoursSinceSSN < 24) {
+            notifs.push({
+              id: "ssn_added",
+              type: "approval",
+              message: "¡Felicidades! Ya estás listo para trabajar legalmente en España.",
+              icon: "success",
+            });
+          }
+        }
         // Check for validated documents
         const { data: validDocs } = await supabase
           .from("user_documents")

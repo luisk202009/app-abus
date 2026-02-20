@@ -1,4 +1,4 @@
-import { User, Home, Shield } from "lucide-react";
+import { User, Home, Shield, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DocumentStatusCard } from "./DocumentStatusCard";
 import { DocumentComments } from "./DocumentComments";
@@ -28,6 +28,7 @@ const categoryIcons: Record<CategoryType, React.ElementType> = {
   identidad: User,
   residencia: Home,
   antecedentes: Shield,
+  identidad_permanente: ShieldCheck,
 };
 
 export const DocumentCategory = ({

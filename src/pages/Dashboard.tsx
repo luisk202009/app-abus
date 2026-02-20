@@ -8,6 +8,7 @@ import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
 import { ProfileSection } from "@/components/dashboard/ProfileSection";
 import { FiscalSimulator } from "@/components/dashboard/FiscalSimulator";
 import { AppointmentManager } from "@/components/dashboard/AppointmentManager";
+import { LifeInSpainSection } from "@/components/dashboard/LifeInSpainSection";
 import { DocumentVault } from "@/components/dashboard/DocumentVault";
 import { ResourcesSection } from "@/components/dashboard/ResourcesSection";
 import { SupportModal } from "@/components/dashboard/SupportModal";
@@ -29,7 +30,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 import { Button } from "@/components/ui/button";
-import { Compass, ArrowRight, Calculator, CalendarCheck } from "lucide-react";
+import { Compass, ArrowRight, Calculator, CalendarCheck, Shield } from "lucide-react";
 import type { RouteType } from "@/lib/documentConfig";
 
 interface UserData {
@@ -343,6 +344,22 @@ const Dashboard = () => {
   // Render the active section content
   const renderContent = () => {
     switch (activeNavItem) {
+      case "life-in-spain":
+        if (!isPremium) {
+          return (
+            <div className="text-center py-16 space-y-4">
+              <Shield className="w-12 h-12 mx-auto text-muted-foreground" />
+              <h3 className="text-lg font-semibold">Vida en España</h3>
+              <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                Guías post-aprobación, identidad digital y documentos para empleadores. Disponible para usuarios Pro y Premium.
+              </p>
+              <Button onClick={handleCheckout} disabled={isCheckoutLoading}>
+                Mejorar mi plan
+              </Button>
+            </div>
+          );
+        }
+        return <LifeInSpainSection userId={user?.id} userName={userData.name} />;
       case "appointment":
         if (!isPremium) {
           return (

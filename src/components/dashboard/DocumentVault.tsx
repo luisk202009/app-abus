@@ -100,7 +100,7 @@ export const DocumentVault = ({ routeType, isPremium }: DocumentVaultProps) => {
     );
   }
 
-  const categories: CategoryType[] = ["identidad", "residencia", "antecedentes"];
+  const categories: CategoryType[] = ["identidad", "residencia", "antecedentes", "identidad_permanente"];
 
   return (
     <div className="space-y-8 relative">
