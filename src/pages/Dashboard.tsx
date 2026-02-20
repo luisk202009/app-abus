@@ -9,6 +9,7 @@ import { ProfileSection } from "@/components/dashboard/ProfileSection";
 import { FiscalSimulator } from "@/components/dashboard/FiscalSimulator";
 import { AppointmentManager } from "@/components/dashboard/AppointmentManager";
 import { LifeInSpainSection } from "@/components/dashboard/LifeInSpainSection";
+import { BusinessOnboardingSection } from "@/components/dashboard/BusinessOnboardingSection";
 import { DocumentVault } from "@/components/dashboard/DocumentVault";
 import { ResourcesSection } from "@/components/dashboard/ResourcesSection";
 import { SupportModal } from "@/components/dashboard/SupportModal";
@@ -30,7 +31,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 import { Button } from "@/components/ui/button";
-import { Compass, ArrowRight, Calculator, CalendarCheck, Shield } from "lucide-react";
+import { Compass, ArrowRight, Calculator, CalendarCheck, Shield, TrendingUp } from "lucide-react";
 import type { RouteType } from "@/lib/documentConfig";
 
 interface UserData {
@@ -360,6 +361,22 @@ const Dashboard = () => {
           );
         }
         return <LifeInSpainSection userId={user?.id} userName={userData.name} />;
+      case "business":
+        if (!isPremium) {
+          return (
+            <div className="text-center py-16 space-y-4">
+              <TrendingUp className="w-12 h-12 mx-auto text-muted-foreground" />
+              <h3 className="text-lg font-semibold">Negocios</h3>
+              <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                Guía completa para darte de alta como autónomo, calculadora de cuotas y obligaciones fiscales. Disponible para usuarios Pro y Premium.
+              </p>
+              <Button onClick={handleCheckout} disabled={isCheckoutLoading}>
+                Mejorar mi plan
+              </Button>
+            </div>
+          );
+        }
+        return <BusinessOnboardingSection onUpgrade={handleCheckout} />;
       case "appointment":
         if (!isPremium) {
           return (
