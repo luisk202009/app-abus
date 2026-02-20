@@ -1,7 +1,8 @@
-import { Home, FolderOpen, User, MessageCircle, LogIn, Crown, BookOpen, Settings, Compass } from "lucide-react";
+import { Home, FolderOpen, User, MessageCircle, LogIn, LogOut, Crown, BookOpen, Settings, Compass } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { AdminModeSwitcher } from "@/components/admin/AdminModeSwitcher";
 import albusLogo from "@/assets/albus-logo.png";
 
@@ -24,10 +25,12 @@ interface DashboardSidebarProps {
   activeItem: string;
   onItemClick: (id: string) => void;
   onRegister?: () => void;
+  onLogout?: () => void;
   isLoggedIn?: boolean;
   isPremium?: boolean;
   userName?: string;
   userEmail?: string;
+  subscriptionStatus?: string;
 }
 
 const ADMIN_EMAIL = "l@albus.com.co";
@@ -36,10 +39,12 @@ export const DashboardSidebar = ({
   activeItem,
   onItemClick,
   onRegister,
+  onLogout,
   isLoggedIn = false,
   isPremium = false,
   userName,
   userEmail,
+  subscriptionStatus = "free",
 }: DashboardSidebarProps) => {
   const navigate = useNavigate();
   const isAdmin = userEmail === ADMIN_EMAIL;
@@ -51,8 +56,8 @@ export const DashboardSidebar = ({
         <img src={albusLogo} alt="Albus" className="h-7" />
       </div>
 
-      {/* User Info (if logged in with Pro) */}
-      {isLoggedIn && isPremium && (
+      {/* User Info (always show when logged in) */}
+      {isLoggedIn && (
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -63,10 +68,16 @@ export const DashboardSidebar = ({
                 <span className="text-sm font-medium truncate">
                   {userName || "Usuario"}
                 </span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary text-primary-foreground rounded text-[10px] font-semibold uppercase">
-                  <Crown className="w-2.5 h-2.5" />
-                  Pro
-                </span>
+                {(subscriptionStatus === "premium" || subscriptionStatus === "pro" || isPremium) ? (
+                  <Badge className="gap-1 px-1.5 py-0.5 text-[10px] bg-primary text-primary-foreground">
+                    <Crown className="w-2.5 h-2.5" />
+                    {subscriptionStatus === "premium" ? "Premium" : "Pro"}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    Gratis
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -132,10 +143,24 @@ export const DashboardSidebar = ({
         </div>
       )}
 
+      {/* Logout Button (if logged in) */}
+      {isLoggedIn && onLogout && (
+        <div className="px-4 pb-2">
+          <Button
+            variant="ghost"
+            className="w-full gap-2 text-muted-foreground hover:text-foreground"
+            onClick={onLogout}
+          >
+            <LogOut className="w-4 h-4" />
+            Cerrar Sesión
+          </Button>
+        </div>
+      )}
+
       {/* Footer */}
       <div className="p-4 border-t border-border">
         <p className="text-xs text-muted-foreground text-center">
-          © 2024 Albus
+          © 2026 Albus
         </p>
       </div>
     </aside>

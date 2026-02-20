@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useRef } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { FileText, Upload, Trash2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
@@ -38,9 +39,21 @@ export const DocumentStatusCard = ({
     fileInputRef.current?.click();
   };
 
+  const { toast } = useToast();
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+      if (file.size > MAX_SIZE) {
+        toast({
+          variant: "destructive",
+          title: "Archivo muy grande",
+          description: "El archivo no puede superar los 5MB. Formatos aceptados: PDF, JPG, PNG.",
+        });
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
       onUpload(file);
     }
     // Reset input
