@@ -1,235 +1,174 @@
 
 
-# Plan: E05 - Portal de Partners Legales y Sistema de Asignacion
+# Plan: F01 - Document Upload Activation, Profile View, and Final UX Polish
 
-## Resumen
+## Summary
 
-Crear un portal para abogados partners con dashboard propio, sistema de asignacion de clientes desde el admin, y flujo de colaboracion con comentarios y notificaciones. Todo protegido con RLS a nivel de base de datos.
-
----
-
-## 1. Migracion de Base de Datos
-
-### Nuevas tablas y funciones:
-
-**Tabla `partner_assignments`** - Vincula partners con usuarios asignados:
-
-| Columna | Tipo | Descripcion |
-|---------|------|-------------|
-| id | uuid PK | ID unico |
-| partner_id | uuid NOT NULL | Referencia a auth.users (el partner) |
-| user_id | uuid NOT NULL | Referencia a auth.users (el usuario asignado) |
-| case_status | text | 'en_revision', 'listo_presentar', 'requiere_accion' (default: 'en_revision') |
-| assigned_at | timestamptz | Fecha de asignacion |
-| notes | text | Notas del partner sobre el caso |
-
-Constraint UNIQUE en (partner_id, user_id).
-
-**Tabla `partners`** - Registro de partners con nombre de equipo:
-
-| Columna | Tipo | Descripcion |
-|---------|------|-------------|
-| id | uuid PK | ID unico |
-| user_id | uuid NOT NULL UNIQUE | Referencia a auth.users |
-| team_name | text NOT NULL | Nombre del equipo legal (ej: "LegalTeam A") |
-| created_at | timestamptz | Fecha de creacion |
-
-**Funcion `is_partner()`** - SECURITY DEFINER para verificar si el usuario es partner:
-
-```sql
-CREATE OR REPLACE FUNCTION public.is_partner(_user_id uuid)
-RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.partners WHERE user_id = _user_id
-  )
-$$;
-```
-
-**Funcion `is_assigned_to_partner()`** - Verifica si un user_id esta asignado al partner actual:
-
-```sql
-CREATE OR REPLACE FUNCTION public.is_assigned_to_partner(_user_id uuid)
-RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.partner_assignments
-    WHERE partner_id = auth.uid() AND user_id = _user_id
-  )
-$$;
-```
-
-### Politicas RLS:
-
-**`partners`:**
-- SELECT: `is_admin()` OR `user_id = auth.uid()`
-- INSERT/UPDATE/DELETE: `is_admin()`
-
-**`partner_assignments`:**
-- SELECT: `is_admin()` OR `partner_id = auth.uid()`
-- INSERT/DELETE: `is_admin()`
-- UPDATE: `partner_id = auth.uid()` (para cambiar case_status y notes)
-
-**Politicas adicionales en tablas existentes:**
-
-- `user_documents` - Nuevo SELECT policy: "Partners can view assigned user docs" con `is_assigned_to_partner(user_id)`
-- `user_documents` - Nuevo UPDATE policy: "Partners can update assigned user doc status" con `is_assigned_to_partner(user_id)`
-- `document_comments` - Nuevo INSERT policy: "Partners can comment on assigned user docs" con check de que el doc pertenece a un usuario asignado
-- `document_comments` - Nuevo SELECT policy: "Partners can view comments on assigned user docs"
-- `onboarding_submissions` - Nuevo SELECT policy: "Partners can view assigned user submissions" con `is_assigned_to_partner(user_id)`
-- `user_active_routes` - Nuevo SELECT policy: "Partners can view assigned user routes" con `is_assigned_to_partner(user_id)`
+The document upload infrastructure already exists and works (storage bucket, RLS, upload logic in `useDocumentVault`). The main gaps are: file size validation, a real Profile view, logout button, and minor polish items.
 
 ---
 
-## 2. Nuevos Archivos
+## 1. File Size Validation (5MB limit)
 
-### `src/pages/PartnerDashboard.tsx`
+### Modify: `src/components/dashboard/DocumentStatusCard.tsx`
 
-Pagina principal del portal de partners. Estructura:
+Add validation in `handleFileChange` before calling `onUpload`:
+- Check `file.size > 5 * 1024 * 1024`
+- If too large, show toast error: "El archivo no puede superar los 5MB"
+- Accept types already correct: `.pdf,.jpg,.jpeg,.png`
 
-- Header con logo Albus y nombre del equipo legal
-- Stats cards: Total asignados, Revisiones completadas, Pendientes
-- Tabla de clientes activos con columnas: Nombre, Email, Ruta, Estado del caso, Deadline, Acciones
-- Panel de documentos del cliente seleccionado (read-only files, write status/comments)
-- Status Switcher: dropdown para cambiar entre "En Revision", "Listo para Presentar", "Requiere Accion"
-
-### `src/components/partner/PartnerClientList.tsx`
-
-Tabla de clientes asignados con:
-- Nombre, email, ruta activa, estado del caso
-- Badge de color segun estado (azul/verde/rojo)
-- Click para expandir panel de documentos
-
-### `src/components/partner/PartnerDocumentReview.tsx`
-
-Panel de revision de documentos de un cliente:
-- Lista de documentos con status badges (read-only files)
-- Dropdown para cambiar status del documento
-- Formulario para agregar comentarios
-- Historial de comentarios existentes
-
-### `src/components/partner/PartnerSummaryStats.tsx`
-
-Cards de resumen: Total asignados, Revisiones completadas ("Listo para Presentar"), Pendientes ("En Revision" + "Requiere Accion").
-
-### `src/hooks/usePartnerData.tsx`
-
-Hook para cargar datos del partner: assignments, documentos de clientes asignados, rutas activas.
+This is a small change (5 lines) in the existing handler.
 
 ---
 
-## 3. Archivos a Modificar
+## 2. Build Profile Section
 
-### `src/App.tsx`
+### Replace the "Proximamente" toast in `Dashboard.tsx`
 
-Agregar ruta `/partner/dashboard` con componente `PartnerDashboard`.
+When `activeNavItem === "profile"`, render a new `ProfileSection` component instead of showing a toast.
 
-### `src/components/admin/AdminUsersTab.tsx`
+### New file: `src/components/dashboard/ProfileSection.tsx`
 
-Agregar columna "Partner" a la tabla de usuarios:
-- Dropdown "Asignar Partner" con lista de partners disponibles (consultados de tabla `partners`)
-- Al seleccionar, insertar en `partner_assignments`
-- Mostrar partner asignado actual como Badge
+Professional profile view with the B&W Albus aesthetic:
 
-### `src/hooks/useNotifications.tsx`
+**User Info Card:**
+- Full Name (from `onboarding_submissions.full_name`)
+- Email (from auth user)
+- Nationality (from `onboarding_submissions.nationality`)
+- Plan Status badge: Free (outline gray), Pro (black with Crown), Premium (black with Crown)
 
-Agregar check para nuevos comentarios de partners en documentos del usuario:
-- Consultar `document_comments` donde `document_id` pertenece a documentos del usuario
-- Si hay comentarios recientes (ultimas 48h), agregar notificacion tipo "partner_comment"
+**Actions:**
+- "Editar Perfil" button: Opens inline edit form for full_name and nationality, saves to `onboarding_submissions`
+- "Cambiar Contrasena" button: Calls `supabase.auth.resetPasswordForEmail()` and shows confirmation toast
 
-### `src/hooks/useAuth.tsx`
-
-Agregar campo `isPartner` al contexto, consultando la tabla `partners` al cargar sesion.
-
----
-
-## 4. Flujo de Colaboracion
-
-```text
-Admin asigna usuario a Partner
-       |
-       v
-Partner ve usuario en su dashboard
-       |
-       v
-Partner revisa documentos (read-only archivos)
-       |
-       v
-Partner cambia status de docs y deja comentarios
-       |
-       v
-Usuario ve notificacion en su dashboard
-       |
-       v
-Partner marca caso como "Listo para Presentar"
-```
+**Billing History:**
+- Simple list of recent payments
+- Since Stripe payment data is managed by webhooks, we show a simplified view from `onboarding_submissions.subscription_status` and the plan info
+- Show current plan details with price from `plans` table
+- Link to Stripe customer portal (if available) or simple status display
 
 ---
 
-## 5. Seguridad
+## 3. Logout Button in Sidebar
 
-- Partners SOLO ven usuarios explicitamente asignados via `partner_assignments`
-- Funciones SECURITY DEFINER evitan recursion RLS
-- Partners NO pueden eliminar documentos ni modificar archivos, solo status y comentarios
-- Admin es el unico que puede crear partners y asignar usuarios
-- Mock inicial: Se insertaran 2 partners de prueba ("LegalTeam A", "LegalTeam B") directamente en la tabla
+### Modify: `src/components/dashboard/DashboardSidebar.tsx`
+
+- Import `LogOut` icon and `useAuth`
+- Add "Cerrar Sesion" button below the admin section, above footer
+- Only visible when `isLoggedIn === true`
+- Call `signOut()` and navigate to `/`
+- Update footer copyright from "2024" to "2026"
+
+### Also add `signOut` prop or use `useAuth` directly
+
+Since the sidebar is a child component, pass `onLogout` callback from Dashboard or import `useAuth` directly.
 
 ---
 
-## Detalles Tecnicos
+## 4. Plan Badge Always Visible
 
-### PartnerDashboard - Proteccion de ruta
+### Modify: `src/components/dashboard/DashboardSidebar.tsx`
+
+- Currently the user info section only shows for `isPremium` users
+- Change to show for ALL logged-in users
+- Display appropriate badge: "Gratis" (outline), "Pro" (black), "Premium" (black)
+- Add `subscriptionStatus` prop to distinguish between plans
+
+---
+
+## 5. CountdownBanner
+
+Already correctly targets June 30, 2026. No changes needed.
+
+---
+
+## 6. Footer Legal Links
+
+Already has links to `/terminos` and `/privacidad` and "Copyright 2026 Albus". No changes needed.
+
+---
+
+## Files to Create
+
+| File | Purpose |
+|------|---------|
+| `src/components/dashboard/ProfileSection.tsx` | User profile view with edit, password change, billing |
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/components/dashboard/DocumentStatusCard.tsx` | Add 5MB file size validation |
+| `src/components/dashboard/DashboardSidebar.tsx` | Add logout button, plan badge for all users, fix copyright year |
+| `src/pages/Dashboard.tsx` | Render ProfileSection instead of toast, pass subscriptionStatus to sidebar |
+
+---
+
+## Technical Details
+
+### DocumentStatusCard - File validation
 
 ```typescript
-// Verifica que el usuario sea partner
-const { user } = useAuth();
-const [isPartner, setIsPartner] = useState(false);
-
-useEffect(() => {
-  if (!user) { navigate("/"); return; }
-  supabase.from("partners").select("id")
-    .eq("user_id", user.id).maybeSingle()
-    .then(({ data }) => {
-      if (!data) navigate("/");
-      else setIsPartner(true);
-    });
-}, [user]);
+const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  
+  const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+  if (file.size > MAX_SIZE) {
+    toast({ variant: "destructive", title: "Archivo muy grande", 
+            description: "El archivo no puede superar los 5MB." });
+    return;
+  }
+  onUpload(file);
+};
 ```
 
-### AdminUsersTab - Dropdown de asignacion
+### ProfileSection - Data fetching
 
 ```typescript
-// Fetch partners list
-const { data: partners } = await supabase
-  .from("partners").select("id, user_id, team_name");
+// Fetch from onboarding_submissions
+const { data } = await supabase
+  .from("onboarding_submissions")
+  .select("full_name, nationality, subscription_status, email")
+  .eq("user_id", user.id)
+  .maybeSingle();
 
-// Fetch existing assignments
-const { data: assignments } = await supabase
-  .from("partner_assignments").select("partner_id, user_id");
+// Fetch plan details
+const { data: plan } = await supabase
+  .from("plans")
+  .select("name, price_cents, currency, interval")
+  .eq("slug", subscriptionStatus)
+  .eq("is_active", true)
+  .maybeSingle();
 ```
 
-### Case Status Badge colors
+### DashboardSidebar - Logout
 
-| Status | Color | Emoji |
-|--------|-------|-------|
-| en_revision | Azul (blue-100/blue-800) | -- |
-| listo_presentar | Verde (green-100/green-800) | -- |
-| requiere_accion | Rojo (red-100/red-800) | -- |
+```typescript
+// Add onLogout prop
+interface DashboardSidebarProps {
+  // ...existing
+  onLogout?: () => void;
+  subscriptionStatus?: string;
+}
+
+// In the component, before footer:
+{isLoggedIn && onLogout && (
+  <div className="px-4 pb-2">
+    <Button variant="ghost" className="w-full gap-2 text-muted-foreground" onClick={onLogout}>
+      <LogOut className="w-4 h-4" />
+      Cerrar Sesion
+    </Button>
+  </div>
+)}
+```
 
 ---
 
-## Orden de Implementacion
+## Implementation Order
 
-1. Migracion SQL (tablas, funciones, RLS policies)
-2. `usePartnerData.tsx` hook
-3. `PartnerSummaryStats.tsx`, `PartnerClientList.tsx`, `PartnerDocumentReview.tsx` components
-4. `PartnerDashboard.tsx` page
-5. Modificar `App.tsx` con nueva ruta
-6. Modificar `AdminUsersTab.tsx` con dropdown de asignacion
-7. Modificar `useNotifications.tsx` para comentarios de partners
-8. Insertar mock partners en la tabla
+1. `DocumentStatusCard.tsx` - Add file size validation
+2. `ProfileSection.tsx` - Build profile view
+3. `DashboardSidebar.tsx` - Logout button + plan badge + copyright fix
+4. `Dashboard.tsx` - Wire profile section, logout, and subscriptionStatus
 
