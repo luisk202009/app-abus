@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
-import { Upload, X, FileText, Loader2, CheckCircle } from "lucide-react";
+import { Upload, X, FileText, Loader2, CheckCircle, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface StepFileUploadProps {
   stepId: string;
@@ -24,6 +25,8 @@ export const StepFileUpload = ({
 }: StepFileUploadProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = useIsMobile();
   const [isUploading, setIsUploading] = useState(false);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,7 +145,7 @@ export const StepFileUpload = ({
         </div>
       )}
 
-      {/* Upload button */}
+      {/* Upload / Scanner buttons */}
       <input
         ref={fileInputRef}
         type="file"
@@ -150,29 +153,57 @@ export const StepFileUpload = ({
         onChange={handleFileSelect}
         accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
       />
-      
-      <Button
-        variant="outline"
-        size="sm"
-        className={cn(
-          "w-full gap-2",
-          !isPremium && "opacity-50"
+      <input
+        ref={cameraInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFileSelect}
+        accept="image/*"
+        capture="environment"
+      />
+
+      <div className={cn("flex gap-2", isMobile ? "flex-col" : "")}>
+        {isMobile && (
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn("w-full gap-2", !isPremium && "opacity-50")}
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={isUploading || !isPremium}
+          >
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Subiendo...
+              </>
+            ) : (
+              <>
+                <Camera className="w-4 h-4" />
+                Escanear Documento
+              </>
+            )}
+          </Button>
         )}
-        onClick={() => fileInputRef.current?.click()}
-        disabled={isUploading || !isPremium}
-      >
-        {isUploading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Subiendo...
-          </>
-        ) : (
-          <>
-            <Upload className="w-4 h-4" />
-            {isPremium ? "Subir documento" : "Subir (Premium)"}
-          </>
-        )}
-      </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn("w-full gap-2", !isPremium && "opacity-50")}
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading || !isPremium}
+        >
+          {isUploading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Subiendo...
+            </>
+          ) : (
+            <>
+              <Upload className="w-4 h-4" />
+              {isPremium ? "Subir documento" : "Subir (Premium)"}
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 };

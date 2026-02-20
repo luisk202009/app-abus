@@ -23,15 +23,18 @@ import { SuccessConfetti } from "@/components/dashboard/SuccessConfetti";
 import { UrgencyBanner } from "@/components/dashboard/UrgencyBanner";
 import { NotificationBanner } from "@/components/dashboard/NotificationBanner";
 import { ProgressBar } from "@/components/dashboard/ProgressBar";
+import { InstallAppBanner } from "@/components/dashboard/InstallAppBanner";
+import { PullToRefresh } from "@/components/dashboard/PullToRefresh";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 import { Button } from "@/components/ui/button";
-import { Compass, ArrowRight, Calculator, CalendarCheck, Shield, TrendingUp } from "lucide-react";
+import { Compass, ArrowRight, Calculator, CalendarCheck, Shield, TrendingUp, Bell } from "lucide-react";
 import type { RouteType } from "@/lib/documentConfig";
 
 interface UserData {
@@ -544,6 +547,14 @@ const Dashboard = () => {
     }
   };
 
+  const { isSupported: pushSupported, requestPermission } = usePushNotifications(user?.id);
+
+  const handleRefresh = useCallback(async () => {
+    if (user) {
+      await fetchTasks(user.id);
+    }
+  }, [user]);
+
   if (isLoading || authLoading || routesLoading) {
     return (
       <div className="min-h-screen bg-secondary flex items-center justify-center">
@@ -575,8 +586,25 @@ const Dashboard = () => {
       />
 
       {/* Main Content */}
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 sm:p-8">
+        <PullToRefresh onRefresh={handleRefresh}>
         <div className="max-w-4xl mx-auto space-y-6">
+          {/* Install App Banner */}
+          <InstallAppBanner />
+
+          {/* Push Notification Opt-in */}
+          {pushSupported && Notification.permission === "default" && user && (
+            <div className="bg-background border border-border rounded-2xl p-4 flex items-center gap-3">
+              <Bell className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+              <p className="text-sm text-muted-foreground flex-1">
+                Activa las notificaciones para recibir alertas sobre tus documentos y plazos.
+              </p>
+              <Button size="sm" variant="outline" onClick={requestPermission}>
+                Activar
+              </Button>
+            </div>
+          )}
+
           {/* Urgency Banner - for all users with active routes */}
           {activeRoutes.length > 0 && <UrgencyBanner />}
 
@@ -603,6 +631,7 @@ const Dashboard = () => {
           {/* Dynamic Content */}
           {renderContent()}
         </div>
+        </PullToRefresh>
       </main>
 
       {/* Auth Modal */}
