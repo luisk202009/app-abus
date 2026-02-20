@@ -6,6 +6,7 @@ import { AuthBanner } from "@/components/dashboard/AuthBanner";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
 import { ProfileSection } from "@/components/dashboard/ProfileSection";
+import { FiscalSimulator } from "@/components/dashboard/FiscalSimulator";
 import { DocumentVault } from "@/components/dashboard/DocumentVault";
 import { ResourcesSection } from "@/components/dashboard/ResourcesSection";
 import { SupportModal } from "@/components/dashboard/SupportModal";
@@ -27,7 +28,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 import { Button } from "@/components/ui/button";
-import { Compass, ArrowRight } from "lucide-react";
+import { Compass, ArrowRight, Calculator } from "lucide-react";
 import type { RouteType } from "@/lib/documentConfig";
 
 interface UserData {
@@ -341,6 +342,28 @@ const Dashboard = () => {
   // Render the active section content
   const renderContent = () => {
     switch (activeNavItem) {
+      case "simulator":
+        // Pro and Premium users get the simulator; free users see upsell
+        if (!isPremium) {
+          return (
+            <div className="text-center py-16 space-y-4">
+              <Calculator className="w-12 h-12 mx-auto text-muted-foreground" />
+              <h3 className="text-lg font-semibold">Simulador Fiscal</h3>
+              <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                Calcula tu sueldo neto estimado en España. Disponible para usuarios Pro y Premium.
+              </p>
+              <Button onClick={handleCheckout} disabled={isCheckoutLoading}>
+                Mejorar mi plan
+              </Button>
+            </div>
+          );
+        }
+        return (
+          <FiscalSimulator
+            subscriptionStatus={isPremium ? "pro" : "free"}
+            onUpgrade={handleCheckout}
+          />
+        );
       case "profile":
         return (
           <ProfileSection
