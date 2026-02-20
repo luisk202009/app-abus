@@ -11,6 +11,8 @@ import RouteDetail from "./pages/RouteDetail";
 import Explorar from "./pages/Explorar";
 import Regularizacion2026 from "./pages/espana/Regularizacion2026";
 import Arraigos from "./pages/espana/Arraigos";
+import RegularizacionPais from "./pages/espana/RegularizacionPais";
+import Recursos from "./pages/Recursos";
 import Success from "./pages/Success";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
@@ -35,7 +37,9 @@ const App = () => (
               <Route path="/explorar" element={<Explorar />} />
               {/* España routes */}
               <Route path="/españa/regularizacion" element={<Regularizacion2026 />} />
+              <Route path="/españa/regularizacion/:paisId" element={<RegularizacionPais />} />
               <Route path="/españa/arraigos" element={<Arraigos />} />
+              <Route path="/recursos" element={<Recursos />} />
               {/* Legacy redirect */}
               <Route path="/regularizacion" element={<Navigate to="/españa/arraigos" replace />} />
               <Route path="/success" element={<Success />} />

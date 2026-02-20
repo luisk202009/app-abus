@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Calendar, Clock, Award, ArrowRight } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { CountdownBanner } from "@/components/CountdownBanner";
+import { EligibilityCalculator } from "@/components/eligibility/EligibilityCalculator";
 import { HeroReg2026 } from "@/components/espana/HeroReg2026";
 import { RequirementCard } from "@/components/espana/RequirementCard";
 import { EligibilityModalReg2026 } from "@/components/eligibility/EligibilityModalReg2026";
@@ -44,6 +46,7 @@ const Regularizacion2026 = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      <CountdownBanner />
 
       {/* Hero Section */}
       <HeroReg2026 onStart={handleStartCheck} />
@@ -102,6 +105,9 @@ const Regularizacion2026 = () => {
           </div>
         </div>
       </section>
+
+      {/* Eligibility Calculator */}
+      <EligibilityCalculator onStartProcess={handleStartCheck} />
 
       <Footer />
 
