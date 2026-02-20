@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Users, Crown, DollarSign, FileSearch, Map, Mail, Filter } from "lucide-react";
+import { Loader2, Users, Crown, DollarSign, FileSearch, Map, Mail, Filter, Eye, EyeOff } from "lucide-react";
 import { trackEvent } from "@/lib/trackingService";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -34,6 +34,7 @@ interface PartnerOption { id: string; team_name: string; }
 interface Assignment { partner_id: string; user_id: string; }
 
 export const AdminUsersTab = () => {
+  const [showEmails, setShowEmails] = useState(false);
   const [users, setUsers] = useState<UserSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingReviews, setPendingReviews] = useState(0);
@@ -324,7 +325,14 @@ export const AdminUsersTab = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead>
+                  <div className="flex items-center gap-1.5">
+                    Email
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setShowEmails(!showEmails)}>
+                      {showEmails ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                </TableHead>
                 <TableHead>País</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Ruta</TableHead>
@@ -341,7 +349,13 @@ export const AdminUsersTab = () => {
                   <TableCell className="font-medium">
                     {user.full_name || "—"}
                   </TableCell>
-                  <TableCell className="text-sm">{user.email || "—"}</TableCell>
+                  <TableCell className="text-sm">
+                    {user.email
+                      ? showEmails
+                        ? user.email
+                        : `${user.email.split("@")[0].slice(0, 3)}***@${user.email.split("@")[1]}`
+                      : "—"}
+                  </TableCell>
                   <TableCell>{user.nationality || "—"}</TableCell>
                   <TableCell>
                     {user.subscription_status === "premium" ? (
