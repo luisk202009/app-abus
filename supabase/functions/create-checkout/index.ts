@@ -21,27 +21,44 @@ serve(async (req) => {
       apiVersion: "2023-10-16",
     });
 
-    // Get user from auth header
+    // Validate auth header
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      throw new Error("No authorization header");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
+    // Use getClaims() for local JWT validation (faster, no network call)
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
     );
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    if (authError || !user) {
-      throw new Error("User not authenticated");
+    const userId = claimsData.claims.sub;
+    const userEmail = claimsData.claims.email;
+
+    if (!userId || !userEmail) {
+      return new Response(JSON.stringify({ error: "Unauthorized: missing user claims" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Check for existing Stripe customer
     const customers = await stripe.customers.list({
-      email: user.email,
+      email: userEmail,
       limit: 1,
     });
 
@@ -52,9 +69,9 @@ serve(async (req) => {
     } else {
       // Create new customer
       const customer = await stripe.customers.create({
-        email: user.email,
+        email: userEmail,
         metadata: {
-          supabase_user_id: user.id,
+          supabase_user_id: userId,
         },
       });
       customerId = customer.id;
@@ -80,7 +97,7 @@ serve(async (req) => {
         .eq("code", referralCode)
         .single();
 
-      if (refCode && refCode.user_id !== user.id) {
+      if (refCode && refCode.user_id !== userId) {
         referralCodeId = refCode.id;
 
         // Find or create the referral coupon
@@ -112,7 +129,7 @@ serve(async (req) => {
       success_url: `${returnUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${returnUrl}/dashboard`,
       metadata: {
-        supabase_user_id: user.id,
+        supabase_user_id: userId,
         referral_code_id: referralCodeId || "",
       },
     });
@@ -125,8 +142,8 @@ serve(async (req) => {
       );
       await serviceClient.from("referrals").insert({
         referrer_id: referralCodeId,
-        referred_user_id: user.id,
-        referred_name: user.email?.split("@")[0] || null,
+        referred_user_id: userId,
+        referred_name: userEmail?.split("@")[0] || null,
         status: "pendiente",
       });
     }

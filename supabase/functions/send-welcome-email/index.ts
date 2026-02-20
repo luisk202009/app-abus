@@ -57,6 +57,28 @@ const handler = async (req: Request): Promise<Response> => {
 
     const { name, email, visaType }: WelcomeEmailRequest = await req.json();
 
+    // Input validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return new Response(JSON.stringify({ error: "Invalid email" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    if (!name || name.trim().length === 0 || name.length > 200) {
+      return new Response(JSON.stringify({ error: "Invalid name" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    const validVisaTypes = ["remote_worker", "student", "entrepreneur", "non_lucrative"];
+    if (visaType && !validVisaTypes.includes(visaType)) {
+      return new Response(JSON.stringify({ error: "Invalid visa type" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     const visaDisplayName = getVisaDisplayName(visaType);
     const firstName = name?.split(" ")[0] || "Usuario";
 
