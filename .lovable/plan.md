@@ -1,102 +1,126 @@
 
-
-# Plan: E02 - Lead Magnet: Generador de Checklist Personalizado
+# Plan: E03 - Trust Architecture, Social Proof y Red de Expertos
 
 ## Resumen
 
-Transformar el resultado "Eligible" de la Calculadora de Elegibilidad en un formulario de captura de leads que genera un checklist personalizado por pais, con opcion de descarga PDF y CTA hacia Plan Pro.
+Crear componentes de confianza y prueba social para aumentar la conversion: seccion de expertos legales, carrusel de testimonios, barra de confianza contextual y roadmap visual de 4 pasos. Todo en estetica Albus B&W.
 
 ---
 
-## 1. Modificar EligibilityCalculator - Captura de Leads
+## 1. Expert Network Preview
 
-### Archivo: `src/components/eligibility/EligibilityCalculator.tsx`
+### Nuevo archivo: `src/components/ExpertNetworkPreview.tsx`
 
-Reemplazar el resultado estatico verde por un formulario de conversion:
+Grid de 3 tarjetas de abogados placeholder con foto, nombre y especializacion.
 
-- Cuando resultado = "eligible", mostrar:
-  - Texto: "Eres apto! Para no cometer errores, descarga tu Hoja de Ruta Personalizada para la Regularizacion 2026."
-  - Campos: Nombre y Email
-  - Boton: "Obtener mi Guia Gratuita"
-- Añadir prop opcional `country` para recibir el pais desde las landings de nacionalidad
-- Al enviar el formulario:
-  1. Guardar lead en `onboarding_submissions` con `crm_tag = lead_checklist_[pais]`
-  2. Abrir modal del checklist personalizado
+**Datos:**
 
----
+| Nombre | Especializacion |
+|--------|----------------|
+| Dra. Laura Martinez | Experta en Regularizacion 2026 |
+| Dr. Carlos Fernandez | Experto en Arraigo Social y Laboral |
+| Dra. Sofia Navarro | Experta en Derecho Migratorio |
 
-## 2. Componente ChecklistModal
+**Estructura de cada tarjeta:**
+- Avatar circular con iniciales (usando componente Avatar existente)
+- Nombre en negrita
+- Especializacion en texto muted
+- Badge "Verificado por Albus" con icono ShieldCheck
 
-### Nuevo archivo: `src/components/eligibility/ChecklistModal.tsx`
-
-Modal que genera un checklist dinamico basado en el pais del usuario.
-
-**Logica de generacion:**
-
-| Pais | Items adicionales |
-|------|-------------------|
-| Venezuela | "Legalizacion SAREN de documentos civiles", "Apostilla via MPPRE" |
-| Colombia | "Apostilla digital via cancilleria.gov.co" |
-| Honduras | "Apostilla presencial en Corte Suprema o consulado" |
-| Peru | "Legalizacion via RREE", "Apostilla en cancilleria peruana" |
-| Marruecos | "Traduccion jurada de documentos en arabe/frances" |
-| General (todos) | "Padron Historico (entrada antes 31/12/2025)", "Antecedentes Penales apostillados", "Pasaporte vigente", "Certificado medico", "Tasa 790-052", "Foto carnet" |
-
-**Estructura del modal:**
-- Header con nombre del usuario y pais
-- Lista de items con checkboxes interactivos (como DocumentChecklist existente)
-- Barra de progreso
-- Boton "Descargar en PDF"
-- CTA al final: "Te abruma tanto papeleo? Por solo 9.99 euros, el Plan Pro organiza estos documentos en tu Boveda Segura y valida tus fechas automaticamente." + Boton "Activar Plan Pro ahora"
+**Diseno:** Fondo `bg-secondary/30`, tarjetas con borde `border-border`, badge en negro con texto blanco.
 
 ---
 
-## 3. Generador PDF del Checklist
+## 2. Testimonials Carousel
 
-### Nuevo archivo: `src/lib/generateChecklistPDF.ts`
+### Nuevo archivo: `src/components/TestimonialsCarousel.tsx`
 
-Funcion que usa `jsPDF` (ya instalado) para generar un PDF con branding Albus B&W.
+Carrusel horizontal usando Embla Carousel (ya instalado) con 3 testimonios.
 
-**Contenido del PDF:**
-- Header negro con logo Albus
-- Titulo: "Tu Hoja de Ruta - Regularizacion 2026"
-- Subtitulo con nombre y pais del usuario
-- Lista de documentos con checkboxes vacios
-- Seccion de requisitos especificos del pais
-- Footer con CTA a albus y fecha de generacion
+**Testimonios:**
 
-El estilo seguira el patron de `generateTasa790.ts` existente.
+| Autor | Cita |
+|-------|------|
+| Carlos M. | "La calculadora de plazos me dio la tranquilidad que necesitaba. Ya tengo mis penales listos." |
+| Elena R. | "El plan Pro de 9.99 euros es la mejor inversion. La boveda organiza todo por ti." |
+| Miguel A. | "Saber que un abogado revisa mis documentos antes de enviarlos me quita un peso de encima." |
+
+**Estructura:** Card con comillas decorativas, texto de la cita, nombre del autor, y estrellas (5/5). Navegacion con puntos indicadores.
 
 ---
 
-## 4. Integracion con Landings de Nacionalidad
+## 3. Trust Bar Contextual
 
-### Archivo: `src/pages/espana/RegularizacionPais.tsx`
+### Nuevo archivo: `src/components/TrustBadgesBar.tsx`
 
-Pasar el `paisId` como prop `country` al `EligibilityCalculator`:
+Barra de confianza con 3 badges para paginas de regularizacion y arraigos.
 
+**Badges:**
+
+| Icono | Texto |
+|-------|-------|
+| Shield | Proteccion de Datos Nivel Bancario |
+| RefreshCw | Contenido Actualizado Enero 2026 |
+| Clock | Respuesta en menos de 24h |
+
+**Diseno:** Similar al TrustBar existente - fondo `bg-secondary`, items con icono + texto en cards con borde sutil.
+
+---
+
+## 4. Visual Process Roadmap
+
+### Nuevo archivo: `src/components/ProcessRoadmap.tsx`
+
+Infografia de 4 pasos con conexiones visuales y tags de plan.
+
+**Pasos:**
+
+| Paso | Titulo | Plan | Descripcion |
+|------|--------|------|-------------|
+| 1 | Valida tu perfil | Gratis | Analiza tu elegibilidad en minutos |
+| 2 | Organiza tus documentos | Pro | Boveda segura con validacion automatica |
+| 3 | Revision por experto | Premium | Un abogado revisa todo antes de enviar |
+| 4 | Presentacion oficial | Abril 2026 | Envia tu solicitud con confianza |
+
+**Diseno:** Timeline vertical en mobile, horizontal en desktop. Cada paso con numero, icono, titulo, badge de plan (outline para Gratis, filled para Pro/Premium), y linea conectora.
+
+---
+
+## 5. Integracion en Paginas
+
+### `src/pages/Index.tsx`
+
+Insertar en este orden:
+1. HeroSection
+2. TrustBar (existente)
+3. HowItWorksSection
+4. EligibilityCalculator
+5. **ProcessRoadmap** (nuevo)
+6. **ExpertNetworkPreview** (nuevo)
+7. **TestimonialsCarousel** (nuevo)
+8. FeaturesSection
+9. ResourcesSection
+10. PricingSection
+
+### `src/pages/espana/Regularizacion2026.tsx`
+
+Insertar `TrustBadgesBar` despues del hero (antes de Requirements):
 ```
-<EligibilityCalculator 
-  onStartProcess={() => setIsModalOpen(true)} 
-  country={paisId}
-/>
+<HeroReg2026 />
+<TrustBadgesBar />
+<section>Requirements...</section>
 ```
 
-### Archivo: `src/pages/Index.tsx`
+Insertar `TestimonialsCarousel` antes del footer.
 
-Sin cambios - la calculadora en la homepage no tendra pais preseleccionado; el checklist mostrara la version "General".
+### `src/pages/espana/Arraigos.tsx`
 
-### Archivo: `src/pages/espana/Regularizacion2026.tsx`
-
-Sin prop country - usara version general.
-
----
-
-## 5. CRM Sync - Base de Datos
-
-No se necesitan migraciones. Se reutiliza la tabla `onboarding_submissions` existente:
-- Se inserta un registro con `crm_tag = 'lead_checklist_[pais]'` (ej: `lead_checklist_venezuela`)
-- Se guardan `full_name`, `email`, y `nationality`
+Insertar `TrustBadgesBar` despues del hero (antes de Pillars):
+```
+<HeroArraigos />
+<TrustBadgesBar />
+<section>Pillars...</section>
+```
 
 ---
 
@@ -104,59 +128,46 @@ No se necesitan migraciones. Se reutiliza la tabla `onboarding_submissions` exis
 
 | Archivo | Proposito |
 |---------|-----------|
-| `src/components/eligibility/ChecklistModal.tsx` | Modal con checklist personalizado |
-| `src/lib/generateChecklistPDF.ts` | Generador PDF del checklist |
+| `src/components/ExpertNetworkPreview.tsx` | Grid de expertos legales |
+| `src/components/TestimonialsCarousel.tsx` | Carrusel de testimonios |
+| `src/components/TrustBadgesBar.tsx` | Barra de badges de confianza |
+| `src/components/ProcessRoadmap.tsx` | Roadmap visual de 4 pasos |
 
 ## Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/components/eligibility/EligibilityCalculator.tsx` | Formulario de captura post-eligibilidad + prop country |
-| `src/pages/espana/RegularizacionPais.tsx` | Pasar country al calculator |
+| `src/pages/Index.tsx` | Agregar ProcessRoadmap, ExpertNetworkPreview, TestimonialsCarousel |
+| `src/pages/espana/Regularizacion2026.tsx` | Agregar TrustBadgesBar y TestimonialsCarousel |
+| `src/pages/espana/Arraigos.tsx` | Agregar TrustBadgesBar |
 
 ---
 
 ## Detalles Tecnicos
 
-### EligibilityCalculator - Nuevo estado
+### ExpertNetworkPreview
 
-```typescript
-interface EligibilityCalculatorProps {
-  onStartProcess?: () => void;
-  country?: string; // paisId from nationality landing
-}
+Usa componentes `Avatar` y `Badge` existentes de Shadcn. Las fotos son placeholders con iniciales (AvatarFallback). El badge "Verificado por Albus" usa `ShieldCheck` de Lucide.
 
-// New states
-const [showLeadForm, setShowLeadForm] = useState(false);
-const [leadName, setLeadName] = useState("");
-const [leadEmail, setLeadEmail] = useState("");
-const [showChecklist, setShowChecklist] = useState(false);
-```
+### TestimonialsCarousel
 
-Cuando `result === "eligible"`, en lugar de mostrar el resultado estatico, se muestra el formulario de captura. Al enviar, se guarda el lead y se abre `ChecklistModal`.
+Usa `embla-carousel-react` (ya instalado). Autoplay con intervalo de 5 segundos. Navegacion con dots indicators. Cada slide es un Card con Quote icon decorativo.
 
-### ChecklistModal - Props
+### ProcessRoadmap
 
-```typescript
-interface ChecklistModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  userName: string;
-  userEmail: string;
-  country?: string;
-}
-```
+Grid responsive: `grid-cols-1 md:grid-cols-4`. Lineas conectoras con pseudo-elementos CSS o divs con bordes. Badges de plan usan el componente Badge existente con variantes `outline` y `default`.
 
-### CTA Plan Pro
+### TrustBadgesBar
 
-Al hacer clic en "Activar Plan Pro ahora", se redirige al flujo de onboarding/checkout existente (`AnalysisModal` o directamente a Stripe).
+Componente simple con flex wrap, similar al patron del TrustBar existente pero con contenido de confianza/compliance.
 
 ---
 
 ## Orden de Implementacion
 
-1. `generateChecklistPDF.ts` - Generador PDF
-2. `ChecklistModal.tsx` - Modal del checklist
-3. `EligibilityCalculator.tsx` - Formulario de captura
-4. `RegularizacionPais.tsx` - Pasar prop country
-
+1. TrustBadgesBar (componente mas simple)
+2. ExpertNetworkPreview (grid de expertos)
+3. TestimonialsCarousel (carrusel con Embla)
+4. ProcessRoadmap (infografia de 4 pasos)
+5. Integrar en Index.tsx
+6. Integrar en Regularizacion2026.tsx y Arraigos.tsx
