@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { trackEvent } from "@/lib/trackingService";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarIcon, CheckCircle2, AlertTriangle, ArrowRight, Loader2 } from "lucide-react";
@@ -36,7 +37,9 @@ export const EligibilityCalculator = ({ onStartProcess, country }: EligibilityCa
 
   const handleCheck = () => {
     if (!date) return;
-    setResult(date <= cutoffDate ? "eligible" : "not-eligible");
+    const isEligible = date <= cutoffDate;
+    setResult(isEligible ? "eligible" : "not-eligible");
+    trackEvent("track_eligibility_check", { eligible: isEligible, country: country || "general" });
   };
 
   const handleReset = () => {
@@ -70,6 +73,7 @@ export const EligibilityCalculator = ({ onStartProcess, country }: EligibilityCa
 
       setShowChecklist(true);
       toast.success("¡Tu hoja de ruta está lista!");
+      trackEvent("lead_captured", { source: "eligibility_calculator", country: country || "general" });
     } catch {
       toast.error("Hubo un error. Inténtalo de nuevo.");
     } finally {
@@ -79,7 +83,7 @@ export const EligibilityCalculator = ({ onStartProcess, country }: EligibilityCa
 
   return (
     <>
-      <section className="py-16 md:py-24 bg-muted/30">
+      <section className="py-16 md:py-24 bg-muted/30" data-section="eligibility">
         <div className="container px-4 md:px-6">
           <div className="max-w-xl mx-auto text-center space-y-8">
             <div>

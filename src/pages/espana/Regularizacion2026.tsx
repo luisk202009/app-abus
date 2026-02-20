@@ -12,6 +12,7 @@ import { AnalysisModal } from "@/components/AnalysisModal";
 import { Button } from "@/components/ui/button";
 import { TrustBadgesBar } from "@/components/TrustBadgesBar";
 import { TestimonialsCarousel } from "@/components/TestimonialsCarousel";
+import { ExitIntentModal } from "@/components/ExitIntentModal";
 
 const requirements = [
   {
@@ -130,6 +131,7 @@ const Regularizacion2026 = () => {
         onClose={() => setIsOnboardingModalOpen(false)}
         source="reg2026"
       />
+      <ExitIntentModal />
     </div>
   );
 };

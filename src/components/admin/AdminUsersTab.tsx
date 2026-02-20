@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, Users, Crown, DollarSign, FileSearch, Map } from "lucide-react";
+import { Loader2, Users, Crown, DollarSign, FileSearch, Map, Mail, Filter } from "lucide-react";
+import { trackEvent } from "@/lib/trackingService";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -24,11 +27,14 @@ interface UserSubmission {
   routeName?: string;
 }
 
+type FilterType = "todos" | "pagos_pendientes" | "leads_sin_registro";
+
 export const AdminUsersTab = () => {
   const [users, setUsers] = useState<UserSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingReviews, setPendingReviews] = useState(0);
   const [routeCounts, setRouteCounts] = useState({ regularizacion: 0, arraigos: 0 });
+  const [activeFilter, setActiveFilter] = useState<FilterType>("todos");
 
   useEffect(() => {
     fetchData();
@@ -161,6 +167,26 @@ export const AdminUsersTab = () => {
   const paidUsers = proUsers + premiumUsers;
   const estimatedRevenue = proUsers * 9.99 + premiumUsers * 19.99;
 
+  const filteredUsers = users.filter((u) => {
+    if (activeFilter === "pagos_pendientes") {
+      return (
+        u.user_id &&
+        u.crm_tag &&
+        (u.crm_tag.includes("regularizacion") || u.crm_tag.includes("arraigo") || u.crm_tag.includes("lead_checklist")) &&
+        (!u.subscription_status || u.subscription_status === "free")
+      );
+    }
+    if (activeFilter === "leads_sin_registro") {
+      return !u.user_id;
+    }
+    return true;
+  });
+
+  const handleSendReminder = (email: string) => {
+    trackEvent("reminder_sent", { email });
+    toast.success(`Recordatorio enviado a ${email}`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -225,10 +251,30 @@ export const AdminUsersTab = () => {
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de usuarios</CardTitle>
-          <CardDescription>
-            Todos los leads y usuarios registrados en la plataforma
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle>Lista de usuarios</CardTitle>
+              <CardDescription>
+                {activeFilter === "todos" && "Todos los leads y usuarios registrados en la plataforma"}
+                {activeFilter === "pagos_pendientes" && "Usuarios con ruta activa pero sin pago completado"}
+                {activeFilter === "leads_sin_registro" && "Leads que aún no se han registrado"}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              {(["todos", "pagos_pendientes", "leads_sin_registro"] as FilterType[]).map((filter) => (
+                <Button
+                  key={filter}
+                  variant={activeFilter === filter ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setActiveFilter(filter)}
+                  className="text-xs"
+                >
+                  {filter === "todos" ? "Todos" : filter === "pagos_pendientes" ? "Pagos Pendientes" : "Leads sin registro"}
+                </Button>
+              ))}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -242,10 +288,11 @@ export const AdminUsersTab = () => {
                 <TableHead>Documentos</TableHead>
                 <TableHead>CRM Tag</TableHead>
                 <TableHead>Fecha</TableHead>
+                {activeFilter === "pagos_pendientes" && <TableHead>Acción</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => (
+              {filteredUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">
                     {user.full_name || "—"}
@@ -279,6 +326,20 @@ export const AdminUsersTab = () => {
                   <TableCell className="text-muted-foreground text-sm">
                     {format(new Date(user.created_at), "d MMM yyyy", { locale: es })}
                   </TableCell>
+                  {activeFilter === "pagos_pendientes" && (
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-xs"
+                        onClick={() => user.email && handleSendReminder(user.email)}
+                        disabled={!user.email}
+                      >
+                        <Mail className="w-3 h-3" />
+                        Recordatorio
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

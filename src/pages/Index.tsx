@@ -12,6 +12,7 @@ import { ResourcesSection } from "@/components/ResourcesSection";
 import { PricingSection } from "@/components/PricingSection";
 import { Footer } from "@/components/Footer";
 import { AnalysisModal } from "@/components/AnalysisModal";
+import { ExitIntentModal } from "@/components/ExitIntentModal";
 
 const Index = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,6 +34,7 @@ const Index = () => {
       </main>
       <Footer onOpenModal={() => setIsModalOpen(true)} />
       <AnalysisModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <ExitIntentModal />
     </div>
   );
 };
