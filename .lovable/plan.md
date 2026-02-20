@@ -1,97 +1,102 @@
 
-# Plan: E01 - SEO Landings por Nacionalidad, Calculadora de Elegibilidad y Centro de Recursos
+
+# Plan: E02 - Lead Magnet: Generador de Checklist Personalizado
 
 ## Resumen
 
-Crear paginas de aterrizaje por nacionalidad para SEO, un widget interactivo de calculadora de elegibilidad con DatePicker, un centro de recursos en `/recursos`, y metadata dinamica con banner countdown sticky.
+Transformar el resultado "Eligible" de la Calculadora de Elegibilidad en un formulario de captura de leads que genera un checklist personalizado por pais, con opcion de descarga PDF y CTA hacia Plan Pro.
 
 ---
 
-## 1. Paginas por Nacionalidad
+## 1. Modificar EligibilityCalculator - Captura de Leads
 
-### Nuevo archivo: `src/pages/espana/RegularizacionPais.tsx`
+### Archivo: `src/components/eligibility/EligibilityCalculator.tsx`
 
-Pagina template dinamica que recibe el pais desde la URL `/españa/regularizacion/:paisId`.
+Reemplazar el resultado estatico verde por un formulario de conversion:
 
-**Datos por pais** (constante en el mismo archivo):
+- Cuando resultado = "eligible", mostrar:
+  - Texto: "Eres apto! Para no cometer errores, descarga tu Hoja de Ruta Personalizada para la Regularizacion 2026."
+  - Campos: Nombre y Email
+  - Boton: "Obtener mi Guia Gratuita"
+- Añadir prop opcional `country` para recibir el pais desde las landings de nacionalidad
+- Al enviar el formulario:
+  1. Guardar lead en `onboarding_submissions` con `crm_tag = lead_checklist_[pais]`
+  2. Abrir modal del checklist personalizado
 
-| Pais | Codigo | Requisito Especifico |
-|------|--------|---------------------|
-| Venezuela | ve | Legalizacion via SAREN para documentos civiles |
-| Colombia | co | Apostilla digital disponible via cancilleria.gov.co |
-| Honduras | hn | Apostilla presencial en Tegucigalpa o consulado |
-| Peru | pe | Legalizacion via RREE y apostilla en cancilleria |
-| Marruecos | ma | Traduccion jurada obligatoria de documentos en arabe |
+---
 
-**Estructura de cada pagina:**
-- Navbar + sticky countdown banner
-- Hero con titulo SEO: "Regularizacion 2026 para [Gentilicio]s en Espana: Guia Paso a Paso"
+## 2. Componente ChecklistModal
+
+### Nuevo archivo: `src/components/eligibility/ChecklistModal.tsx`
+
+Modal que genera un checklist dinamico basado en el pais del usuario.
+
+**Logica de generacion:**
+
+| Pais | Items adicionales |
+|------|-------------------|
+| Venezuela | "Legalizacion SAREN de documentos civiles", "Apostilla via MPPRE" |
+| Colombia | "Apostilla digital via cancilleria.gov.co" |
+| Honduras | "Apostilla presencial en Corte Suprema o consulado" |
+| Peru | "Legalizacion via RREE", "Apostilla en cancilleria peruana" |
+| Marruecos | "Traduccion jurada de documentos en arabe/frances" |
+| General (todos) | "Padron Historico (entrada antes 31/12/2025)", "Antecedentes Penales apostillados", "Pasaporte vigente", "Certificado medico", "Tasa 790-052", "Foto carnet" |
+
+**Estructura del modal:**
+- Header con nombre del usuario y pais
+- Lista de items con checkboxes interactivos (como DocumentChecklist existente)
+- Barra de progreso
+- Boton "Descargar en PDF"
+- CTA al final: "Te abruma tanto papeleo? Por solo 9.99 euros, el Plan Pro organiza estos documentos en tu Boveda Segura y valida tus fechas automaticamente." + Boton "Activar Plan Pro ahora"
+
+---
+
+## 3. Generador PDF del Checklist
+
+### Nuevo archivo: `src/lib/generateChecklistPDF.ts`
+
+Funcion que usa `jsPDF` (ya instalado) para generar un PDF con branding Albus B&W.
+
+**Contenido del PDF:**
+- Header negro con logo Albus
+- Titulo: "Tu Hoja de Ruta - Regularizacion 2026"
+- Subtitulo con nombre y pais del usuario
+- Lista de documentos con checkboxes vacios
 - Seccion de requisitos especificos del pais
-- Widget de Calculadora de Elegibilidad (componente compartido)
-- CTA hacia onboarding Pro/Premium
-- Footer
+- Footer con CTA a albus y fecha de generacion
 
-### Metadata SEO dinamica
-
-Usar `document.title` y meta tags via `useEffect` en cada pagina de pais:
-- Title: "Regularizacion 2026 para [Gentilicio]s en Espana | Albus"
-- Description: "Guia completa para [gentilicio]s que quieren regularizarse en Espana en 2026. Requisitos, documentos y plazos."
+El estilo seguira el patron de `generateTasa790.ts` existente.
 
 ---
 
-## 2. Calculadora de Elegibilidad 2026
+## 4. Integracion con Landings de Nacionalidad
 
-### Nuevo archivo: `src/components/eligibility/EligibilityCalculator.tsx`
+### Archivo: `src/pages/espana/RegularizacionPais.tsx`
 
-Widget independiente con DatePicker de Shadcn.
+Pasar el `paisId` como prop `country` al `EligibilityCalculator`:
 
-**Interfaz:**
-- Titulo: "Calculadora de Elegibilidad 2026"
-- Input: Popover con Calendar para seleccionar fecha de entrada a Espana
-- Boton "Verificar"
+```
+<EligibilityCalculator 
+  onStartProcess={() => setIsModalOpen(true)} 
+  country={paisId}
+/>
+```
 
-**Logica:**
-- Si fecha <= 31/12/2025: Resultado verde "Eres elegible! Tienes hasta el 30 de junio para aplicar." + CTA a onboarding
-- Si fecha > 31/12/2025: Resultado amarillo "No aplicas para la Regularizacion 2026, pero te ayudamos con el proceso de Arraigo Social." + link a `/españa/arraigos`
+### Archivo: `src/pages/Index.tsx`
 
-**Ubicacion:**
-- Homepage (Index.tsx): entre HowItWorksSection y FeaturesSection
-- Todas las landings de regularizacion por pais
-- Pagina principal de Regularizacion2026.tsx
+Sin cambios - la calculadora en la homepage no tendra pais preseleccionado; el checklist mostrara la version "General".
 
----
+### Archivo: `src/pages/espana/Regularizacion2026.tsx`
 
-## 3. Centro de Recursos (`/recursos`)
-
-### Nuevo archivo: `src/pages/Recursos.tsx`
-
-Grid de tarjetas de articulos SEO (placeholders por ahora).
-
-**3 tarjetas iniciales:**
-
-| Titulo | Descripcion | Tag |
-|--------|-------------|-----|
-| Padron Historico: Como solicitarlo para la Regularizacion | Guia paso a paso para obtener tu certificado de empadronamiento historico | Documentacion |
-| Antecedentes Penales: Que vigencia deben tener en 2026? | Todo sobre la validez y apostilla de tus antecedentes penales | Legal |
-| Hijos menores: El permiso de 5 anos explicado | Como incluir a tus hijos menores en el proceso de regularizacion | Familia |
-
-**Diseno:** Grid responsive (1-2-3 columnas), tarjetas con icono, titulo, descripcion, tag de categoria, y un label "Proximamente" ya que son placeholders.
-
-### Ruta en App.tsx
-
-Agregar `<Route path="/recursos" element={<Recursos />} />`
+Sin prop country - usara version general.
 
 ---
 
-## 4. Countdown Banner Sticky
+## 5. CRM Sync - Base de Datos
 
-### Nuevo archivo: `src/components/CountdownBanner.tsx`
-
-Banner sticky debajo del navbar (top fijo) que muestra los dias restantes.
-
-- Texto: "Faltan [X] dias para el cierre del proceso (30 de Junio)"
-- Estilo: fondo `bg-primary text-primary-foreground`, sticky debajo del nav
-- Se muestra en: paginas de regularizacion por pais y Regularizacion2026
+No se necesitan migraciones. Se reutiliza la tabla `onboarding_submissions` existente:
+- Se inserta un registro con `crm_tag = 'lead_checklist_[pais]'` (ej: `lead_checklist_venezuela`)
+- Se guardan `full_name`, `email`, y `nationality`
 
 ---
 
@@ -99,80 +104,59 @@ Banner sticky debajo del navbar (top fijo) que muestra los dias restantes.
 
 | Archivo | Proposito |
 |---------|-----------|
-| `src/pages/espana/RegularizacionPais.tsx` | Template dinamico por nacionalidad |
-| `src/components/eligibility/EligibilityCalculator.tsx` | Widget calculadora con DatePicker |
-| `src/pages/Recursos.tsx` | Centro de recursos / blog |
-| `src/components/CountdownBanner.tsx` | Banner sticky con countdown |
+| `src/components/eligibility/ChecklistModal.tsx` | Modal con checklist personalizado |
+| `src/lib/generateChecklistPDF.ts` | Generador PDF del checklist |
 
 ## Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/App.tsx` | Agregar rutas `/españa/regularizacion/:paisId` y `/recursos` |
-| `src/pages/Index.tsx` | Insertar EligibilityCalculator entre secciones |
-| `src/pages/espana/Regularizacion2026.tsx` | Agregar EligibilityCalculator y CountdownBanner |
-| `src/components/Navbar.tsx` | Agregar link "Recursos" apuntando a `/recursos` |
+| `src/components/eligibility/EligibilityCalculator.tsx` | Formulario de captura post-eligibilidad + prop country |
+| `src/pages/espana/RegularizacionPais.tsx` | Pasar country al calculator |
 
 ---
 
 ## Detalles Tecnicos
 
-### Routing
+### EligibilityCalculator - Nuevo estado
 
 ```typescript
-// App.tsx - nuevas rutas
-<Route path="/españa/regularizacion/:paisId" element={<RegularizacionPais />} />
-<Route path="/recursos" element={<Recursos />} />
+interface EligibilityCalculatorProps {
+  onStartProcess?: () => void;
+  country?: string; // paisId from nationality landing
+}
+
+// New states
+const [showLeadForm, setShowLeadForm] = useState(false);
+const [leadName, setLeadName] = useState("");
+const [leadEmail, setLeadEmail] = useState("");
+const [showChecklist, setShowChecklist] = useState(false);
 ```
 
-### EligibilityCalculator - Logica principal
+Cuando `result === "eligible"`, en lugar de mostrar el resultado estatico, se muestra el formulario de captura. Al enviar, se guarda el lead y se abre `ChecklistModal`.
+
+### ChecklistModal - Props
 
 ```typescript
-const cutoffDate = new Date("2025-12-31");
-
-const handleCheck = () => {
-  if (!selectedDate) return;
-  if (selectedDate <= cutoffDate) {
-    setResult("eligible");
-  } else {
-    setResult("not-eligible");
-  }
-};
+interface ChecklistModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  userName: string;
+  userEmail: string;
+  country?: string;
+}
 ```
 
-Usa el componente Calendar de Shadcn dentro de un Popover con `pointer-events-auto` como indica la documentacion.
+### CTA Plan Pro
 
-### SEO Metadata
-
-Cada pagina de pais usara un `useEffect` para establecer:
-- `document.title`
-- `meta[name="description"]` via `document.querySelector`
-
-### Datos de Paises
-
-```typescript
-const paisesData = {
-  venezuela: {
-    name: "Venezuela", gentilicio: "Venezolano",
-    code: "ve",
-    requisito: "Legalizacion via SAREN para documentos civiles",
-    detalle: "Los documentos venezolanos deben ser legalizados...",
-  },
-  colombia: { ... },
-  honduras: { ... },
-  peru: { ... },
-  marruecos: { ... },
-};
-```
+Al hacer clic en "Activar Plan Pro ahora", se redirige al flujo de onboarding/checkout existente (`AnalysisModal` o directamente a Stripe).
 
 ---
 
 ## Orden de Implementacion
 
-1. CountdownBanner (componente reutilizable)
-2. EligibilityCalculator (widget con DatePicker)
-3. RegularizacionPais (template + datos de 5 paises)
-4. Recursos (pagina grid)
-5. Actualizar App.tsx con rutas
-6. Integrar calculadora en Index.tsx y Regularizacion2026.tsx
-7. Actualizar Navbar con link a Recursos
+1. `generateChecklistPDF.ts` - Generador PDF
+2. `ChecklistModal.tsx` - Modal del checklist
+3. `EligibilityCalculator.tsx` - Formulario de captura
+4. `RegularizacionPais.tsx` - Pasar prop country
+
