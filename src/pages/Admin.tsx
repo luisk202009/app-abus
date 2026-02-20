@@ -5,12 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Users, Package, FileText, Map, Loader2, FolderOpen } from "lucide-react";
+import { ArrowLeft, Users, Package, FileText, Map, Loader2, FolderOpen, BarChart3 } from "lucide-react";
 import { AdminUsersTab } from "@/components/admin/AdminUsersTab";
 import { AdminPlansTab } from "@/components/admin/AdminPlansTab";
 import { AdminResourcesTab } from "@/components/admin/AdminResourcesTab";
 import { AdminRoutesTab } from "@/components/admin/AdminRoutesTab";
 import { AdminDocumentsTab } from "@/components/admin/AdminDocumentsTab";
+import { AdminAnalyticsTab } from "@/components/admin/AdminAnalyticsTab";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 
 const ADMIN_EMAIL = "l@albus.com.co";
@@ -85,8 +86,12 @@ const Admin = () => {
 
       {/* Main Content */}
       <main className="container mx-auto py-8">
-        <Tabs defaultValue="users" className="space-y-6">
+        <Tabs defaultValue="analytics" className="space-y-6">
           <TabsList className="bg-background border border-border">
+            <TabsTrigger value="analytics" className="gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Analytics
+            </TabsTrigger>
             <TabsTrigger value="users" className="gap-2">
               <Users className="w-4 h-4" />
               Usuarios
@@ -108,6 +113,10 @@ const Admin = () => {
               Documentos
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="analytics">
+            <AdminAnalyticsTab />
+          </TabsContent>
 
           <TabsContent value="users">
             <AdminUsersTab />
