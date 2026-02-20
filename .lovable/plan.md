@@ -1,118 +1,155 @@
 
 
-# Plan: G03 - Progressive Web App (PWA) with Push Notifications
+# Plan: G04 - Refer-a-Friend Viral System
 
 ## Summary
 
-Transform Albus into an installable PWA using `vite-plugin-pwa`, add mobile-optimized features (camera-first uploads, pull-to-refresh, offline vault access), implement a push notification engine, and polish responsive tables for small screens.
+Build a referral system with a new `referral_codes` table, a referral dashboard in the sidebar, social sharing (WhatsApp/Telegram/Facebook), Stripe coupon integration for 5 EUR discount, and a "Refer and Win" banner on the main dashboard.
 
 ---
 
-## 1. Install `vite-plugin-pwa`
+## 1. Database Migration: `referral_codes` table
 
-Add `vite-plugin-pwa` as a dev dependency. This handles service worker generation, manifest injection, and offline caching automatically.
+Create a new table to store referral codes and track referrals:
 
----
+```sql
+CREATE TABLE public.referral_codes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  code text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-## 2. Configure PWA in `vite.config.ts`
+CREATE TABLE public.referrals (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id uuid NOT NULL REFERENCES public.referral_codes(id) ON DELETE CASCADE,
+  referred_user_id uuid,
+  referred_name text,
+  status text NOT NULL DEFAULT 'pendiente',
+  reward_amount numeric NOT NULL DEFAULT 5,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-- Add `VitePWA()` plugin with:
-  - `registerType: 'autoUpdate'`
-  - `manifest` object with Albus branding (name, short_name, theme_color: `#000000`, background_color: `#ffffff`)
-  - Icons: reference existing `/isotipo-albus.png` + generate 192x192 and 512x512 variants in `public/`
-  - `workbox.runtimeCaching` rules to cache `/dashboard` and `/dashboard/documentos` routes (NetworkFirst strategy)
-  - `workbox.navigateFallbackDenylist: [/^\/~oauth/]` to protect OAuth flow
-  - Cache Supabase storage URLs (CacheFirst) for offline vault access
+ALTER TABLE public.referral_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
 
----
+-- RLS for referral_codes
+CREATE POLICY "Users can view their own code" ON public.referral_codes
+  FOR SELECT TO authenticated USING (user_id = auth.uid());
 
-## 3. Add PWA meta tags to `index.html`
+CREATE POLICY "Users can insert their own code" ON public.referral_codes
+  FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
 
-- `<meta name="theme-color" content="#000000">`
-- `<meta name="apple-mobile-web-app-capable" content="yes">`
-- `<meta name="apple-mobile-web-app-status-bar-style" content="black">`
-- `<link rel="apple-touch-icon" href="/isotipo-albus.png">`
+CREATE POLICY "Admin can manage all codes" ON public.referral_codes
+  FOR ALL TO authenticated USING (is_admin()) WITH CHECK (is_admin());
 
----
+-- RLS for referrals
+CREATE POLICY "Users can view their referrals" ON public.referrals
+  FOR SELECT TO authenticated USING (
+    referrer_id IN (SELECT id FROM public.referral_codes WHERE user_id = auth.uid())
+  );
 
-## 4. Create PWA icon assets
+CREATE POLICY "Admin can manage all referrals" ON public.referrals
+  FOR ALL TO authenticated USING (is_admin()) WITH CHECK (is_admin());
 
-Create two placeholder icon files in `public/`:
-- `public/pwa-192x192.png` (copy from isotipo-albus.png or reference it)
-- `public/pwa-512x512.png`
+-- Allow system inserts (via service role) for referral tracking
+CREATE POLICY "Allow insert via service role" ON public.referrals
+  FOR INSERT TO authenticated WITH CHECK (true);
 
-For simplicity, reference the existing `/isotipo-albus.png` in the manifest for both sizes.
+-- Validation trigger for referral status
+CREATE OR REPLACE FUNCTION public.validate_referral_status()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.status NOT IN ('pendiente', 'completado') THEN
+    RAISE EXCEPTION 'Invalid status. Must be pendiente or completado';
+  END IF;
+  RETURN NEW;
+END;
+$$;
 
----
-
-## 5. New file: `src/components/dashboard/InstallAppBanner.tsx`
-
-A smart banner that:
-- Listens for the `beforeinstallprompt` event
-- Shows after the second visit (tracked via `localStorage` counter)
-- Displays: "Instala Albus en tu dispositivo" with Install and Dismiss buttons
-- B&W Albus aesthetic with a `Smartphone` icon
-- Only visible on mobile (via `useIsMobile` hook)
-
----
-
-## 6. New file: `src/hooks/usePushNotifications.tsx`
-
-Push notification hook:
-- Checks for browser Push API support (`'Notification' in window`)
-- `requestPermission()`: Asks for notification permission
-- `sendLocalNotification(title, body)`: Creates a browser notification
-- `subscribeToChanges()`: Sets up Supabase real-time subscriptions on:
-  - `user_documents` changes (status updates) -> "Tu expediente ha sido revisado!"
-  - `document_comments` inserts -> "Nuevo comentario de tu equipo legal"
-- Deadline countdown: Calculates days until June 30, 2026 and sends a local notification if <= 30 days
-
----
-
-## 7. New file: `src/components/dashboard/PullToRefresh.tsx`
-
-A wrapper component for dashboard views:
-- Detects touch pull-down gesture at top of scroll container
-- Shows a spinner indicator during refresh
-- Calls a `onRefresh` callback to reload data
-- Works by tracking `touchstart`/`touchmove`/`touchend` events
-- Only active on mobile (via `useIsMobile`)
+CREATE TRIGGER validate_referral_status_trigger
+  BEFORE INSERT OR UPDATE ON public.referrals
+  FOR EACH ROW EXECUTE FUNCTION public.validate_referral_status();
+```
 
 ---
 
-## 8. Modify: `src/components/route-detail/StepFileUpload.tsx`
+## 2. New file: `src/hooks/useReferral.tsx`
 
-Mobile scanner enhancement:
-- Add `capture="environment"` attribute to the file input when on mobile
-- Add a secondary button "Escanear Documento" with `Camera` icon that opens camera directly
-- Detect mobile via `useIsMobile` hook
-- On mobile, the primary button becomes "Escanear Documento" with camera icon instead of upload icon
-
----
-
-## 9. Modify: `src/pages/Dashboard.tsx`
-
-- Import and render `InstallAppBanner` at the top of the dashboard
-- Import and use `PullToRefresh` wrapper around dashboard content
-- Import `usePushNotifications` and call `subscribeToChanges()` on mount
-- Add notification permission request button in the notification area
+Custom hook that:
+- Fetches or generates a 6-character referral code for the current user (stored in `referral_codes`)
+- Fetches referral stats: count of invited friends, total rewards, list of referrals with status
+- Code generation: random 6-char alphanumeric uppercase string
+- Only generates codes for Pro/Premium users
 
 ---
 
-## 10. Modify: `src/components/dashboard/BusinessOnboardingSection.tsx`
+## 3. New file: `src/components/dashboard/ReferralDashboard.tsx`
 
-Mobile table responsiveness:
-- Wrap tables in `overflow-x-auto` containers (likely already done, but verify)
-- Add `min-w-0` and `text-xs sm:text-sm` responsive text sizing
-- For the Cuota Cero table and Tax Obligations table: stack on mobile using card layout instead of table when `useIsMobile` is true
+Main referral section with:
+
+### Section A: Your Code
+- Large, copyable referral code display with a "Copiar" button
+- Generates the code on first visit (if Pro/Premium)
+
+### Section B: Stats Cards
+- "Amigos Invitados" - count of referrals
+- "Dinero Ahorrado/Ganado" - sum of `reward_amount` where status = 'completado'
+
+### Section C: Sharing Buttons
+- **WhatsApp**: Pre-filled message with code and signup URL
+- **Telegram**: Share link with message
+- **Facebook**: Share dialog with URL
+- Message template: "Hola! Estoy usando Albus para mi Regularizacion 2026. Si usas mi codigo [CODE], tendras 5 EUR de descuento en tu plan Pro. Registrate aqui: [URL]"
+
+### Section D: Referral Status Table
+- Columns: Nombre (masked), Fecha, Estado (Pendiente/Completado badge)
+- Empty state: "Comparte tu codigo para empezar a ganar recompensas"
 
 ---
 
-## 11. Modify: `src/components/dashboard/FiscalSimulator.tsx`
+## 4. New file: `src/components/dashboard/ReferralBanner.tsx`
 
-Mobile polish:
-- Ensure result cards use `grid-cols-1 sm:grid-cols-2` instead of fixed columns
-- Add `text-xs sm:text-sm` for table cells
+A small gold-accented banner for the main dashboard roadmap view:
+- Text: "Invita amigos y gana 5 EUR por cada uno"
+- Icon: `Gift`
+- Button: "Ver mi codigo" -> navigates to referrals section
+- Dismissible (localStorage flag)
+
+---
+
+## 5. Modify: `src/components/dashboard/DashboardSidebar.tsx`
+
+Add nav item after "Negocios":
+
+```typescript
+{ id: "referrals", label: "Referidos", icon: <Gift className="w-5 h-5" /> }
+```
+
+---
+
+## 6. Modify: `src/pages/Dashboard.tsx`
+
+- Add case `"referrals"` in `renderContent()` -> render `ReferralDashboard` (gated for Pro/Premium)
+- Add `ReferralBanner` component in the roadmap view (between UrgencyBanner and header)
+- Import `Gift` icon, `ReferralDashboard`, `ReferralBanner`
+
+---
+
+## 7. Modify: `supabase/functions/create-checkout/index.ts`
+
+Add referral code validation logic:
+- Accept optional `referralCode` in request body
+- If provided, look up the code in `referral_codes` table (using service role client)
+- If valid, create or retrieve a Stripe coupon for 5 EUR off and apply it to the checkout session via `discounts`
+- After successful session creation, insert a record into `referrals` table with status 'pendiente'
+
+---
+
+## 8. Modify: `src/hooks/useSubscription.tsx`
+
+- Update `handleCheckout` to accept optional `referralCode` parameter
+- Pass `referralCode` in the request body to `create-checkout`
 
 ---
 
@@ -120,128 +157,94 @@ Mobile polish:
 
 | File | Purpose |
 |------|---------|
-| `src/components/dashboard/InstallAppBanner.tsx` | PWA install prompt for mobile users |
-| `src/hooks/usePushNotifications.tsx` | Push notification engine with real-time Supabase subscriptions |
-| `src/components/dashboard/PullToRefresh.tsx` | Pull-to-refresh gesture wrapper for mobile |
+| `src/hooks/useReferral.tsx` | Referral code management and stats |
+| `src/components/dashboard/ReferralDashboard.tsx` | Full referral section UI |
+| `src/components/dashboard/ReferralBanner.tsx` | Gold CTA banner for dashboard |
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `vite.config.ts` | Add VitePWA plugin with manifest, caching, icons |
-| `index.html` | Add PWA meta tags (theme-color, apple-mobile-web-app) |
-| `src/pages/Dashboard.tsx` | Add InstallAppBanner, PullToRefresh, push notification init |
-| `src/components/route-detail/StepFileUpload.tsx` | Add mobile camera capture and scanner UI |
-| `src/components/dashboard/BusinessOnboardingSection.tsx` | Mobile-responsive tables |
-| `src/components/dashboard/FiscalSimulator.tsx` | Mobile-responsive grid/tables |
+| `src/components/dashboard/DashboardSidebar.tsx` | Add "Referidos" nav item |
+| `src/pages/Dashboard.tsx` | Add referrals route + banner |
+| `supabase/functions/create-checkout/index.ts` | Referral code discount logic |
+| `src/hooks/useSubscription.tsx` | Pass referral code to checkout |
+| `supabase/config.toml` | Already has verify_jwt=false for create-checkout |
 
-## No Database Migration Required
+## Database Migration Required
 
-Push subscriptions use browser APIs. Real-time uses existing Supabase tables.
+New `referral_codes` and `referrals` tables with RLS policies and validation trigger.
 
 ---
 
 ## Technical Details
 
-### vite-plugin-pwa Configuration
+### Referral Code Generation
 
 ```typescript
-import { VitePWA } from 'vite-plugin-pwa';
-
-VitePWA({
-  registerType: 'autoUpdate',
-  includeAssets: ['isotipo-albus.png', 'albus-logo.png'],
-  manifest: {
-    name: 'Albus - Tu asistente de migracion',
-    short_name: 'Albus',
-    description: 'Simplificamos tu migracion a Espana',
-    theme_color: '#000000',
-    background_color: '#ffffff',
-    display: 'standalone',
-    start_url: '/dashboard',
-    icons: [
-      { src: '/isotipo-albus.png', sizes: '192x192', type: 'image/png' },
-      { src: '/isotipo-albus.png', sizes: '512x512', type: 'image/png' },
-    ],
-  },
-  workbox: {
-    navigateFallbackDenylist: [/^\/~oauth/],
-    runtimeCaching: [
-      {
-        urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/.*/,
-        handler: 'CacheFirst',
-        options: { cacheName: 'vault-documents', expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 } },
-      },
-    ],
-  },
-})
+function generateCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 ```
 
-### Install Banner Logic
+### Stripe Coupon for Referral Discount
+
+In `create-checkout`, when a valid referral code is provided:
 
 ```typescript
-// Track visits in localStorage
-const visitCount = parseInt(localStorage.getItem('albus_visits') || '0');
-localStorage.setItem('albus_visits', String(visitCount + 1));
-const showBanner = visitCount >= 2 && deferredPrompt !== null;
+// Create or find a 5 EUR off coupon
+let coupon;
+const coupons = await stripe.coupons.list({ limit: 100 });
+coupon = coupons.data.find(c => c.name === 'REFERRAL_5EUR');
+if (!coupon) {
+  coupon = await stripe.coupons.create({
+    name: 'REFERRAL_5EUR',
+    amount_off: 500, // 5 EUR in cents
+    currency: 'eur',
+    duration: 'once',
+  });
+}
+
+// Apply to checkout session
+session = await stripe.checkout.sessions.create({
+  ...sessionParams,
+  discounts: [{ coupon: coupon.id }],
+});
 ```
 
-### Push Notification Triggers
+### WhatsApp Share URL
 
 ```typescript
-// Real-time subscription on user_documents
-supabase
-  .channel('doc-status-changes')
-  .on('postgres_changes', {
-    event: 'UPDATE', schema: 'public', table: 'user_documents',
-    filter: `user_id=eq.${userId}`,
-  }, (payload) => {
-    if (payload.new.status !== payload.old.status) {
-      sendLocalNotification('Albus', 'Tu expediente ha sido revisado!');
-    }
-  })
-  .subscribe();
+const message = `Hola! Estoy usando Albus para mi Regularizacion 2026. Si usas mi codigo ${code}, tendras 5€ de descuento en tu plan Pro. Registrate aqui: ${window.location.origin}`;
+const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 ```
-
-### Mobile Camera Capture
-
-```html
-<!-- On mobile, add capture attribute -->
-<input type="file" accept="image/*,.pdf" capture="environment" />
-```
-
-### Pull to Refresh
-
-```typescript
-// Touch gesture detection
-const startY = useRef(0);
-const onTouchStart = (e) => { startY.current = e.touches[0].clientY; };
-const onTouchMove = (e) => {
-  const diff = e.touches[0].clientY - startY.current;
-  if (diff > 80 && scrollTop === 0) triggerRefresh();
-};
-```
-
-### Offline Vault Access
-
-The Workbox `CacheFirst` strategy for Supabase storage URLs means previously viewed document files (PDFs, images) will be served from cache when offline. The document metadata is cached via the default navigation caching.
 
 ### Aesthetic
 
-- Install banner: `bg-background border border-border rounded-2xl` with `Smartphone` icon
-- Pull-to-refresh spinner: Albus isotipo rotating animation
-- Scanner button: `Camera` icon with "Escanear Documento" label, full-width on mobile
-- All existing B&W palette maintained
+- Gold accents: `border-amber-500/30 bg-amber-50/5 text-amber-600`
+- Icons: `Gift` (nav + banner), `Users` (stats), `Copy` (code), `Share2` (sharing)
+- Code display: large monospace font in a bordered card
+- Stats cards: same pattern as existing dashboard cards
+
+### Admin Notification
+
+When a referral status changes to 'completado', the admin can see all referrals via the existing admin panel pattern. A future enhancement could add an admin tab for referral management, but for now the `referrals` table is queryable by admin via RLS.
 
 ---
 
 ## Implementation Order
 
-1. `vite.config.ts` + `index.html` - PWA core setup
-2. `src/components/dashboard/InstallAppBanner.tsx` - Install prompt
-3. `src/hooks/usePushNotifications.tsx` - Notification engine
-4. `src/components/dashboard/PullToRefresh.tsx` - Pull to refresh
-5. `src/components/route-detail/StepFileUpload.tsx` - Mobile scanner
-6. `src/components/dashboard/BusinessOnboardingSection.tsx` + `FiscalSimulator.tsx` - Mobile polish
-7. `src/pages/Dashboard.tsx` - Wire everything together
+1. Database migration (referral_codes + referrals tables)
+2. `src/hooks/useReferral.tsx` - Hook
+3. `src/components/dashboard/ReferralDashboard.tsx` - Main UI
+4. `src/components/dashboard/ReferralBanner.tsx` - CTA banner
+5. `src/components/dashboard/DashboardSidebar.tsx` - Nav item
+6. `supabase/functions/create-checkout/index.ts` - Discount logic
+7. `src/hooks/useSubscription.tsx` - Pass referral code
+8. `src/pages/Dashboard.tsx` - Wire everything together
 
