@@ -1,96 +1,118 @@
 
 
-# Plan: G02 - Business Onboarding: From Immigrant to Freelancer
+# Plan: G03 - Progressive Web App (PWA) with Push Notifications
 
 ## Summary
 
-Create a new "Negocios" section in the dashboard for Pro/Premium users. It includes a freelance roadmap, autonomo fee calculator, tax obligations summary, Cuota Cero guide, and a premium upsell banner for managed alta services.
+Transform Albus into an installable PWA using `vite-plugin-pwa`, add mobile-optimized features (camera-first uploads, pull-to-refresh, offline vault access), implement a push notification engine, and polish responsive tables for small screens.
 
 ---
 
-## 1. New file: `src/components/dashboard/BusinessOnboardingSection.tsx`
+## 1. Install `vite-plugin-pwa`
 
-Main component with five sections:
-
-### Section A: Freelance Roadmap
-Visual 3-step vertical timeline with completion tracking:
-1. **Certificado Digital** - Link to G01's digital identity section. Icon: `Shield`. Description: "Solicita tu certificado en la FNMT."
-2. **Alta en Hacienda (Censo de Empresarios)** - Instructions for Modelo 036/037. Icon: `Building2`. External link to AEAT sede electronica.
-3. **Alta en el RETA (Seguridad Social)** - Instructions for registration via sede electronica SS. Icon: `Briefcase`. External link.
-
-Each step: title, description, external link button, completion checkbox (local state).
-
-### Section B: Cuota Cero Guide
-Info card explaining Tarifa Plana and Cuota Cero benefits:
-- **Tarifa Plana nacional**: 80 EUR/month first 12 months (all of Spain).
-- **Cuota Cero regional**: Table of communities offering 100% discount (Madrid, Andalucia, Murcia, Valencia, Baleares, Canarias, La Rioja, Extremadura, Castilla-La Mancha, Aragon).
-- Duration: 12 or 24 months depending on community.
-- Display as a compact table: Comunidad | Duracion | Beneficio.
-
-### Section C: Autonomo Fee Calculator
-Small calculator:
-- **Input**: "Ingresos netos mensuales estimados" (number input, slider optional).
-- **Output**: Based on 2026 real income brackets (cotizacion por ingresos reales):
-  - Bracket lookup -> monthly quota.
-  - Show "Cuota de autonomo estimada: X EUR/mes".
-  - Show "Con Tarifa Plana: 80 EUR/mes (primeros 12 meses)".
-  - Show "Con Cuota Cero: 0 EUR/mes (si tu comunidad lo ofrece)".
-- Brackets (2026 real income system, simplified):
-  - <= 670 EUR: 230 EUR
-  - 670-900: 260 EUR
-  - 900-1,166: 275 EUR
-  - 1,166-1,300: 291 EUR
-  - 1,300-1,500: 294 EUR
-  - 1,500-1,700: 294 EUR
-  - 1,700-1,850: 310 EUR
-  - 1,850-2,030: 315 EUR
-  - 2,030-2,330: 320 EUR
-  - 2,330-2,760: 330 EUR
-  - 2,760-3,190: 350 EUR
-  - 3,190-3,620: 370 EUR
-  - > 3,620: 390 EUR
-
-### Section D: Tax Obligations Summary
-Clean table with three rows:
-| Obligacion | Modelo | Frecuencia | Descripcion |
-|---|---|---|---|
-| IVA (21%) | Modelo 303 | Trimestral | Declaracion de IVA repercutido menos soportado |
-| IRPF (Pagos a cuenta) | Modelo 130 | Trimestral | Pago fraccionado del 20% del rendimiento neto |
-| Declaracion Anual | Modelo 100 (Renta) | Anual (Abril-Junio) | Declaracion de la Renta completa |
-
-Additional row for Modelo 390 (resumen anual IVA) as supplementary info.
-
-### Section E: Premium Upsell Banner
-Card with gold accent border:
-- Text: "Prefieres que nosotros hagamos el alta por ti? Nuestro equipo legal gestiona tu alta en Hacienda y Seguridad Social en 24h."
-- Button: "Contratar Alta de Autonomo (Servicio Premium)" -> triggers `onUpgrade` callback.
-- Icon: `Crown` with gold/amber accent.
+Add `vite-plugin-pwa` as a dev dependency. This handles service worker generation, manifest injection, and offline caching automatically.
 
 ---
 
-## 2. Modify: `src/components/dashboard/DashboardSidebar.tsx`
+## 2. Configure PWA in `vite.config.ts`
 
-Add new nav item after "Vida en Espana":
-```typescript
-{ id: "business", label: "Negocios", icon: <TrendingUp className="w-5 h-5" /> }
-```
-
-Import `TrendingUp` from lucide-react.
+- Add `VitePWA()` plugin with:
+  - `registerType: 'autoUpdate'`
+  - `manifest` object with Albus branding (name, short_name, theme_color: `#000000`, background_color: `#ffffff`)
+  - Icons: reference existing `/isotipo-albus.png` + generate 192x192 and 512x512 variants in `public/`
+  - `workbox.runtimeCaching` rules to cache `/dashboard` and `/dashboard/documentos` routes (NetworkFirst strategy)
+  - `workbox.navigateFallbackDenylist: [/^\/~oauth/]` to protect OAuth flow
+  - Cache Supabase storage URLs (CacheFirst) for offline vault access
 
 ---
 
-## 3. Modify: `src/pages/Dashboard.tsx`
+## 3. Add PWA meta tags to `index.html`
 
-Add new case in `renderContent()`:
-```typescript
-case "business":
-  if (!isPremium) {
-    return <PremiumGate feature="Negocios" icon={TrendingUp} />;
-  }
-  return <BusinessOnboardingSection onUpgrade={handleCheckout} />;
-```
+- `<meta name="theme-color" content="#000000">`
+- `<meta name="apple-mobile-web-app-capable" content="yes">`
+- `<meta name="apple-mobile-web-app-status-bar-style" content="black">`
+- `<link rel="apple-touch-icon" href="/isotipo-albus.png">`
 
-Import `BusinessOnboardingSection` and `TrendingUp`.
+---
+
+## 4. Create PWA icon assets
+
+Create two placeholder icon files in `public/`:
+- `public/pwa-192x192.png` (copy from isotipo-albus.png or reference it)
+- `public/pwa-512x512.png`
+
+For simplicity, reference the existing `/isotipo-albus.png` in the manifest for both sizes.
+
+---
+
+## 5. New file: `src/components/dashboard/InstallAppBanner.tsx`
+
+A smart banner that:
+- Listens for the `beforeinstallprompt` event
+- Shows after the second visit (tracked via `localStorage` counter)
+- Displays: "Instala Albus en tu dispositivo" with Install and Dismiss buttons
+- B&W Albus aesthetic with a `Smartphone` icon
+- Only visible on mobile (via `useIsMobile` hook)
+
+---
+
+## 6. New file: `src/hooks/usePushNotifications.tsx`
+
+Push notification hook:
+- Checks for browser Push API support (`'Notification' in window`)
+- `requestPermission()`: Asks for notification permission
+- `sendLocalNotification(title, body)`: Creates a browser notification
+- `subscribeToChanges()`: Sets up Supabase real-time subscriptions on:
+  - `user_documents` changes (status updates) -> "Tu expediente ha sido revisado!"
+  - `document_comments` inserts -> "Nuevo comentario de tu equipo legal"
+- Deadline countdown: Calculates days until June 30, 2026 and sends a local notification if <= 30 days
+
+---
+
+## 7. New file: `src/components/dashboard/PullToRefresh.tsx`
+
+A wrapper component for dashboard views:
+- Detects touch pull-down gesture at top of scroll container
+- Shows a spinner indicator during refresh
+- Calls a `onRefresh` callback to reload data
+- Works by tracking `touchstart`/`touchmove`/`touchend` events
+- Only active on mobile (via `useIsMobile`)
+
+---
+
+## 8. Modify: `src/components/route-detail/StepFileUpload.tsx`
+
+Mobile scanner enhancement:
+- Add `capture="environment"` attribute to the file input when on mobile
+- Add a secondary button "Escanear Documento" with `Camera` icon that opens camera directly
+- Detect mobile via `useIsMobile` hook
+- On mobile, the primary button becomes "Escanear Documento" with camera icon instead of upload icon
+
+---
+
+## 9. Modify: `src/pages/Dashboard.tsx`
+
+- Import and render `InstallAppBanner` at the top of the dashboard
+- Import and use `PullToRefresh` wrapper around dashboard content
+- Import `usePushNotifications` and call `subscribeToChanges()` on mount
+- Add notification permission request button in the notification area
+
+---
+
+## 10. Modify: `src/components/dashboard/BusinessOnboardingSection.tsx`
+
+Mobile table responsiveness:
+- Wrap tables in `overflow-x-auto` containers (likely already done, but verify)
+- Add `min-w-0` and `text-xs sm:text-sm` responsive text sizing
+- For the Cuota Cero table and Tax Obligations table: stack on mobile using card layout instead of table when `useIsMobile` is true
+
+---
+
+## 11. Modify: `src/components/dashboard/FiscalSimulator.tsx`
+
+Mobile polish:
+- Ensure result cards use `grid-cols-1 sm:grid-cols-2` instead of fixed columns
+- Add `text-xs sm:text-sm` for table cells
 
 ---
 
@@ -98,82 +120,128 @@ Import `BusinessOnboardingSection` and `TrendingUp`.
 
 | File | Purpose |
 |------|---------|
-| `src/components/dashboard/BusinessOnboardingSection.tsx` | Full business onboarding module |
+| `src/components/dashboard/InstallAppBanner.tsx` | PWA install prompt for mobile users |
+| `src/hooks/usePushNotifications.tsx` | Push notification engine with real-time Supabase subscriptions |
+| `src/components/dashboard/PullToRefresh.tsx` | Pull-to-refresh gesture wrapper for mobile |
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/components/dashboard/DashboardSidebar.tsx` | Add "Negocios" nav item |
-| `src/pages/Dashboard.tsx` | Add case "business" with premium gate |
+| `vite.config.ts` | Add VitePWA plugin with manifest, caching, icons |
+| `index.html` | Add PWA meta tags (theme-color, apple-mobile-web-app) |
+| `src/pages/Dashboard.tsx` | Add InstallAppBanner, PullToRefresh, push notification init |
+| `src/components/route-detail/StepFileUpload.tsx` | Add mobile camera capture and scanner UI |
+| `src/components/dashboard/BusinessOnboardingSection.tsx` | Mobile-responsive tables |
+| `src/components/dashboard/FiscalSimulator.tsx` | Mobile-responsive grid/tables |
 
 ## No Database Migration Required
 
-All data is static reference content. Calculator uses client-side logic only.
+Push subscriptions use browser APIs. Real-time uses existing Supabase tables.
 
 ---
 
 ## Technical Details
 
-### Autonomo Fee Brackets (2026 cotizacion por ingresos reales)
+### vite-plugin-pwa Configuration
 
 ```typescript
-const AUTONOMO_BRACKETS = [
-  { maxIncome: 670, quota: 230 },
-  { maxIncome: 900, quota: 260 },
-  { maxIncome: 1166, quota: 275 },
-  { maxIncome: 1300, quota: 291 },
-  { maxIncome: 1500, quota: 294 },
-  { maxIncome: 1700, quota: 294 },
-  { maxIncome: 1850, quota: 310 },
-  { maxIncome: 2030, quota: 315 },
-  { maxIncome: 2330, quota: 320 },
-  { maxIncome: 2760, quota: 330 },
-  { maxIncome: 3190, quota: 350 },
-  { maxIncome: 3620, quota: 370 },
-  { maxIncome: Infinity, quota: 390 },
-];
+import { VitePWA } from 'vite-plugin-pwa';
 
-function getAutonomoQuota(monthlyIncome: number): number {
-  const bracket = AUTONOMO_BRACKETS.find(b => monthlyIncome <= b.maxIncome);
-  return bracket?.quota ?? 390;
-}
+VitePWA({
+  registerType: 'autoUpdate',
+  includeAssets: ['isotipo-albus.png', 'albus-logo.png'],
+  manifest: {
+    name: 'Albus - Tu asistente de migracion',
+    short_name: 'Albus',
+    description: 'Simplificamos tu migracion a Espana',
+    theme_color: '#000000',
+    background_color: '#ffffff',
+    display: 'standalone',
+    start_url: '/dashboard',
+    icons: [
+      { src: '/isotipo-albus.png', sizes: '192x192', type: 'image/png' },
+      { src: '/isotipo-albus.png', sizes: '512x512', type: 'image/png' },
+    ],
+  },
+  workbox: {
+    navigateFallbackDenylist: [/^\/~oauth/],
+    runtimeCaching: [
+      {
+        urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/.*/,
+        handler: 'CacheFirst',
+        options: { cacheName: 'vault-documents', expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 } },
+      },
+    ],
+  },
+})
 ```
 
-### Cuota Cero Regions Data
+### Install Banner Logic
 
 ```typescript
-const CUOTA_CERO_REGIONS = [
-  { name: "Madrid", months: 24 },
-  { name: "Andalucia", months: 12 },
-  { name: "Murcia", months: 24 },
-  { name: "Com. Valenciana", months: 12 },
-  { name: "Baleares", months: 12 },
-  { name: "Canarias", months: 12 },
-  { name: "La Rioja", months: 12 },
-  { name: "Extremadura", months: 12 },
-  { name: "Castilla-La Mancha", months: 24 },
-  { name: "Aragon", months: 12 },
-];
+// Track visits in localStorage
+const visitCount = parseInt(localStorage.getItem('albus_visits') || '0');
+localStorage.setItem('albus_visits', String(visitCount + 1));
+const showBanner = visitCount >= 2 && deferredPrompt !== null;
 ```
+
+### Push Notification Triggers
+
+```typescript
+// Real-time subscription on user_documents
+supabase
+  .channel('doc-status-changes')
+  .on('postgres_changes', {
+    event: 'UPDATE', schema: 'public', table: 'user_documents',
+    filter: `user_id=eq.${userId}`,
+  }, (payload) => {
+    if (payload.new.status !== payload.old.status) {
+      sendLocalNotification('Albus', 'Tu expediente ha sido revisado!');
+    }
+  })
+  .subscribe();
+```
+
+### Mobile Camera Capture
+
+```html
+<!-- On mobile, add capture attribute -->
+<input type="file" accept="image/*,.pdf" capture="environment" />
+```
+
+### Pull to Refresh
+
+```typescript
+// Touch gesture detection
+const startY = useRef(0);
+const onTouchStart = (e) => { startY.current = e.touches[0].clientY; };
+const onTouchMove = (e) => {
+  const diff = e.touches[0].clientY - startY.current;
+  if (diff > 80 && scrollTop === 0) triggerRefresh();
+};
+```
+
+### Offline Vault Access
+
+The Workbox `CacheFirst` strategy for Supabase storage URLs means previously viewed document files (PDFs, images) will be served from cache when offline. The document metadata is cached via the default navigation caching.
 
 ### Aesthetic
-- Same B&W Albus style as FiscalSimulator
-- Cards: `rounded-2xl border border-border`
-- Gold accent for upsell: `border-amber-500/30 bg-amber-50/5`
-- Icons: `TrendingUp` (header), `Shield` (cert digital), `Building2` (Hacienda), `Briefcase` (RETA), `Crown` (upsell)
-- Roadmap timeline: vertical line with numbered circles, similar to LifeInSpainSection steps
 
-### External Links
-- AEAT Modelo 036: `https://sede.agenciatributaria.gob.es/`
-- Seguridad Social RETA: `https://www.seg-social.es/`
-- FNMT: already linked from G01
+- Install banner: `bg-background border border-border rounded-2xl` with `Smartphone` icon
+- Pull-to-refresh spinner: Albus isotipo rotating animation
+- Scanner button: `Camera` icon with "Escanear Documento" label, full-width on mobile
+- All existing B&W palette maintained
 
 ---
 
 ## Implementation Order
 
-1. `src/components/dashboard/BusinessOnboardingSection.tsx` - Full module
-2. `src/components/dashboard/DashboardSidebar.tsx` - Nav item
-3. `src/pages/Dashboard.tsx` - Routing and premium gate
+1. `vite.config.ts` + `index.html` - PWA core setup
+2. `src/components/dashboard/InstallAppBanner.tsx` - Install prompt
+3. `src/hooks/usePushNotifications.tsx` - Notification engine
+4. `src/components/dashboard/PullToRefresh.tsx` - Pull to refresh
+5. `src/components/route-detail/StepFileUpload.tsx` - Mobile scanner
+6. `src/components/dashboard/BusinessOnboardingSection.tsx` + `FiscalSimulator.tsx` - Mobile polish
+7. `src/pages/Dashboard.tsx` - Wire everything together
 
