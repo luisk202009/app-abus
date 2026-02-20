@@ -178,7 +178,7 @@ const RegularizacionPais = () => {
       </section>
 
       {/* Eligibility Calculator */}
-      <EligibilityCalculator onStartProcess={() => setIsModalOpen(true)} />
+      <EligibilityCalculator onStartProcess={() => setIsModalOpen(true)} country={paisId} />
 
       {/* CTA */}
       <section className="py-16 md:py-20">
