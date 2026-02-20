@@ -9,6 +9,7 @@ import { DocumentChecklist } from "@/components/regularizacion/DocumentChecklist
 import { EligibilityModalArraigos } from "@/components/eligibility/EligibilityModalArraigos";
 import { AnalysisModal } from "@/components/AnalysisModal";
 import { Button } from "@/components/ui/button";
+import { TrustBadgesBar } from "@/components/TrustBadgesBar";
 
 const pillars = [
   {
@@ -65,6 +66,8 @@ const Arraigos = () => {
 
       {/* Hero Section */}
       <HeroArraigos onStart={handleStartCheck} />
+
+      <TrustBadgesBar />
 
       {/* Pillars Section */}
       <section className="py-16 md:py-24">

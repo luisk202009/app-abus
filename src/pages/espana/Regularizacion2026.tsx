@@ -10,6 +10,8 @@ import { RequirementCard } from "@/components/espana/RequirementCard";
 import { EligibilityModalReg2026 } from "@/components/eligibility/EligibilityModalReg2026";
 import { AnalysisModal } from "@/components/AnalysisModal";
 import { Button } from "@/components/ui/button";
+import { TrustBadgesBar } from "@/components/TrustBadgesBar";
+import { TestimonialsCarousel } from "@/components/TestimonialsCarousel";
 
 const requirements = [
   {
@@ -50,6 +52,8 @@ const Regularizacion2026 = () => {
 
       {/* Hero Section */}
       <HeroReg2026 onStart={handleStartCheck} />
+
+      <TrustBadgesBar />
 
       {/* Requirements Section */}
       <section className="py-16 md:py-24 bg-muted/30">
@@ -108,6 +112,8 @@ const Regularizacion2026 = () => {
 
       {/* Eligibility Calculator */}
       <EligibilityCalculator onStartProcess={handleStartCheck} />
+
+      <TestimonialsCarousel />
 
       <Footer />
 
