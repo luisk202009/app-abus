@@ -1,174 +1,235 @@
 
-# Plan: E04 - Conversion Tracking, Exit Intent y Lead Recovery
+
+# Plan: E05 - Portal de Partners Legales y Sistema de Asignacion
 
 ## Resumen
 
-Implementar un sistema de tracking de eventos de conversion, un popup de exit intent para recuperar visitantes, filtro de "Pagos Pendientes" en el admin panel, y la infraestructura base para Meta Pixel y Google Tag Manager.
+Crear un portal para abogados partners con dashboard propio, sistema de asignacion de clientes desde el admin, y flujo de colaboracion con comentarios y notificaciones. Todo protegido con RLS a nivel de base de datos.
 
 ---
 
-## 1. Servicio de Tracking de Eventos
+## 1. Migracion de Base de Datos
 
-### Nuevo archivo: `src/lib/trackingService.ts`
+### Nuevas tablas y funciones:
 
-Servicio centralizado que registra eventos de conversion tanto en consola como en la tabla `onboarding_submissions`.
+**Tabla `partner_assignments`** - Vincula partners con usuarios asignados:
 
-**Eventos soportados:**
+| Columna | Tipo | Descripcion |
+|---------|------|-------------|
+| id | uuid PK | ID unico |
+| partner_id | uuid NOT NULL | Referencia a auth.users (el partner) |
+| user_id | uuid NOT NULL | Referencia a auth.users (el usuario asignado) |
+| case_status | text | 'en_revision', 'listo_presentar', 'requiere_accion' (default: 'en_revision') |
+| assigned_at | timestamptz | Fecha de asignacion |
+| notes | text | Notas del partner sobre el caso |
 
-| Evento | Trigger | Accion |
-|--------|---------|--------|
-| `lead_captured` | Usuario envia formulario del checklist (E02) | Log + tag CRM |
-| `onboarding_started` | Usuario selecciona ruta en AnalysisModal | Log + tag CRM |
-| `payment_success` | Usuario completa checkout Stripe | Log (ya gestionado por webhook) |
-| `track_eligibility_check` | Usuario usa la calculadora | Log + evento analytics |
+Constraint UNIQUE en (partner_id, user_id).
 
-**Funciones:**
-- `trackEvent(eventName, metadata)`: Log a consola + dispara evento `window.dataLayer.push` para GTM y `fbq` para Meta Pixel
-- Integracion con los custom events de GTM/Meta
+**Tabla `partners`** - Registro de partners con nombre de equipo:
 
-### Modificaciones en componentes existentes:
-- `EligibilityCalculator.tsx`: Llamar `trackEvent('track_eligibility_check')` en `handleCheck` y `trackEvent('lead_captured')` en `handleLeadSubmit`
-- `AnalysisModal.tsx`: Llamar `trackEvent('onboarding_started')` cuando el usuario selecciona una ruta
+| Columna | Tipo | Descripcion |
+|---------|------|-------------|
+| id | uuid PK | ID unico |
+| user_id | uuid NOT NULL UNIQUE | Referencia a auth.users |
+| team_name | text NOT NULL | Nombre del equipo legal (ej: "LegalTeam A") |
+| created_at | timestamptz | Fecha de creacion |
 
----
+**Funcion `is_partner()`** - SECURITY DEFINER para verificar si el usuario es partner:
 
-## 2. Exit Intent Modal
+```sql
+CREATE OR REPLACE FUNCTION public.is_partner(_user_id uuid)
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.partners WHERE user_id = _user_id
+  )
+$$;
+```
 
-### Nuevo archivo: `src/components/ExitIntentModal.tsx`
+**Funcion `is_assigned_to_partner()`** - Verifica si un user_id esta asignado al partner actual:
 
-Modal que se activa cuando:
-- **Desktop**: El mouse sale de la ventana del navegador (`mouseleave` en `document.documentElement`)
-- **Mobile**: Despues de 30 segundos de inactividad (sin scroll, click o touch)
+```sql
+CREATE OR REPLACE FUNCTION public.is_assigned_to_partner(_user_id uuid)
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.partner_assignments
+    WHERE partner_id = auth.uid() AND user_id = _user_id
+  )
+$$;
+```
 
-**Restricciones:**
-- Solo se muestra 1 vez por sesion (controlado via `sessionStorage`)
-- Solo en paginas de pricing/regularizacion
+### Politicas RLS:
 
-**Contenido del modal:**
-- Titulo: "No pierdas tu oportunidad!"
-- Texto: "El proceso de Regularizacion 2026 es limitado. Tienes dudas? Descarga nuestra guia gratuita antes de irte."
-- CTA Primario: Boton que hace scroll al EligibilityCalculator (lead magnet de E02)
-- CTA Secundario: "No gracias, ya volveré"
+**`partners`:**
+- SELECT: `is_admin()` OR `user_id = auth.uid()`
+- INSERT/UPDATE/DELETE: `is_admin()`
 
-### Integracion:
-- Agregar en `Index.tsx`, `Regularizacion2026.tsx` y `PricingSection` parent pages
+**`partner_assignments`:**
+- SELECT: `is_admin()` OR `partner_id = auth.uid()`
+- INSERT/DELETE: `is_admin()`
+- UPDATE: `partner_id = auth.uid()` (para cambiar case_status y notes)
 
----
+**Politicas adicionales en tablas existentes:**
 
-## 3. Filtro "Pagos Pendientes" en Admin
-
-### Modificar: `src/components/admin/AdminUsersTab.tsx`
-
-Agregar un sistema de filtros con tabs o botones encima de la tabla de usuarios:
-
-**Filtros:**
-- "Todos" (default)
-- "Pagos Pendientes": Usuarios que tienen `crm_tag` relacionado a una ruta (contiene `regularizacion` o `arraigo`) pero `subscription_status` = `free` o `null`, y tienen `user_id` (se registraron pero no pagaron)
-- "Leads sin registro": Usuarios sin `user_id`
-
-**Boton "Recordatorio Manual":**
-- Aparece en cada fila del filtro "Pagos Pendientes"
-- Al hacer clic: muestra un toast de confirmacion "Recordatorio enviado a [email]" (simulado)
-- Registra el evento en consola via `trackEvent('reminder_sent', { email })`
-
----
-
-## 4. Analytics Infrastructure
-
-### Nuevo archivo: `src/components/AnalyticsProvider.tsx`
-
-Componente wrapper que inyecta los scripts de Meta Pixel y GTM como placeholders.
-
-**Contenido:**
-- Script de GTM con placeholder `YOUR_GTM_ID`
-- Script de Meta Pixel con placeholder `YOUR_PIXEL_ID`
-- Helper global `window.trackAlbusEvent` que unifica `dataLayer.push` + `fbq('trackCustom', ...)`
-- Se renderiza como children wrapper (no visual)
-
-### Integracion en `src/App.tsx`:
-- Envolver el contenido principal con `<AnalyticsProvider>`
+- `user_documents` - Nuevo SELECT policy: "Partners can view assigned user docs" con `is_assigned_to_partner(user_id)`
+- `user_documents` - Nuevo UPDATE policy: "Partners can update assigned user doc status" con `is_assigned_to_partner(user_id)`
+- `document_comments` - Nuevo INSERT policy: "Partners can comment on assigned user docs" con check de que el doc pertenece a un usuario asignado
+- `document_comments` - Nuevo SELECT policy: "Partners can view comments on assigned user docs"
+- `onboarding_submissions` - Nuevo SELECT policy: "Partners can view assigned user submissions" con `is_assigned_to_partner(user_id)`
+- `user_active_routes` - Nuevo SELECT policy: "Partners can view assigned user routes" con `is_assigned_to_partner(user_id)`
 
 ---
 
-## Archivos a Crear
+## 2. Nuevos Archivos
 
-| Archivo | Proposito |
-|---------|-----------|
-| `src/lib/trackingService.ts` | Servicio centralizado de tracking |
-| `src/components/ExitIntentModal.tsx` | Popup de exit intent |
-| `src/components/AnalyticsProvider.tsx` | Wrapper con GTM + Meta Pixel |
+### `src/pages/PartnerDashboard.tsx`
 
-## Archivos a Modificar
+Pagina principal del portal de partners. Estructura:
 
-| Archivo | Cambio |
-|---------|--------|
-| `src/components/eligibility/EligibilityCalculator.tsx` | Agregar trackEvent en handleCheck y handleLeadSubmit |
-| `src/components/AnalysisModal.tsx` | Agregar trackEvent en seleccion de ruta |
-| `src/components/admin/AdminUsersTab.tsx` | Agregar filtros y boton "Recordatorio Manual" |
-| `src/App.tsx` | Envolver con AnalyticsProvider |
-| `src/pages/Index.tsx` | Agregar ExitIntentModal |
-| `src/pages/espana/Regularizacion2026.tsx` | Agregar ExitIntentModal |
+- Header con logo Albus y nombre del equipo legal
+- Stats cards: Total asignados, Revisiones completadas, Pendientes
+- Tabla de clientes activos con columnas: Nombre, Email, Ruta, Estado del caso, Deadline, Acciones
+- Panel de documentos del cliente seleccionado (read-only files, write status/comments)
+- Status Switcher: dropdown para cambiar entre "En Revision", "Listo para Presentar", "Requiere Accion"
+
+### `src/components/partner/PartnerClientList.tsx`
+
+Tabla de clientes asignados con:
+- Nombre, email, ruta activa, estado del caso
+- Badge de color segun estado (azul/verde/rojo)
+- Click para expandir panel de documentos
+
+### `src/components/partner/PartnerDocumentReview.tsx`
+
+Panel de revision de documentos de un cliente:
+- Lista de documentos con status badges (read-only files)
+- Dropdown para cambiar status del documento
+- Formulario para agregar comentarios
+- Historial de comentarios existentes
+
+### `src/components/partner/PartnerSummaryStats.tsx`
+
+Cards de resumen: Total asignados, Revisiones completadas ("Listo para Presentar"), Pendientes ("En Revision" + "Requiere Accion").
+
+### `src/hooks/usePartnerData.tsx`
+
+Hook para cargar datos del partner: assignments, documentos de clientes asignados, rutas activas.
+
+---
+
+## 3. Archivos a Modificar
+
+### `src/App.tsx`
+
+Agregar ruta `/partner/dashboard` con componente `PartnerDashboard`.
+
+### `src/components/admin/AdminUsersTab.tsx`
+
+Agregar columna "Partner" a la tabla de usuarios:
+- Dropdown "Asignar Partner" con lista de partners disponibles (consultados de tabla `partners`)
+- Al seleccionar, insertar en `partner_assignments`
+- Mostrar partner asignado actual como Badge
+
+### `src/hooks/useNotifications.tsx`
+
+Agregar check para nuevos comentarios de partners en documentos del usuario:
+- Consultar `document_comments` donde `document_id` pertenece a documentos del usuario
+- Si hay comentarios recientes (ultimas 48h), agregar notificacion tipo "partner_comment"
+
+### `src/hooks/useAuth.tsx`
+
+Agregar campo `isPartner` al contexto, consultando la tabla `partners` al cargar sesion.
+
+---
+
+## 4. Flujo de Colaboracion
+
+```text
+Admin asigna usuario a Partner
+       |
+       v
+Partner ve usuario en su dashboard
+       |
+       v
+Partner revisa documentos (read-only archivos)
+       |
+       v
+Partner cambia status de docs y deja comentarios
+       |
+       v
+Usuario ve notificacion en su dashboard
+       |
+       v
+Partner marca caso como "Listo para Presentar"
+```
+
+---
+
+## 5. Seguridad
+
+- Partners SOLO ven usuarios explicitamente asignados via `partner_assignments`
+- Funciones SECURITY DEFINER evitan recursion RLS
+- Partners NO pueden eliminar documentos ni modificar archivos, solo status y comentarios
+- Admin es el unico que puede crear partners y asignar usuarios
+- Mock inicial: Se insertaran 2 partners de prueba ("LegalTeam A", "LegalTeam B") directamente en la tabla
 
 ---
 
 ## Detalles Tecnicos
 
-### trackingService.ts
+### PartnerDashboard - Proteccion de ruta
 
 ```typescript
-export const trackEvent = (eventName: string, metadata?: Record<string, any>) => {
-  // Console log for development
-  console.log(`[Albus Track] ${eventName}`, metadata);
+// Verifica que el usuario sea partner
+const { user } = useAuth();
+const [isPartner, setIsPartner] = useState(false);
 
-  // GTM dataLayer
-  if (typeof window !== 'undefined' && (window as any).dataLayer) {
-    (window as any).dataLayer.push({ event: eventName, ...metadata });
-  }
-
-  // Meta Pixel
-  if (typeof window !== 'undefined' && (window as any).fbq) {
-    (window as any).fbq('trackCustom', eventName, metadata);
-  }
-};
+useEffect(() => {
+  if (!user) { navigate("/"); return; }
+  supabase.from("partners").select("id")
+    .eq("user_id", user.id).maybeSingle()
+    .then(({ data }) => {
+      if (!data) navigate("/");
+      else setIsPartner(true);
+    });
+}, [user]);
 ```
 
-### ExitIntentModal - Logica de deteccion
+### AdminUsersTab - Dropdown de asignacion
 
 ```typescript
-// Desktop: mouseleave en documentElement
-document.documentElement.addEventListener('mouseleave', showModal);
+// Fetch partners list
+const { data: partners } = await supabase
+  .from("partners").select("id, user_id, team_name");
 
-// Mobile: 30s inactivity timer, reset on scroll/touch/click
-let inactivityTimer = setTimeout(showModal, 30000);
-['scroll', 'touchstart', 'click'].forEach(evt => 
-  window.addEventListener(evt, () => {
-    clearTimeout(inactivityTimer);
-    inactivityTimer = setTimeout(showModal, 30000);
-  })
-);
+// Fetch existing assignments
+const { data: assignments } = await supabase
+  .from("partner_assignments").select("partner_id, user_id");
 ```
 
-Control con `sessionStorage.getItem('exit_intent_shown')`.
+### Case Status Badge colors
 
-### AdminUsersTab - Filtro "Pagos Pendientes"
-
-Logica de filtrado:
-```typescript
-const pendingPayments = users.filter(u => 
-  u.user_id && 
-  u.crm_tag && 
-  (u.crm_tag.includes('regularizacion') || u.crm_tag.includes('arraigo') || u.crm_tag.includes('lead_checklist')) &&
-  (!u.subscription_status || u.subscription_status === 'free')
-);
-```
+| Status | Color | Emoji |
+|--------|-------|-------|
+| en_revision | Azul (blue-100/blue-800) | -- |
+| listo_presentar | Verde (green-100/green-800) | -- |
+| requiere_accion | Rojo (red-100/red-800) | -- |
 
 ---
 
 ## Orden de Implementacion
 
-1. `trackingService.ts` - Servicio base de tracking
-2. `AnalyticsProvider.tsx` - Wrapper GTM + Meta Pixel
-3. `ExitIntentModal.tsx` - Popup de exit intent
-4. Modificar `EligibilityCalculator.tsx` y `AnalysisModal.tsx` con tracking
-5. Modificar `AdminUsersTab.tsx` con filtros y recordatorio
-6. Integrar AnalyticsProvider en App.tsx y ExitIntentModal en paginas
+1. Migracion SQL (tablas, funciones, RLS policies)
+2. `usePartnerData.tsx` hook
+3. `PartnerSummaryStats.tsx`, `PartnerClientList.tsx`, `PartnerDocumentReview.tsx` components
+4. `PartnerDashboard.tsx` page
+5. Modificar `App.tsx` con nueva ruta
+6. Modificar `AdminUsersTab.tsx` con dropdown de asignacion
+7. Modificar `useNotifications.tsx` para comentarios de partners
+8. Insertar mock partners en la tabla
+
