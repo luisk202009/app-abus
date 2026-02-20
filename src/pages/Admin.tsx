@@ -5,11 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Users, Package, FileText, Map, Loader2 } from "lucide-react";
+import { ArrowLeft, Users, Package, FileText, Map, Loader2, FolderOpen } from "lucide-react";
 import { AdminUsersTab } from "@/components/admin/AdminUsersTab";
 import { AdminPlansTab } from "@/components/admin/AdminPlansTab";
 import { AdminResourcesTab } from "@/components/admin/AdminResourcesTab";
 import { AdminRoutesTab } from "@/components/admin/AdminRoutesTab";
+import { AdminDocumentsTab } from "@/components/admin/AdminDocumentsTab";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
 
 const ADMIN_EMAIL = "l@albus.com.co";
@@ -102,6 +103,10 @@ const Admin = () => {
               <Map className="w-4 h-4" />
               Rutas
             </TabsTrigger>
+            <TabsTrigger value="documents" className="gap-2">
+              <FolderOpen className="w-4 h-4" />
+              Documentos
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -118,6 +123,10 @@ const Admin = () => {
 
           <TabsContent value="routes">
             <AdminRoutesTab />
+          </TabsContent>
+
+          <TabsContent value="documents">
+            <AdminDocumentsTab />
           </TabsContent>
         </Tabs>
       </main>

@@ -1,4 +1,4 @@
-import { Check, Sparkles } from "lucide-react";
+import { Check, Sparkles, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface PricingSectionProps {
@@ -20,6 +20,14 @@ const proFeatures = [
   "Soporte prioritario",
 ];
 
+const premiumFeatures = [
+  "Todo del plan Pro",
+  "Revisión humana de documentos",
+  "Validación asistida por IA",
+  "Comentarios del equipo legal",
+  "Soporte dedicado",
+];
+
 export const PricingSection = ({ onStartFree }: PricingSectionProps) => {
   return (
     <section id="precios" className="py-24 bg-background">
@@ -33,7 +41,7 @@ export const PricingSection = ({ onStartFree }: PricingSectionProps) => {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {/* Free Plan */}
           <div className="bg-background border border-border rounded-2xl p-8 animate-fade-up">
             <div className="mb-6">
@@ -71,7 +79,6 @@ export const PricingSection = ({ onStartFree }: PricingSectionProps) => {
             className="relative bg-primary text-primary-foreground rounded-2xl p-8 animate-fade-up"
             style={{ animationDelay: "0.1s" }}
           >
-            {/* Popular badge */}
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
               <span className="inline-flex items-center gap-1 px-3 py-1 bg-background text-foreground text-xs font-semibold rounded-full border border-border shadow-sm">
                 <Sparkles className="w-3 h-3" />
@@ -106,6 +113,43 @@ export const PricingSection = ({ onStartFree }: PricingSectionProps) => {
               onClick={onStartFree}
             >
               Empezar con Pro
+            </Button>
+          </div>
+
+          {/* Premium Plan */}
+          <div 
+            className="bg-background border border-border rounded-2xl p-8 animate-fade-up"
+            style={{ animationDelay: "0.2s" }}
+          >
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-lg font-semibold">Premium</h3>
+                <Crown className="w-4 h-4 text-primary" />
+              </div>
+              <p className="text-muted-foreground text-sm">
+                Acompañamiento completo
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <span className="text-4xl font-bold">19,99€</span>
+              <span className="text-muted-foreground">/mes</span>
+            </div>
+
+            <ul className="space-y-3 mb-8">
+              {premiumFeatures.map((feature) => (
+                <li key={feature} className="flex items-center gap-3 text-sm">
+                  <Check className="w-4 h-4 text-primary shrink-0" />
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <Button
+              className="w-full"
+              onClick={onStartFree}
+            >
+              Empezar con Premium
             </Button>
           </div>
         </div>

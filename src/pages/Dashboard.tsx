@@ -16,6 +16,7 @@ import { DeleteRouteModal } from "@/components/dashboard/DeleteRouteModal";
 import { ActiveRouteCard } from "@/components/dashboard/ActiveRouteCard";
 import { SuccessConfetti } from "@/components/dashboard/SuccessConfetti";
 import { UrgencyBanner } from "@/components/dashboard/UrgencyBanner";
+import { NotificationBanner } from "@/components/dashboard/NotificationBanner";
 import { ProgressBar } from "@/components/dashboard/ProgressBar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -492,8 +493,11 @@ const Dashboard = () => {
       {/* Main Content */}
       <main className="flex-1 p-8">
         <div className="max-w-4xl mx-auto space-y-6">
-          {/* Urgency Banner - only for premium users */}
-          {isPremium && <UrgencyBanner />}
+          {/* Urgency Banner - for all users with active routes */}
+          {activeRoutes.length > 0 && <UrgencyBanner />}
+
+          {/* Notification Banners */}
+          <NotificationBanner />
 
           {/* Auth Banner - hide for logged in users AND premium users */}
           {!user && !isPremium && <AuthBanner onRegister={handleRegister} />}
