@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 interface WelcomeEmailRequest {
@@ -30,6 +31,30 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Validate authentication
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     const { name, email, visaType }: WelcomeEmailRequest = await req.json();
 
     const visaDisplayName = getVisaDisplayName(visaType);
@@ -59,7 +84,7 @@ const handler = async (req: Request): Promise<Response> => {
         <p style="color: #e5e5e5; font-size: 16px; line-height: 26px; margin: 0 0 24px 0;">
           Tu hoja de ruta para el <strong style="color: #ffffff;">${visaDisplayName}</strong> ya está desbloqueada. Puedes empezar a subir tus documentos y generar tus tasas oficiales ahora mismo.
         </p>
-        <a href="https://id-preview--0cfb12a8-a888-4c75-9004-2ceaf24c1e0c.lovable.app/dashboard" style="display: inline-block; background-color: #ffffff; color: #000000; font-size: 14px; font-weight: 600; text-decoration: none; padding: 14px 28px; border-radius: 6px; margin-top: 16px;">
+        <a href="https://app-abus.lovable.app/dashboard" style="display: inline-block; background-color: #ffffff; color: #000000; font-size: 14px; font-weight: 600; text-decoration: none; padding: 14px 28px; border-radius: 6px; margin-top: 16px;">
           Ir a mi Dashboard →
         </a>
       </td>
