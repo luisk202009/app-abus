@@ -1,7 +1,7 @@
 import { Clock } from "lucide-react";
 
 const calculateDaysUntilDeadline = () => {
-  const deadline = new Date("2026-04-01");
+  const deadline = new Date("2026-06-30");
   const today = new Date();
   const diffTime = deadline.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -18,7 +18,7 @@ export const UrgencyBanner = () => {
       <div className="flex items-center justify-center gap-2 text-sm font-medium">
         <Clock className="w-4 h-4" />
         <span>
-          Quedan <span className="font-bold">{daysRemaining} días</span> para la apertura de solicitudes (1 de abril)
+          Faltan <span className="font-bold">{daysRemaining} días</span> para el cierre del proceso (30 de Junio)
         </span>
       </div>
     </div>

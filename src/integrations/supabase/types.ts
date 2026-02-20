@@ -14,10 +14,43 @@ export type Database = {
   }
   public: {
     Tables: {
+      document_comments: {
+        Row: {
+          author_email: string
+          content: string
+          created_at: string
+          document_id: string
+          id: string
+        }
+        Insert: {
+          author_email: string
+          content: string
+          created_at?: string
+          document_id: string
+          id?: string
+        }
+        Update: {
+          author_email?: string
+          content?: string
+          created_at?: string
+          document_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_comments_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "user_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       onboarding_submissions: {
         Row: {
           ai_recommendation: Json | null
           created_at: string
+          crm_tag: string | null
           current_location: string | null
           email: string | null
           full_name: string | null
@@ -34,6 +67,7 @@ export type Database = {
         Insert: {
           ai_recommendation?: Json | null
           created_at?: string
+          crm_tag?: string | null
           current_location?: string | null
           email?: string | null
           full_name?: string | null
@@ -50,6 +84,7 @@ export type Database = {
         Update: {
           ai_recommendation?: Json | null
           created_at?: string
+          crm_tag?: string | null
           current_location?: string | null
           email?: string | null
           full_name?: string | null

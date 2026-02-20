@@ -1,6 +1,7 @@
 import { User, Home, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DocumentStatusCard } from "./DocumentStatusCard";
+import { DocumentComments } from "./DocumentComments";
 import type { DocumentStatus, DocumentType, DocumentCategory as CategoryType } from "@/lib/documentConfig";
 
 interface UserDocument {
@@ -64,18 +65,20 @@ export const DocumentCategory = ({
         {documents.map((doc) => {
           const userDoc = getUserDocument(doc.type);
           return (
-            <DocumentStatusCard
-              key={doc.type}
-              document={doc}
-              status={(userDoc?.status as DocumentStatus) || "waiting"}
-              fileName={userDoc?.file_name}
-              validationMessage={userDoc?.validation_message}
-              onUpload={(file) => onUpload(doc.type, file)}
-              onDelete={userDoc ? () => onDelete(userDoc.id) : undefined}
-              isUploading={isUploading}
-              isPremium={isPremium}
-              onPremiumRequired={onPremiumRequired}
-            />
+            <div key={doc.type}>
+              <DocumentStatusCard
+                document={doc}
+                status={(userDoc?.status as DocumentStatus) || "waiting"}
+                fileName={userDoc?.file_name}
+                validationMessage={userDoc?.validation_message}
+                onUpload={(file) => onUpload(doc.type, file)}
+                onDelete={userDoc ? () => onDelete(userDoc.id) : undefined}
+                isUploading={isUploading}
+                isPremium={isPremium}
+                onPremiumRequired={onPremiumRequired}
+              />
+              {userDoc && <DocumentComments documentId={userDoc.id} />}
+            </div>
           );
         })}
       </div>
