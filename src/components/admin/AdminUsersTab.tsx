@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Users, Crown, DollarSign, FileSearch, Map, Mail, Filter } from "lucide-react";
 import { trackEvent } from "@/lib/trackingService";
 import { toast } from "sonner";
@@ -29,15 +30,21 @@ interface UserSubmission {
 
 type FilterType = "todos" | "pagos_pendientes" | "leads_sin_registro";
 
+interface PartnerOption { id: string; team_name: string; }
+interface Assignment { partner_id: string; user_id: string; }
+
 export const AdminUsersTab = () => {
   const [users, setUsers] = useState<UserSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingReviews, setPendingReviews] = useState(0);
   const [routeCounts, setRouteCounts] = useState({ regularizacion: 0, arraigos: 0 });
   const [activeFilter, setActiveFilter] = useState<FilterType>("todos");
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
 
   useEffect(() => {
     fetchData();
+    fetchPartners();
   }, []);
 
   const fetchData = async () => {
@@ -136,6 +143,42 @@ export const AdminUsersTab = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchPartners = async () => {
+    const { data: p } = await supabase.from("partners").select("id, team_name");
+    setPartners(p || []);
+    const { data: a } = await supabase.from("partner_assignments").select("partner_id, user_id");
+    setAssignments(a || []);
+  };
+
+  const handleAssignPartner = async (userId: string, partnerId: string) => {
+    // Remove existing assignment for this user
+    const existing = assignments.find((a) => a.user_id === userId);
+    if (existing) {
+      await supabase.from("partner_assignments").delete()
+        .eq("user_id", userId).eq("partner_id", existing.partner_id);
+    }
+    if (partnerId === "none") {
+      setAssignments((prev) => prev.filter((a) => a.user_id !== userId));
+      toast.success("Partner desasignado");
+      return;
+    }
+    const { error } = await supabase.from("partner_assignments").insert({
+      partner_id: partnerId, user_id: userId,
+    });
+    if (error) toast.error("Error al asignar partner");
+    else {
+      toast.success("Partner asignado");
+      setAssignments((prev) => [...prev.filter((a) => a.user_id !== userId), { partner_id: partnerId, user_id: userId }]);
+    }
+  };
+
+  const getAssignedPartner = (userId: string | null) => {
+    if (!userId) return null;
+    const a = assignments.find((x) => x.user_id === userId);
+    if (!a) return null;
+    return partners.find((p) => p.id === a.partner_id) || null;
   };
 
   const getDocBadge = (status: UserSubmission["docStatus"]) => {
@@ -286,6 +329,7 @@ export const AdminUsersTab = () => {
                 <TableHead>Plan</TableHead>
                 <TableHead>Ruta</TableHead>
                 <TableHead>Documentos</TableHead>
+                <TableHead>Partner</TableHead>
                 <TableHead>CRM Tag</TableHead>
                 <TableHead>Fecha</TableHead>
                 {activeFilter === "pagos_pendientes" && <TableHead>Acción</TableHead>}
@@ -314,6 +358,26 @@ export const AdminUsersTab = () => {
                     {user.routeName || "—"}
                   </TableCell>
                   <TableCell>{getDocBadge(user.docStatus)}</TableCell>
+                  <TableCell>
+                    {user.user_id ? (
+                      <Select
+                        value={getAssignedPartner(user.user_id)?.id || "none"}
+                        onValueChange={(val) => user.user_id && handleAssignPartner(user.user_id, val)}
+                      >
+                        <SelectTrigger className="w-[140px] h-8 text-xs">
+                          <SelectValue placeholder="Sin asignar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sin asignar</SelectItem>
+                          {partners.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>{p.team_name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {user.crm_tag ? (
                       <Badge variant="outline" className="text-xs font-mono">

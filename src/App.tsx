@@ -19,6 +19,7 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import ComingSoon from "./pages/ComingSoon";
 import Admin from "./pages/Admin";
+import PartnerDashboard from "./pages/PartnerDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +50,7 @@ const App = () => (
                 <Route path="/privacidad" element={<Privacy />} />
                 <Route path="/destinos/:countryId" element={<ComingSoon />} />
                 <Route path="/admin" element={<Admin />} />
+                <Route path="/partner/dashboard" element={<PartnerDashboard />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
