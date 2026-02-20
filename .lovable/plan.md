@@ -1,147 +1,170 @@
 
-# Plan: Corregir Botón "Entrar" y Rediseñar "+ Añadir Ruta"
+# Plan: C04 - CRM, Notificaciones y Dashboard Admin
 
 ## Resumen
 
-Dos correcciones de UX:
-1. El botón "Entrar" en el navbar debe abrir directamente la vista de **iniciar sesión** en lugar de crear cuenta
-2. El botón "+ Añadir ruta" debe usar el mismo diseño visual que la sección "Explorar Rutas"
+Implementar un sistema CRM interno con dashboard de metricas, notificaciones automatizadas para usuarios, etiquetado por ruta/plan, y seccion de comentarios del equipo legal.
 
 ---
 
-## Cambio 1: Botón "Entrar" → Iniciar Sesión
+## 1. Admin Dashboard Mejorado
 
-### Problema Actual
-El `AuthModal` siempre abre en modo `"signup"` por defecto, incluso cuando el usuario hace clic en "Entrar".
+### Archivo: `src/components/admin/AdminUsersTab.tsx`
 
-### Solución
-Añadir una prop `defaultMode` al `AuthModal` para controlar qué vista mostrar al abrir.
+**Metricas nuevas** (reemplazar las 3 cards actuales por 5):
+- Total Revenue (calculado desde usuarios con suscripcion activa x precio)
+- Usuarios en Regularizacion 2026 vs Arraigos (query a `user_active_routes` + `route_templates`)
+- Pending Reviews (documentos con status "analyzing")
+- Total Pro / Premium users
 
-### Archivos a Modificar
+**Lista de usuarios Premium** con badges de estado:
+- Consultar `user_documents` para cada usuario premium
+- Badges: "Docs Completos" (todos valid), "En Revision" (alguno analyzing), "Pendiente" (alguno waiting), "Apto" (todos valid + submitted)
+
+**Estilo**: Mantener B&W con acentos sutiles. Cards con borde `border-border`, fondo `bg-background`.
+
+---
+
+## 2. Sistema de Notificaciones
+
+### Nuevo archivo: `src/components/dashboard/NotificationBanner.tsx`
+
+Componente que muestra alertas contextuales en el dashboard del usuario.
+
+**Logica de alertas:**
+
+| Alerta | Condicion | Mensaje |
+|--------|-----------|---------|
+| Retencion | Usuario premium, sin `penales_origen` subido, cuenta creada hace >48h | "Asegura tu plaza: Completa tu documentacion para la Regularizacion 2026." |
+| Aprobacion | Documento con status `valid` (detectado via polling o al cargar) | "Documento validado con exito!" |
+
+### Modificar: `src/components/dashboard/UrgencyBanner.tsx`
+
+Cambiar deadline de "1 de abril" a "30 de Junio" y mostrarlo para todos los usuarios con rutas activas (no solo premium). Texto: "Faltan [X] dias para el cierre del proceso (30 de Junio)."
+
+### Nuevo hook: `src/hooks/useNotifications.tsx`
+
+- Consulta `user_documents` al cargar dashboard
+- Calcula tiempo desde creacion de cuenta (`onboarding_submissions.created_at`)
+- Retorna lista de notificaciones activas
+
+---
+
+## 3. CRM - Etiquetado de Usuarios
+
+### Migracion de base de datos
+
+Agregar columna `crm_tag` a `onboarding_submissions`:
+
+```sql
+ALTER TABLE public.onboarding_submissions
+ADD COLUMN crm_tag text;
+```
+
+**Logica de etiquetado** (calculada en frontend para el admin panel, no almacenada):
+- Se genera combinando: ruta activa + plan de suscripcion
+- Ejemplo: `regularizacion_2026_premium`, `arraigo_social_pro`, `arraigo_social_free`
+
+Mostrar tags como badges en `AdminUsersTab`.
+
+### Seccion de Comentarios del Equipo Legal
+
+#### Migracion: nueva tabla `document_comments`
+
+```sql
+CREATE TABLE public.document_comments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id uuid NOT NULL REFERENCES public.user_documents(id) ON DELETE CASCADE,
+  author_email text NOT NULL,
+  content text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.document_comments ENABLE ROW LEVEL SECURITY;
+
+-- Admin puede CRUD
+CREATE POLICY "Admin can manage comments"
+  ON public.document_comments FOR ALL
+  TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+-- Usuarios pueden ver comentarios de sus documentos
+CREATE POLICY "Users can view comments on their docs"
+  ON public.document_comments FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_documents ud
+      WHERE ud.id = document_comments.document_id
+        AND ud.user_id = auth.uid()
+    )
+  );
+```
+
+#### Nuevo componente: `src/components/dashboard/DocumentComments.tsx`
+
+- Muestra comentarios del equipo legal debajo de cada documento en el Document Vault
+- Solo lectura para usuarios, editable para admin
+- Estilo: burbuja de chat minimalista con timestamp
+
+#### Admin: Seccion de gestion de documentos
+
+Agregar nueva tab "Documentos" en Admin panel (`AdminDocumentsTab.tsx`):
+- Lista documentos de todos los usuarios premium
+- Permite cambiar status (waiting -> analyzing -> valid / error)
+- Campo de texto para agregar comentarios
+
+---
+
+## 4. Consistencia de Precios
+
+Verificar y asegurar que todos los componentes usan `STRIPE_PRICES` de `documentConfig.ts`:
+
+| Archivo | Estado actual |
+|---------|--------------|
+| `PricingSection.tsx` | Hardcoded 9.99 - actualizar para mostrar ambos planes |
+| `QualificationSuccess.tsx` | Usa STRIPE_PRICES correctamente |
+| `PremiumFeatureModal.tsx` | Usa STRIPE_PRICES correctamente |
+| `PremiumModal.tsx` | No muestra precio - OK |
+
+**Accion**: Actualizar `PricingSection.tsx` para incluir Plan Premium (19.99) ademas de Pro.
+
+---
+
+## Archivos a Crear
+
+| Archivo | Proposito |
+|---------|-----------|
+| `src/hooks/useNotifications.tsx` | Hook para calcular notificaciones |
+| `src/components/dashboard/NotificationBanner.tsx` | Banners de alerta en dashboard |
+| `src/components/dashboard/DocumentComments.tsx` | Comentarios del equipo legal |
+| `src/components/admin/AdminDocumentsTab.tsx` | Tab admin para gestionar documentos |
+
+## Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/components/auth/AuthModal.tsx` | Añadir prop `defaultMode?: "signup" \| "login"` |
-| `src/components/Navbar.tsx` | Pasar `defaultMode="login"` al AuthModal |
+| `src/components/admin/AdminUsersTab.tsx` | Metricas + badges de estado + CRM tags |
+| `src/components/dashboard/UrgencyBanner.tsx` | Deadline 30 Junio, visible para todos con rutas |
+| `src/components/dashboard/DocumentVault.tsx` | Integrar DocumentComments |
+| `src/pages/Admin.tsx` | Agregar tab "Documentos" |
+| `src/pages/Dashboard.tsx` | Integrar NotificationBanner |
+| `src/components/PricingSection.tsx` | Agregar Plan Premium 19.99 |
+
+## Migraciones SQL
+
+1. Agregar `crm_tag` a `onboarding_submissions`
+2. Crear tabla `document_comments` con RLS
 
 ---
 
-## Cambio 2: Rediseño Botón "+ Añadir Ruta"
+## Orden de Implementacion
 
-### Problema Actual
-El botón actual es un simple `Button variant="outline" size="sm"` que no coincide con el estilo premium del explorador de rutas.
-
-### Diseño Propuesto
-
-```text
-┌──────────────────────────────────────────────────────────────────┐
-│                                                                  │
-│  Mis Rutas Activas                                               │
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │                                                             │  │
-│  │  🧭  Explorar más rutas                                    │  │
-│  │                                                             │  │
-│  │  Descubre todas las rutas migratorias disponibles          │  │
-│  │                                                             │  │
-│  │                         [ Ver rutas disponibles → ]        │  │
-│  │                                                             │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-### Características del Nuevo Diseño
-- Tarjeta con bordes redondeados (`rounded-2xl`) como en RouteExplorer
-- Icono `Compass` consistente con la sección de explorar
-- Texto descriptivo breve
-- Botón de acción con flecha (`ArrowRight`)
-- Hover effect con sombra y borde primary
-
-### Archivo a Modificar
-
-| Archivo | Cambio |
-|---------|--------|
-| `src/pages/Dashboard.tsx` | Reemplazar botón simple por tarjeta estilizada |
-
----
-
-## Implementación
-
-### 1. AuthModal.tsx
-
-```typescript
-// Añadir prop
-interface AuthModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  defaultEmail?: string;
-  leadId?: string;
-  onSuccess?: () => void;
-  defaultMode?: "signup" | "login";  // Nueva prop
-}
-
-// Usar la prop para inicializar el estado
-const [mode, setMode] = useState<"signup" | "login">(defaultMode || "signup");
-
-// Resetear mode cuando cambia defaultMode o se abre el modal
-useEffect(() => {
-  if (isOpen && defaultMode) {
-    setMode(defaultMode);
-  }
-}, [isOpen, defaultMode]);
-```
-
-### 2. Navbar.tsx
-
-```typescript
-<AuthModal
-  isOpen={showAuthModal}
-  onClose={() => setShowAuthModal(false)}
-  onSuccess={() => navigate("/dashboard")}
-  defaultMode="login"  // Añadir esta línea
-/>
-```
-
-### 3. Dashboard.tsx - Nueva Tarjeta de Explorar
-
-```typescript
-{canAddRoute && (
-  <div
-    className="group relative rounded-2xl border border-dashed border-border p-6 
-               transition-all hover:shadow-lg hover:border-primary/30 
-               bg-background/50 cursor-pointer"
-    onClick={() => setActiveNavItem("explorer")}
-  >
-    <div className="flex items-center justify-between">
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Compass className="w-5 h-5 text-primary" />
-          <h4 className="font-semibold group-hover:text-primary transition-colors">
-            Explorar más rutas
-          </h4>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Descubre todas las rutas migratorias disponibles
-        </p>
-      </div>
-      <Button variant="ghost" size="sm" className="gap-1">
-        Ver rutas
-        <ArrowRight className="w-4 h-4" />
-      </Button>
-    </div>
-  </div>
-)}
-```
-
----
-
-## Verificación
-
-| Escenario | Resultado Esperado |
-|-----------|-------------------|
-| Click en "Entrar" (navbar) | Modal abre con título "Inicia sesión" |
-| Click en "Empezar Gratis" | Modal abre con título "Crea tu cuenta" |
-| Dashboard con rutas activas | Nueva tarjeta de explorar con diseño premium |
-| Hover sobre tarjeta explorar | Sombra y borde primary aparecen |
-| Click en tarjeta explorar | Navega a la sección de explorar rutas |
+1. Migraciones de base de datos (crm_tag + document_comments)
+2. Hook de notificaciones + NotificationBanner
+3. Actualizar UrgencyBanner
+4. AdminUsersTab mejorado con metricas y tags
+5. AdminDocumentsTab (gestion de documentos + comentarios)
+6. DocumentComments en DocumentVault (vista usuario)
+7. Consistencia de precios en PricingSection
