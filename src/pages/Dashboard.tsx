@@ -5,6 +5,7 @@ import { TaskList } from "@/components/dashboard/TaskList";
 import { AuthBanner } from "@/components/dashboard/AuthBanner";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
+import { ProfileSection } from "@/components/dashboard/ProfileSection";
 import { DocumentVault } from "@/components/dashboard/DocumentVault";
 import { ResourcesSection } from "@/components/dashboard/ResourcesSection";
 import { SupportModal } from "@/components/dashboard/SupportModal";
@@ -21,6 +22,7 @@ import { ProgressBar } from "@/components/dashboard/ProgressBar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
@@ -46,8 +48,9 @@ interface Task {
 
 const Dashboard = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, signOut } = useAuth();
   const { isPremium, handleCheckout, isCheckoutLoading } = useSubscription();
   const {
     templates,
@@ -260,13 +263,11 @@ const Dashboard = () => {
       setShowSupportModal(true);
       return;
     }
+  };
 
-    if (id === "profile") {
-      toast({
-        title: "Próximamente",
-        description: "Esta sección estará disponible pronto.",
-      });
-    }
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
   };
 
   const handleStartRoute = useCallback(
@@ -340,6 +341,13 @@ const Dashboard = () => {
   // Render the active section content
   const renderContent = () => {
     switch (activeNavItem) {
+      case "profile":
+        return (
+          <ProfileSection
+            isPremium={isPremium}
+            subscriptionStatus={isPremium ? "pro" : "free"}
+          />
+        );
       case "documents":
         // Use new DocumentVault for reg2026/arraigos routes
         if (activeRouteType) {
@@ -484,10 +492,12 @@ const Dashboard = () => {
         activeItem={activeNavItem}
         onItemClick={handleNavItemClick}
         onRegister={handleRegister}
+        onLogout={handleLogout}
         isLoggedIn={!!user}
         isPremium={isPremium}
         userName={userData.name}
         userEmail={user?.email}
+        subscriptionStatus={isPremium ? "pro" : "free"}
       />
 
       {/* Main Content */}
