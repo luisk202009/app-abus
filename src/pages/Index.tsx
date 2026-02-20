@@ -4,6 +4,9 @@ import { HeroSection } from "@/components/HeroSection";
 import { TrustBar } from "@/components/TrustBar";
 import { HowItWorksSection } from "@/components/HowItWorksSection";
 import { EligibilityCalculator } from "@/components/eligibility/EligibilityCalculator";
+import { ProcessRoadmap } from "@/components/ProcessRoadmap";
+import { ExpertNetworkPreview } from "@/components/ExpertNetworkPreview";
+import { TestimonialsCarousel } from "@/components/TestimonialsCarousel";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { ResourcesSection } from "@/components/ResourcesSection";
 import { PricingSection } from "@/components/PricingSection";
@@ -21,6 +24,9 @@ const Index = () => {
         <TrustBar />
         <HowItWorksSection />
         <EligibilityCalculator onStartProcess={() => setIsModalOpen(true)} />
+        <ProcessRoadmap />
+        <ExpertNetworkPreview />
+        <TestimonialsCarousel />
         <FeaturesSection />
         <ResourcesSection />
         <PricingSection onStartFree={() => setIsModalOpen(true)} />
