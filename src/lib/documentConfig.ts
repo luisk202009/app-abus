@@ -1,6 +1,6 @@
 // Document configuration for the Document Vault
 export type DocumentStatus = "waiting" | "analyzing" | "valid" | "error";
-export type DocumentCategory = "identidad" | "residencia" | "antecedentes";
+export type DocumentCategory = "identidad" | "residencia" | "antecedentes" | "identidad_permanente";
 export type RouteType = "regularizacion2026" | "arraigos";
 
 export interface DocumentType {
@@ -64,6 +64,30 @@ export const DOCUMENT_CATEGORIES: Record<RouteType, RouteDocumentConfig> = {
         },
       ],
     },
+    identidad_permanente: {
+      title: "Identidad Permanente 🔐",
+      icon: "shield-check",
+      documents: [
+        {
+          type: "tie_fisica",
+          name: "TIE (Tarjeta Física)",
+          description: "Tarjeta de Identidad de Extranjero",
+          required: false,
+        },
+        {
+          type: "resolucion_concedida",
+          name: "Resolución Concedida",
+          description: "Resolución oficial de concesión de residencia",
+          required: false,
+        },
+        {
+          type: "numero_ss",
+          name: "Número de Seguridad Social",
+          description: "Documento con tu número de afiliación",
+          required: false,
+        },
+      ],
+    },
   },
   arraigos: {
     identidad: {
@@ -123,6 +147,30 @@ export const DOCUMENT_CATEGORIES: Record<RouteType, RouteDocumentConfig> = {
           name: "Antecedentes Penales España",
           description: "Certificado del Ministerio de Justicia",
           required: true,
+        },
+      ],
+    },
+    identidad_permanente: {
+      title: "Identidad Permanente 🔐",
+      icon: "shield-check",
+      documents: [
+        {
+          type: "tie_fisica",
+          name: "TIE (Tarjeta Física)",
+          description: "Tarjeta de Identidad de Extranjero",
+          required: false,
+        },
+        {
+          type: "resolucion_concedida",
+          name: "Resolución Concedida",
+          description: "Resolución oficial de concesión de residencia",
+          required: false,
+        },
+        {
+          type: "numero_ss",
+          name: "Número de Seguridad Social",
+          description: "Documento con tu número de afiliación",
+          required: false,
         },
       ],
     },
