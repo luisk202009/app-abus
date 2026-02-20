@@ -1,203 +1,186 @@
 
-
-# Plan: G05 - Security Audit, SEO, Performance & Production Readiness
+# Plan: G05-FIX — Global Security Fix, RLS Hardening & Edge Function Auth
 
 ## Summary
 
-Final production hardening pass: fix RLS security warnings, upgrade the 404 page, add proper OG tags, create an admin system status tab, add an admin manual route, and apply CSS transitions for smooth view changes.
+Four targeted fixes addressing the exact security issues identified: (1) remove the `OR (user_id IS NULL)` RLS exposure on `onboarding_submissions`, (2) harden the `create-checkout` edge function to use `getClaims()`, (3) fix the internal server-to-server call from `stripe-webhook` → `send-welcome-email` that broke when JWT auth was added, and (4) add input validation to `send-welcome-email`. The document upload system is already fully functional — no changes needed there.
 
 ---
 
-## 1. Database Migration: Fix Overly Permissive RLS Policies
+## Issue 1: Critical RLS Fix — `onboarding_submissions` SELECT Leak
 
-The Supabase linter flagged 3 `WITH CHECK (true)` policies. These need tightening:
-
-### a) `onboarding_submissions` - "Allow anonymous inserts"
-This is intentional (anonymous lead capture from onboarding flow). **Leave as-is** but document the rationale.
-
-### b) `referrals` - "Allow authenticated insert referrals"
-Currently `WITH CHECK (true)` allows any authenticated user to insert any referral. Tighten to only allow inserts via service role (the checkout function). Change to:
+### Current Broken Policy
 ```sql
-DROP POLICY "Allow authenticated insert referrals" ON public.referrals;
--- No replacement needed: inserts happen via service_role in the edge function
+"Users can view their own submissions"
+USING: (auth.uid() = user_id) OR (user_id IS NULL)
 ```
 
-### c) Leaked password protection
-This is a Supabase dashboard setting, not a code change. We will note it for the admin to enable manually.
+The `OR (user_id IS NULL)` clause is a data leak. Any authenticated user can read ALL anonymous onboarding records (leads that haven't linked to an account yet), which contain: email, full name, nationality, income, savings, and professional profile.
+
+### Fix
+Drop and recreate as two separate, scoped policies:
+- **Policy A** (authenticated users, their own linked record): `USING (auth.uid() = user_id)`
+- **Policy B** (anonymous submissions, only visible to the session that created them — i.e., `user_id IS NULL` rows are only readable by unauthenticated queries, which RLS would handle via `anon` role): Since the onboarding flow uses `anon` insert but doesn't need to SELECT back, **we simply drop the `user_id IS NULL` clause entirely**.
+
+```sql
+DROP POLICY "Users can view their own submissions" ON public.onboarding_submissions;
+
+CREATE POLICY "Users can view their own submissions"
+ON public.onboarding_submissions
+FOR SELECT
+TO authenticated
+USING (auth.uid() = user_id);
+```
+
+This is safe because:
+- Admins see all via the `is_admin()` policy (already exists)
+- Partners see assigned users via `is_assigned_to_partner()` (already exists)
+- Anonymous leads don't need to SELECT their own record (they just insert and move on)
+- Authenticated users see only their own linked record
 
 ---
 
-## 2. Modify: `index.html` - OpenGraph & SEO Tags
+## Issue 2: Edge Function — `create-checkout` Auth Upgrade
 
-Update OG tags with Albus-specific branding:
-- `og:title`: "Albus - Tu Regularizacion 2026 en Espana"
-- `og:description`: "Analizamos tu perfil legal, generamos tu hoja de ruta migratoria y automatizamos tu burocracia."
-- `og:image`: Use the existing `/isotipo-albus.png` as a production image (or reference the published URL)
-- `og:url`: `https://app-abus.lovable.app`
-- Remove references to `lovable.dev` default OG images
-- Update `twitter:site` from `@Lovable` to `@AlbusApp` (or remove)
+### Current State
+`create-checkout` uses the older `getUser(token)` pattern (network call to auth server) instead of the faster, local `getClaims(token)` pattern used in the other functions.
 
----
+### Fix
+Update `create-checkout/index.ts` to use `getClaims()` for consistency and security:
 
-## 3. Modify: `src/pages/NotFound.tsx` - Custom 404 Page
+```typescript
+// Replace getUser() with getClaims()
+const supabaseClient = createClient(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+  { global: { headers: { Authorization: authHeader } } }
+);
 
-Redesign with Albus B&W aesthetic:
-- Albus isotipo logo at the top
-- "404" in large bold text
-- Spanish text: "Pagina no encontrada"
-- Two buttons: "Volver al Dashboard" and "Ir al Inicio"
-- Clean white background with border card, matching dashboard style
-
----
-
-## 4. New file: `src/components/admin/AdminSystemStatus.tsx`
-
-A "System Status" card for the admin panel:
-- Mock health indicators for: Supabase API, Stripe API, Edge Functions, Storage
-- Each shows a green/red dot with "Operativo" / "Error"
-- Uses `fetch` to ping Supabase health endpoint and Stripe (mock for Stripe)
-- Displays last check timestamp
-- "Verificar Ahora" button to re-run checks
+const token = authHeader.replace("Bearer ", "");
+const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+if (claimsError || !claimsData?.claims) {
+  return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+}
+const userId = claimsData.claims.sub;
+const userEmail = claimsData.claims.email;
+```
 
 ---
 
-## 5. New file: `src/pages/AdminManual.tsx`
+## Issue 3: `stripe-webhook` → `send-welcome-email` Internal Call (CRITICAL BUG)
 
-Protected route `/admin/manual` with admin-only access:
-- Three sections in accordion format:
-  1. **Como asignar Partners**: Step-by-step guide (go to Admin > Users tab, select partner from dropdown)
-  2. **Como validar recompensas de referidos**: Guide to update referral status in the referrals table
-  3. **Contactos de soporte tecnico**: List of key emails and resources
-- Same admin auth check as `/admin` page
+### The Problem
+When a payment completes, `stripe-webhook` calls `send-welcome-email` with:
+```typescript
+Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`
+```
 
----
+But `send-welcome-email` now requires a **valid user JWT** via `getClaims()`. The anon key is a static API key — NOT a user JWT. This means **welcome emails are silently failing** for every new paid subscriber.
 
-## 6. Modify: `src/App.tsx` - Add AdminManual Route
+### Fix Option: Use Service Role Key as the Bearer for internal server-to-server calls
+The Supabase service role JWT **is** a valid JWT that `getClaims()` can verify. We switch the internal call to use `SUPABASE_SERVICE_ROLE_KEY`:
 
-Add route: `<Route path="/admin/manual" element={<AdminManual />} />`
+```typescript
+Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+```
 
----
-
-## 7. Modify: `src/pages/Admin.tsx` - Add System Status & Manual Link
-
-- Add the `AdminSystemStatus` component above the tabs
-- Add a "Manual de Operacion" link button in the header that navigates to `/admin/manual`
+This is a secure server-to-server call (both functions run in Supabase's secure environment), so using the service role key here is appropriate.
 
 ---
 
-## 8. Modify: `src/components/admin/AdminUsersTab.tsx` - Mask Sensitive Data
+## Issue 4: `send-welcome-email` — Input Validation
 
-- Mask emails: show first 3 chars + "***" + domain (e.g., `joh***@gmail.com`)
-- Add a "Mostrar" toggle button per row to reveal full email (admin convenience)
-- This prevents accidental exposure in screen shares or screenshots
+### Current State
+The function accepts `name`, `email`, `visaType` without validation. An attacker with a valid token could submit malformed data.
+
+### Fix
+Add validation before processing:
+```typescript
+// Validate email format
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+if (!email || !emailRegex.test(email)) {
+  return new Response(JSON.stringify({ error: "Invalid email" }), { status: 400 });
+}
+
+// Validate name
+if (!name || name.trim().length === 0 || name.length > 200) {
+  return new Response(JSON.stringify({ error: "Invalid name" }), { status: 400 });
+}
+
+// Validate visaType whitelist
+const validVisaTypes = ['remote_worker', 'student', 'entrepreneur', 'non_lucrative'];
+if (visaType && !validVisaTypes.includes(visaType)) {
+  return new Response(JSON.stringify({ error: "Invalid visa type" }), { status: 400 });
+}
+```
 
 ---
 
-## 9. Add CSS Transitions for View Changes
+## Issue 5: Document Upload — Status Assessment
 
-Modify `src/pages/Dashboard.tsx`:
-- Wrap `renderContent()` output in a container with CSS fade transition
-- Use a simple `animate-in fade-in` class from tailwindcss-animate (already installed)
-- Apply `key={activeNavItem}` to trigger re-render animation on section change
+After reviewing `useDocumentVault.tsx` and `DocumentStatusCard.tsx` in detail:
+
+**The document upload system is already fully functional.** It:
+- Uploads files to the `user-documents` Supabase Storage bucket
+- Sets status to `"analyzing"` (blue — "En revisión") immediately on upload
+- Runs mock AI validation and updates to `"valid"` or `"error"`
+- Has a proper 5MB file size limit
+- Only accepts PDF, JPG, PNG formats
+- The storage bucket has correct RLS policies scoped by user ID
+
+No changes needed here. The task's mention of a "disponible pronto" toast refers to an older version that has already been replaced.
 
 ---
-
-## Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/components/admin/AdminSystemStatus.tsx` | System health indicator for admin panel |
-| `src/pages/AdminManual.tsx` | Protected admin operations manual |
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `index.html` | Update OG tags with Albus branding, remove Lovable defaults |
-| `src/pages/NotFound.tsx` | Redesign 404 page with Albus aesthetic |
-| `src/App.tsx` | Add `/admin/manual` route |
-| `src/pages/Admin.tsx` | Add SystemStatus card + manual link |
-| `src/components/admin/AdminUsersTab.tsx` | Mask emails in user table |
-| `src/pages/Dashboard.tsx` | Add fade transitions on section changes |
+| Database migration | Drop + recreate `"Users can view their own submissions"` policy removing `OR (user_id IS NULL)` |
+| `supabase/functions/create-checkout/index.ts` | Replace `getUser()` with `getClaims()` pattern |
+| `supabase/functions/stripe-webhook/index.ts` | Fix internal call to use `SUPABASE_SERVICE_ROLE_KEY` instead of `SUPABASE_ANON_KEY` |
+| `supabase/functions/send-welcome-email/index.ts` | Add email/name/visaType input validation |
 
-## Database Migration Required
+## Files NOT Changing (Already Correct)
 
-Remove the overly permissive `Allow authenticated insert referrals` policy on the `referrals` table.
+| File | Why |
+|------|-----|
+| `useDocumentVault.tsx` | Upload logic is fully implemented and connected to storage |
+| `DocumentStatusCard.tsx` | Upload button and file input are working |
+| `supabase/functions/stripe-webhook/index.ts` | JWT auth is NOT needed here — it's a webhook authenticated by Stripe signature, which is the correct pattern for public webhook endpoints |
+| `supabase/config.toml` | All `verify_jwt = false` entries are correct — we validate in code |
 
 ---
 
 ## Technical Details
 
-### Email Masking Function
+### Why `verify_jwt = false` in config.toml is Correct
+Supabase's `verify_jwt = true` config flag uses a deprecated key-rotation system. The modern, recommended approach is `verify_jwt = false` + manual `getClaims()` in the function code. This is exactly what the current setup does (and what Supabase docs recommend).
 
-```typescript
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  const visible = local.slice(0, 3);
-  return `${visible}***@${domain}`;
-}
-```
-
-### System Status Health Check
-
-```typescript
-const checkSupabase = async () => {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/`, {
-      headers: { apikey: SUPABASE_ANON_KEY },
-    });
-    return res.ok;
-  } catch { return false; }
-};
-```
-
-### 404 Page Design
+### RLS Policy Breakdown After Fix
 
 ```
-+----------------------------------+
-|        [Albus Isotipo]           |
-|             404                  |
-|    Pagina no encontrada          |
-|                                  |
-|  [Volver al Dashboard]  [Inicio] |
-+----------------------------------+
+onboarding_submissions SELECT access:
+├── Admin (is_admin()) → sees ALL rows ✓
+├── Partners (is_assigned_to_partner()) → sees assigned rows ✓  
+├── Authenticated users → sees ONLY their own (auth.uid() = user_id) ✓
+└── Anonymous rows (user_id IS NULL) → NOT accessible to anyone via SELECT ✓
 ```
 
-### OG Tags (Final)
+### Edge Function Auth Flow After Fix
 
-```html
-<meta property="og:title" content="Albus - Tu Regularizacion 2026 en Espana" />
-<meta property="og:description" content="Analizamos tu perfil legal, generamos tu hoja de ruta migratoria y automatizamos tu burocracia." />
-<meta property="og:image" content="https://app-abus.lovable.app/isotipo-albus.png" />
-<meta property="og:url" content="https://app-abus.lovable.app" />
-<meta property="og:type" content="website" />
-<meta name="twitter:card" content="summary" />
 ```
-
-### Dashboard Fade Transition
-
-```tsx
-<div key={activeNavItem} className="animate-in fade-in duration-300">
-  {renderContent()}
-</div>
+create-checkout:     Client JWT → getClaims() → verified ✓
+send-welcome-email:  Client JWT → getClaims() → verified ✓ (or Service Role from webhook)
+create-one-time:     Client JWT → getClaims() → verified ✓
+stripe-webhook:      Stripe Signature → constructEvent() → verified ✓ (no JWT needed)
 ```
-
-### Admin Manual Note for Leaked Password Protection
-
-The admin manual will include a note:
-> "Habilita la proteccion de contrasenas filtradas en Supabase Dashboard > Authentication > Settings > Password Security"
-
----
 
 ## Implementation Order
 
-1. Database migration (remove permissive referrals INSERT policy)
-2. `index.html` - OG tags
-3. `src/pages/NotFound.tsx` - Custom 404
-4. `src/components/admin/AdminSystemStatus.tsx` - System status
-5. `src/pages/AdminManual.tsx` - Operations manual
-6. `src/App.tsx` - Add manual route
-7. `src/pages/Admin.tsx` - Wire system status + manual link
-8. `src/components/admin/AdminUsersTab.tsx` - Email masking
-9. `src/pages/Dashboard.tsx` - Fade transitions
-
+1. Database migration: fix `onboarding_submissions` RLS policy
+2. Update `create-checkout` to use `getClaims()`
+3. Fix `stripe-webhook` internal email call (use service role key)
+4. Add input validation to `send-welcome-email`
+5. Redeploy all affected edge functions
+6. Re-run security scan to confirm all errors resolved
