@@ -102,7 +102,7 @@ export const FiscalSimulator = ({
       </Card>
 
       {/* Main Grid */}
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left: Form */}
         <Card className="border-border rounded-2xl">
           <CardHeader className="pb-4">

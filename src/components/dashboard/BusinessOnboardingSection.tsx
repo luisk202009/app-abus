@@ -249,7 +249,7 @@ export const BusinessOnboardingSection = ({
             <h4 className="text-sm font-semibold mb-2">
               Comunidades con Cuota Cero (0 €/mes)
             </h4>
-            <div className="rounded-xl border border-border overflow-hidden">
+            <div className="rounded-xl border border-border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -265,10 +265,10 @@ export const BusinessOnboardingSection = ({
                 <TableBody>
                   {CUOTA_CERO_REGIONS.map((region) => (
                     <TableRow key={region.name}>
-                      <TableCell className="text-sm font-medium">
+                      <TableCell className="text-xs sm:text-sm font-medium">
                         {region.name}
                       </TableCell>
-                      <TableCell className="text-sm text-right text-muted-foreground">
+                      <TableCell className="text-xs sm:text-sm text-right text-muted-foreground">
                         {region.months} meses
                       </TableCell>
                       <TableCell className="text-right">
@@ -364,7 +364,7 @@ export const BusinessOnboardingSection = ({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-xl border border-border overflow-hidden">
+          <div className="rounded-xl border border-border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -379,7 +379,7 @@ export const BusinessOnboardingSection = ({
               <TableBody>
                 {TAX_OBLIGATIONS.map((tax) => (
                   <TableRow key={tax.modelo}>
-                    <TableCell className="text-sm font-medium">
+                    <TableCell className="text-xs sm:text-sm font-medium">
                       {tax.obligation}
                     </TableCell>
                     <TableCell>
@@ -387,10 +387,10 @@ export const BusinessOnboardingSection = ({
                         {tax.modelo}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="text-xs sm:text-sm text-muted-foreground">
                       {tax.frequency}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">
+                    <TableCell className="text-xs sm:text-sm text-muted-foreground hidden sm:table-cell">
                       {tax.description}
                     </TableCell>
                   </TableRow>
