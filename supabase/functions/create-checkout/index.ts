@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { priceId, returnUrl } = await req.json();
+    const { priceId, returnUrl, referralCode } = await req.json();
 
     // Initialize Stripe
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
@@ -63,7 +63,42 @@ serve(async (req) => {
     // Default price ID for Albus Pro subscription
     const checkoutPriceId = priceId || "price_1SwlHBGVNlA5jALg4s8gArUM";
 
-    // Create checkout session - mode based on price
+    // Handle referral code discount
+    let discounts: { coupon: string }[] | undefined;
+    let referralCodeId: string | null = null;
+
+    if (referralCode) {
+      // Use service role client to look up referral code
+      const serviceClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
+
+      const { data: refCode } = await serviceClient
+        .from("referral_codes")
+        .select("id, user_id")
+        .eq("code", referralCode)
+        .single();
+
+      if (refCode && refCode.user_id !== user.id) {
+        referralCodeId = refCode.id;
+
+        // Find or create the referral coupon
+        const coupons = await stripe.coupons.list({ limit: 100 });
+        let coupon = coupons.data.find((c: any) => c.name === "REFERRAL_5EUR");
+        if (!coupon) {
+          coupon = await stripe.coupons.create({
+            name: "REFERRAL_5EUR",
+            amount_off: 500,
+            currency: "eur",
+            duration: "once",
+          });
+        }
+        discounts = [{ coupon: coupon.id }];
+      }
+    }
+
+    // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [
@@ -73,12 +108,28 @@ serve(async (req) => {
         },
       ],
       mode: "subscription",
+      ...(discounts ? { discounts } : {}),
       success_url: `${returnUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${returnUrl}/dashboard`,
       metadata: {
         supabase_user_id: user.id,
+        referral_code_id: referralCodeId || "",
       },
     });
+
+    // Track the referral
+    if (referralCodeId) {
+      const serviceClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
+      await serviceClient.from("referrals").insert({
+        referrer_id: referralCodeId,
+        referred_user_id: user.id,
+        referred_name: user.email?.split("@")[0] || null,
+        status: "pendiente",
+      });
+    }
 
     return new Response(
       JSON.stringify({ url: session.url }),
