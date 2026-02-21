@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS onboarding_submissions_user_id_unique ON onboarding_submissions(user_id);

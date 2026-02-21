@@ -137,7 +137,6 @@ const Dashboard = () => {
           } | null;
           setUserData(prev => {
             const newName = submission.full_name || user.email?.split("@")[0] || "Usuario";
-            // Don't overwrite if user already has a real name (e.g. from profile edit)
             const keepName = prev.name !== "Usuario" && newName === (user.email?.split("@")[0] || "Usuario");
             return {
               name: keepName ? prev.name : newName,
@@ -148,6 +147,13 @@ const Dashboard = () => {
               leadId: submission.id,
             };
           });
+        } else {
+          // No submission yet - use auth data as fallback
+          setUserData(prev => ({
+            ...prev,
+            name: prev.name !== "Usuario" ? prev.name : (user.email?.split("@")[0] || "Usuario"),
+            email: user.email || "",
+          }));
         }
 
         // Fetch tasks from Supabase
