@@ -61,18 +61,20 @@ export const useRoutes = (): UseRoutesReturn => {
     if (!user) return false;
     
     if (isPremium) {
-      // Pro: limit is based on active routes
+      // Pro/Premium: limit is based on active routes
       return activeRoutes.length < maxRoutes;
     } else {
-      // Free: limit is based on lifetime routes created
-      return totalRoutesCreated < 1;
+      // Free: limit is based on lifetime routes created (use max of counter and actual routes)
+      const effectiveCount = Math.max(totalRoutesCreated, activeRoutes.length);
+      return effectiveCount < 1;
     }
   }, [user, isPremium, activeRoutes.length, maxRoutes, totalRoutesCreated]);
 
   // Slot exhausted = Free user who has already created 1+ route
   const slotExhausted = useMemo(() => {
-    return !isPremium && totalRoutesCreated >= 1;
-  }, [isPremium, totalRoutesCreated]);
+    const effectiveCount = Math.max(totalRoutesCreated, activeRoutes.length);
+    return !isPremium && effectiveCount >= 1;
+  }, [isPremium, totalRoutesCreated, activeRoutes.length]);
 
   // Fetch templates and active routes
   useEffect(() => {
