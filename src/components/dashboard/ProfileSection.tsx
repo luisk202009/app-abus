@@ -75,16 +75,17 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
 
     const { error } = await supabase
       .from("onboarding_submissions")
-      .update({
+      .upsert({
+        user_id: user.id,
         full_name: editData.full_name.trim(),
         nationality: editData.nationality.trim(),
-      })
-      .eq("user_id", user.id);
+        email: user.email || "",
+      }, { onConflict: "user_id" });
 
     if (error) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el perfil." });
     } else {
-      setProfileData(prev => ({ ...prev, ...editData }));
+      setProfileData(prev => ({ ...prev, full_name: editData.full_name.trim(), nationality: editData.nationality.trim() }));
       setIsEditing(false);
       toast({ title: "Perfil actualizado", description: "Tus datos se han guardado correctamente." });
       onProfileUpdate?.({ full_name: editData.full_name.trim(), nationality: editData.nationality.trim() });
