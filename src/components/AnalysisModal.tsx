@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { trackEvent } from "@/lib/trackingService";
 import { useNavigate } from "react-router-dom";
 import { X, ArrowRight, ArrowLeft, CheckCircle, Compass } from "lucide-react";
+import { AuthModal } from "@/components/auth/AuthModal";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CountrySelect } from "@/components/onboarding/CountrySelect";
@@ -117,6 +118,8 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
   const [showSuccess, setShowSuccess] = useState(false);
   const [recommendation, setRecommendation] = useState<AIRecommendation | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"roadmap" | "explore" | null>(null);
   const [formData, setFormData] = useState<FormData>({
     nationality: "",
     currentSituation: "",
@@ -221,29 +224,39 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
   };
 
   const handleViewRoadmap = () => {
-    // Navigate to dashboard with user data - this activates the recommended route
-    navigate("/dashboard", {
-      state: {
-        name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
-        visaType: recommendation?.visa_type || "consultation",
-        visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
-        leadId: leadId,
-        startRecommendedRoute: true, // Flag to auto-start route
-        source: source, // Pass source for auto-routing (e.g., "regularizacion")
-      },
-    });
-    handleClose();
+    // Open auth modal - registration required before accessing dashboard
+    setPendingAction("roadmap");
+    setShowAuthModal(true);
   };
 
   const handleExploreOthers = () => {
-    // Navigate to explore page to see all routes
-    navigate("/explorar", {
-      state: {
-        fromOnboarding: true,
-        leadId: leadId,
-      },
-    });
+    // Open auth modal - registration required before exploring
+    setPendingAction("explore");
+    setShowAuthModal(true);
+  };
+
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false);
+    if (pendingAction === "roadmap") {
+      navigate("/dashboard", {
+        state: {
+          name: formData.name.trim(),
+          email: formData.email.trim().toLowerCase(),
+          visaType: recommendation?.visa_type || "consultation",
+          visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
+          leadId: leadId,
+          startRecommendedRoute: true,
+          source: source,
+        },
+      });
+    } else {
+      navigate("/explorar", {
+        state: {
+          fromOnboarding: true,
+          leadId: leadId,
+        },
+      });
+    }
     handleClose();
   };
 
@@ -343,6 +356,18 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
               Ver otros destinos disponibles
             </Button>
           </div>
+
+          {/* Auth Modal for mandatory registration */}
+          <AuthModal
+            isOpen={showAuthModal}
+            onClose={() => {
+              setShowAuthModal(false);
+              setPendingAction(null);
+            }}
+            defaultEmail={formData.email}
+            leadId={leadId || undefined}
+            onSuccess={handleAuthSuccess}
+          />
         </div>
       </div>
     );
