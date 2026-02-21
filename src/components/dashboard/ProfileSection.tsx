@@ -8,13 +8,15 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { CountrySelect } from "@/components/onboarding/CountrySelect";
 
 interface ProfileSectionProps {
   isPremium: boolean;
   subscriptionStatus: string;
+  onProfileUpdate?: (data: { full_name: string; nationality: string }) => void;
 }
 
-export const ProfileSection = ({ isPremium, subscriptionStatus }: ProfileSectionProps) => {
+export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate }: ProfileSectionProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
@@ -85,6 +87,7 @@ export const ProfileSection = ({ isPremium, subscriptionStatus }: ProfileSection
       setProfileData(prev => ({ ...prev, ...editData }));
       setIsEditing(false);
       toast({ title: "Perfil actualizado", description: "Tus datos se han guardado correctamente." });
+      onProfileUpdate?.({ full_name: editData.full_name.trim(), nationality: editData.nationality.trim() });
     }
     setIsSaving(false);
   };
@@ -184,13 +187,13 @@ export const ProfileSection = ({ isPremium, subscriptionStatus }: ProfileSection
             <div className="flex-1">
               <p className="text-xs text-muted-foreground">Nacionalidad</p>
               {isEditing ? (
-                <Input
-                  value={editData.nationality}
-                  onChange={(e) => setEditData(prev => ({ ...prev, nationality: e.target.value }))}
-                  className="mt-1 h-9"
-                  placeholder="Tu nacionalidad"
-                  maxLength={100}
-                />
+                <div className="mt-1">
+                  <CountrySelect
+                    value={editData.nationality}
+                    onChange={(val) => setEditData(prev => ({ ...prev, nationality: val }))}
+                    compact
+                  />
+                </div>
               ) : (
                 <p className="font-medium">{profileData.nationality || "Sin definir"}</p>
               )}

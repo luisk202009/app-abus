@@ -427,6 +427,12 @@ const Dashboard = () => {
           <ProfileSection
             isPremium={isPremium}
             subscriptionStatus={isPremium ? "pro" : "free"}
+            onProfileUpdate={(data) => {
+              setUserData(prev => ({
+                ...prev,
+                name: data.full_name || prev.name,
+              }));
+            }}
           />
         );
       case "documents":
