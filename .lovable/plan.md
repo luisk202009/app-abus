@@ -1,154 +1,110 @@
 
 
-# Plan: Fix Storage Connectivity, Checkout Resilience & UI Placeholders
+# Plan: G06 — Operational Excellence, Manual Plan Management & Usage Limits
 
 ## Summary
 
-Three targeted fixes to resolve storage status checks, prevent checkout failures from referral errors, and replace the last remaining placeholder toast with real upload functionality.
+Four changes: add admin plan management modal, enforce free-tier limit messaging on route buttons, improve checkout error diagnostics, and clean up remaining placeholder text.
 
 ---
 
-## Change 1: Fix AdminSystemStatus Storage Check
+## Change 1: Manual Plan Management in Admin Users Tab
 
-**Problem:** The Storage health check pings `/storage/v1/bucket` with the anon key, which returns an auth error (the anon key lacks permission to list buckets), causing a false "error" status.
+**File:** `src/components/admin/AdminUsersTab.tsx`
 
-**Fix:** Change the endpoint to check the specific `user-documents` bucket's public info at `/storage/v1/object/list/user-documents` or use the health-check friendly endpoint `/storage/v1/bucket/user-documents`. Since anon can't list buckets but the API responds with a structured error (not a 500), we adjust to check for `status < 500` like Edge Functions, or better: use a known-accessible path.
+Add a "Gestionar Plan" button to each user row (only for registered users with `user_id`). Clicking opens a Dialog with:
+- A Select dropdown for subscription level: `free`, `pro`, `premium`
+- A DatePicker for expiration/next billing date (stored as metadata but not currently in the schema -- see note below)
+- A "Guardar" button that updates `onboarding_submissions.subscription_status` directly
 
-**File:** `src/components/admin/AdminSystemStatus.tsx`
-- Change Storage check from `/storage/v1/bucket` to `/storage/v1/bucket/user-documents` with the Authorization header
-- Accept any non-5xx response as "ok" (a 401/400 means the service is running; a 500 means it's down)
+**Schema note:** There is no `next_billing_date` column on `onboarding_submissions`. We need a migration to add it.
+
+**New migration:**
+```sql
+ALTER TABLE public.onboarding_submissions
+ADD COLUMN IF NOT EXISTS next_billing_date date;
+```
+
+**UI flow:**
+- Button appears in each user row (visible column or inline)
+- Dialog pre-fills with current `subscription_status` and `next_billing_date`
+- On save: `supabase.from("onboarding_submissions").update({ subscription_status, next_billing_date }).eq("user_id", userId)`
+- Toast confirms success; local state updates immediately
 
 ---
 
-## Change 2: Wrap Referral Logic in try/catch in create-checkout
+## Change 2: Free Tier Limit Enforcement Messaging
 
-**Problem:** If the referral code lookup or insert fails (e.g., invalid code, DB error), the entire checkout fails and the user sees "No se pudo iniciar el proceso de pago."
+The limit logic already exists in `useRoutes.tsx` (`canAddRoute`, `slotExhausted`). The modals (`RouteLimitModal`, `SlotExhaustedModal`) already trigger correctly.
 
-**Fix:** Wrap the referral block (lines 126-188) in its own try/catch so referral failures are logged but the checkout session still completes.
+**Enhancement needed in two places:**
+
+**A. `RouteExplorer.tsx` (dashboard route explorer):**
+- When `!canAddRoute && slotExhausted`, show a Banner/Alert above the grid:
+  "Limite de ruta gratuita alcanzado. Mejora a Pro para gestionar multiples procesos."
+- Disable the "Iniciar esta ruta" button for non-active routes and change label to "Limite alcanzado"
+
+**B. `RouteDetailModal` (Explorar page detail modal):**
+- Pass `canAddRoute` and `slotExhausted` as props
+- When limits are hit, disable the start button and show inline message
+
+**File:** `src/components/routes/RouteDetailModal.tsx` -- add props for limit state
+**File:** `src/pages/Explorar.tsx` -- pass the new props
+
+---
+
+## Change 3: Checkout Error Diagnostics
 
 **File:** `supabase/functions/create-checkout/index.ts`
-- Wrap referral code lookup + discount creation (lines 126-155) in try/catch; on failure, set `discounts = undefined` and `referralCodeId = null`
-- Wrap the post-session referral insert (lines 177-188) in its own try/catch; log the error but don't throw
+
+In the catch block (line 207-216):
+- Log `error.raw` for Stripe-specific errors: `console.log("Stripe Error Details:", error?.raw || error)`
+- Return a more descriptive error message based on error type:
+  - If `error.type === "StripeInvalidRequestError"` -> "Error de configuracion de Stripe: ID de precio invalido o inexistente"
+  - Otherwise -> current generic message
+
+**File:** `src/hooks/useSubscription.tsx`
+
+In `handleCheckout` (line 93-97):
+- Before throwing, log the full response: `console.error("Checkout server response:", data)`
+- Show `data.error` in the toast description instead of the generic message
 
 ---
 
-## Change 3: Replace "disponible pronto" Toast with Real Upload
+## Change 4: UI Placeholder Cleanup
 
-**Problem:** `DocumentsSection.tsx` (the fallback for non-regularizacion visa types) still shows "La funcionalidad de subida estara disponible pronto" instead of triggering a real file upload.
+Search results show "Proximamente" in these files (none are DocumentVault/FiscalSimulator/BusinessOnboarding -- those are clean):
 
-**Fix:** Add a hidden file input (like `DocumentStatusCard` already does) and wire `handleUploadClick` to trigger it. On file selection, upload via `supabase.storage.from('user-documents').upload()`.
+| File | Text | Action |
+|------|------|--------|
+| `src/components/ResourcesSection.tsx` | `tag: "Proximamente"` on 4 items | Keep as-is -- these are marketing landing page items for features not yet built. They are NOT toasts, they are legitimate "coming soon" labels for unreleased content sections. |
+| `src/components/WaitlistModal.tsx` | `"Proximamente: {country.name}"` | Keep -- this is intentional for countries not yet supported |
+| `src/pages/Recursos.tsx` | `"Proximamente"` badge | Keep -- same as ResourcesSection |
+| `src/components/dashboard/ResourcesSection.tsx` | `"Proximamente mas recursos"` | Keep -- empty state for resources section when no resources exist |
 
-**File:** `src/components/dashboard/DocumentsSection.tsx`
-- Add a `useRef<HTMLInputElement>` for a hidden file input
-- Replace the toast in `handleUploadClick` with `fileInputRef.current?.click()`
-- Add `handleFileChange` handler with 5MB validation
-- Add `uploadToStorage` function using Supabase Storage SDK
-- Add a hidden `<input type="file">` element
-- Track which document triggered the upload via state
-
----
-
-## Change 4: Improve Checkout Error Logging
-
-**Problem:** The error toast "No se pudo iniciar el proceso de pago" gives no debugging info.
-
-**Fix:** In `DocumentVault.tsx`, the error is already logged to console (`console.error("Checkout error:", error)`). Enhance it to also include the server response body for easier debugging.
-
-**File:** `src/components/dashboard/DocumentVault.tsx`
-- Before `throw new Error(data.error)`, log the full response: `console.error("Checkout server error:", data)`
+**Result:** No "disponible pronto" toasts remain anywhere. The "Proximamente" labels found are all legitimate content labels, not placeholder toasts blocking functionality. No cleanup needed.
 
 ---
 
-## No Changes Needed
+## Files to Modify
 
-| Item | Status |
+| File | Change |
 |------|--------|
-| Storage bucket `user-documents` | Already exists, private, with full RLS |
-| Storage RLS policies | Complete: owner CRUD, admin full, partner read |
-| `DocumentStatusCard` upload | Already has real file input and calls `onUpload` |
-| `DocumentVault` upload flow | Already wired to `useDocumentVault.uploadDocument` |
-| `PremiumFeatureModal` checkout | Already calls `onUpgrade(priceId)` correctly |
+| Database migration | Add `next_billing_date` column to `onboarding_submissions` |
+| `src/components/admin/AdminUsersTab.tsx` | Add "Gestionar Plan" button + Dialog with plan selector and date picker |
+| `src/components/dashboard/RouteExplorer.tsx` | Add limit-reached banner and disable buttons with message |
+| `src/components/routes/RouteDetailModal.tsx` | Accept limit props and disable start button when exhausted |
+| `src/pages/Explorar.tsx` | Pass `canAddRoute`/`slotExhausted` to `RouteDetailModal` |
+| `supabase/functions/create-checkout/index.ts` | Add `error.raw` logging and descriptive error responses |
+| `src/hooks/useSubscription.tsx` | Log full server response and show specific error in toast |
 
----
+## Files NOT Changing
 
-## Technical Details
+| File | Why |
+|------|-----|
+| `src/components/dashboard/DocumentVault.tsx` | No "disponible pronto" found |
+| `src/components/dashboard/FiscalSimulator.tsx` | No placeholder toasts found |
+| `src/components/dashboard/BusinessOnboardingSection.tsx` | No placeholder toasts found |
+| `src/components/dashboard/DocumentsSection.tsx` | Already fixed in previous sprint |
+| `src/components/admin/AdminSystemStatus.tsx` | Already fixed in previous sprint |
 
-### AdminSystemStatus - Storage endpoint fix
-```typescript
-// Before
-const res = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
-  headers: { apikey: SUPABASE_ANON_KEY },
-});
-results.push({ name: "Storage", status: res.ok ? "ok" : "error" });
-
-// After: check specific bucket endpoint; non-5xx = service is running
-const res = await fetch(`${SUPABASE_URL}/storage/v1/bucket/user-documents`, {
-  headers: {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  },
-});
-results.push({ name: "Storage", status: res.status < 500 ? "ok" : "error" });
-```
-
-### create-checkout - Referral try/catch
-```typescript
-// Wrap referral lookup in try/catch
-if (referralCode) {
-  try {
-    // ... existing referral lookup and discount logic ...
-  } catch (refError) {
-    console.error("Referral processing failed (non-blocking):", refError);
-    // Continue checkout without discount
-  }
-}
-
-// Wrap post-checkout referral insert in try/catch
-if (referralCodeId) {
-  try {
-    // ... existing insert logic ...
-  } catch (refInsertError) {
-    console.error("Referral tracking failed (non-blocking):", refInsertError);
-  }
-}
-```
-
-### DocumentsSection - Real upload replacement
-```typescript
-const fileInputRef = useRef<HTMLInputElement>(null);
-const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
-
-const handleUploadClick = (docId: string) => (e: React.MouseEvent) => {
-  e.preventDefault();
-  e.stopPropagation();
-  if (!isPremium) { setShowPremiumModal(true); return; }
-  setUploadingDocId(docId);
-  fileInputRef.current?.click();
-};
-
-const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file || !user || !uploadingDocId) return;
-  if (file.size > 5 * 1024 * 1024) {
-    toast({ variant: "destructive", title: "Archivo muy grande", description: "Max 5MB." });
-    return;
-  }
-  // Upload to storage and update toast
-  const path = `${user.id}/${uploadingDocId}_${Date.now()}.${file.name.split('.').pop()}`;
-  const { error } = await supabase.storage.from('user-documents').upload(path, file);
-  if (error) {
-    toast({ variant: "destructive", title: "Error", description: "No se pudo subir." });
-  } else {
-    toast({ title: "Documento subido", description: `${file.name} subido correctamente.` });
-  }
-  if (fileInputRef.current) fileInputRef.current.value = "";
-};
-```
-
----
-
-## Deployment
-
-- `create-checkout` edge function will be auto-deployed after edit
-- No database migration needed (storage bucket and policies already exist)
-- All changes are code-only
