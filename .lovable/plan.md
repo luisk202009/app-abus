@@ -1,163 +1,89 @@
 
 
-# Plan: Fix Route Limits, Plan Management, Checkout Errors & Document View Consistency
+# G08: Sincronizacion de Identidad y Refinamiento del Perfil
 
-## Summary
+## Resumen
 
-Four bugs to fix: (1) free users can bypass route limit, (2) admin "Plan" button not visible for some users, (3) checkout crashes with circular JSON error, (4) document views inconsistent between users.
-
----
-
-## Issue 1: Free User Can Add More Than 1 Route
-
-**Root Cause:** The `canAddRoute` check in `useRoutes.tsx` relies on `totalRoutesCreated` fetched from `onboarding_submissions.total_routes_created`. If this counter was never properly incremented (missing DB trigger or the counter is 0 despite having routes), the client-side guard fails. There is no server-side enforcement.
-
-**Fix (two parts):**
-
-**A. Add a DB trigger** (migration) to auto-increment `total_routes_created` on `user_active_routes` INSERT:
-```sql
-CREATE OR REPLACE FUNCTION increment_total_routes()
-RETURNS TRIGGER AS $$
-BEGIN
-  UPDATE onboarding_submissions
-  SET total_routes_created = total_routes_created + 1
-  WHERE user_id = NEW.user_id;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE TRIGGER trg_increment_routes
-AFTER INSERT ON user_active_routes
-FOR EACH ROW
-EXECUTE FUNCTION increment_total_routes();
-```
-
-**B. Fix the client-side fallback** in `useRoutes.tsx`: when `totalRoutesCreated` is 0 but `activeRoutes.length > 0`, use `activeRoutes.length` as the real count. Change `canAddRoute` logic:
-```typescript
-const canAddRoute = useMemo(() => {
-  if (!user) return false;
-  if (isPremium) {
-    return activeRoutes.length < maxRoutes;
-  } else {
-    // Use the higher of totalRoutesCreated or activeRoutes.length
-    const effectiveCount = Math.max(totalRoutesCreated, activeRoutes.length);
-    return effectiveCount < 1;
-  }
-}, [user, isPremium, activeRoutes.length, maxRoutes, totalRoutesCreated]);
-```
-
-Also update `slotExhausted`:
-```typescript
-const slotExhausted = useMemo(() => {
-  const effectiveCount = Math.max(totalRoutesCreated, activeRoutes.length);
-  return !isPremium && effectiveCount >= 1;
-}, [isPremium, totalRoutesCreated, activeRoutes.length]);
-```
-
-**C. Data fix migration:** Sync existing users' `total_routes_created` with their actual route count:
-```sql
-UPDATE onboarding_submissions os
-SET total_routes_created = (
-  SELECT COUNT(*) FROM user_active_routes uar WHERE uar.user_id = os.user_id
-)
-WHERE os.user_id IS NOT NULL;
-```
+Cuatro mejoras: (1) selector de nacionalidad con buscador en el perfil, (2) sincronizacion automatica onboarding -> perfil al primer login, (3) nombre actualizado en sidebar/header, (4) badges de plan y boton mejorado en AdminUsersTab.
 
 ---
 
-## Issue 2: Admin Cannot See "Plan" Button for Some Users
+## 1. Selector de Nacionalidad en el Perfil
 
-**Root Cause:** The "Plan" button in `AdminUsersTab.tsx` only renders when `user.user_id` is truthy (line 450). Users showing as "Lead" have `user_id = null` in `onboarding_submissions`, so the button is hidden.
+**Archivo:** `src/components/dashboard/ProfileSection.tsx`
 
-The user luisk20@gmail.com likely has a registered auth account but their `onboarding_submissions.user_id` was never linked. This is a data issue, not a code issue -- the button correctly only shows for registered users.
+- Importar `CountrySelect` de `@/components/onboarding/CountrySelect`
+- En modo edicion, reemplazar el `<Input>` de nacionalidad (lineas 187-193) por `<CountrySelect>` con estilos adaptados para el perfil (mas compacto que la version onboarding)
+- El componente `CountrySelect` ya tiene buscador integrado, lista de paises y banderas
+- El valor se guarda en `onboarding_submissions.nationality` (logica existente en `handleSave`)
 
-**Fix:** No code change needed for the button visibility logic (it's correct to only manage plans for registered users). However, we should make the button more visible by also showing a "Tipo" indicator:
-- If `user_id` exists: show "Plan" button (already works)
-- Verify the user is actually registered. If luisk20@gmail.com has `user_id` set, then the button should appear. If it shows as "Lead", the `user_id` column is null.
-
-**Action:** Verify in the admin panel that luisk20@gmail.com has `user_id` set. If not, the user needs to log in to link their account. No code change needed.
-
----
-
-## Issue 3: Circular Structure Error on Checkout
-
-**Root Cause:** In `Dashboard.tsx`, multiple places call `handleCheckout` directly as a button onClick handler:
-```tsx
-<Button onClick={handleCheckout} disabled={isCheckoutLoading}>
-```
-
-This passes the `MouseEvent` object as the first argument to `handleCheckout(referralCode?: string)`. Inside `handleCheckout`, it then does:
-```typescript
-body: JSON.stringify({
-  returnUrl: window.location.origin,
-  ...(referralCode ? { referralCode } : {}),
-})
-```
-
-Since `referralCode` is actually a MouseEvent (truthy), it spreads the entire MouseEvent into the JSON body. `JSON.stringify` fails because MouseEvent contains circular references (HTMLButtonElement -> React fiber -> stateNode -> back to element).
-
-**Fix in `Dashboard.tsx`:** Wrap all `handleCheckout` calls in arrow functions:
-```tsx
-// Before (6+ places in Dashboard.tsx)
-<Button onClick={handleCheckout}>
-
-// After
-<Button onClick={() => handleCheckout()}>
-```
-
-All affected locations in `renderContent()`:
-- Line 364 (life-in-spain upsell)
-- Line 381 (business upsell)
-- Line 399 (appointment upsell)
-- Line 414 (simulator upsell)
+**Ajuste menor en CountrySelect:** Aceptar una prop opcional `compact` para renderizar con padding reducido (`py-2` en vez de `py-4`) cuando se usa dentro del perfil.
 
 ---
 
-## Issue 4: Different Document Views Between Users
+## 2. Sincronizacion Onboarding -> Perfil (Primer Login)
 
-**Root Cause:** The document section in `Dashboard.tsx` (line 432-450) uses two completely different components:
+**Archivo:** `src/hooks/useAuth.tsx`
 
-- If user has reg2026/arraigos route -> shows `DocumentVault` (new component with categories: Identidad, Residencia, Antecedentes)
-- Otherwise -> shows `DocumentsSection` (old component with generic documents grid)
+- Despues de `setUser(session.user)` en `onAuthStateChange`, agregar logica para verificar si el usuario tiene una `onboarding_submission` vinculada
+- Si `full_name` o `nationality` estan vacios en la sesion pero existen en `onboarding_submissions`, copiar esos valores
+- Esto se ejecuta una sola vez al detectar un evento `SIGNED_IN`
 
-The admin (l@albus.com.co) in "Pro" test mode may have a different route type than luisk20@gmail.com, resulting in different views.
-
-Additionally, the `DocumentVault` component gates access with `isPremium` but does NOT use `planFeatures.hasDocuments` -- it uses the raw `isPremium` boolean. For free users, it should show the PremiumFeatureModal.
-
-**Fix:** Update the documents case in Dashboard.tsx to use `planFeatures.hasDocuments` for gating:
-```typescript
-case "documents":
-  if (!planFeatures.hasDocuments) {
-    // Show upsell for document access
-    return (
-      <div className="text-center py-16 space-y-4">
-        <FolderLock className="w-12 h-12 mx-auto text-muted-foreground" />
-        <h3 className="text-lg font-semibold">Boveda de Documentos</h3>
-        <p className="text-muted-foreground text-sm max-w-md mx-auto">
-          Organiza y valida tus documentos. Disponible para usuarios Pro y Premium.
-        </p>
-        <Button onClick={() => handleCheckout()}>
-          Mejorar mi plan
-        </Button>
-      </div>
-    );
-  }
-  // Show DocumentVault for reg2026/arraigos, DocumentsSection otherwise
-  if (activeRouteType) {
-    return <DocumentVault routeType={activeRouteType} isPremium={isPremium} />;
-  }
-  return <DocumentsSection ... />;
+Flujo:
+```text
+onAuthStateChange(SIGNED_IN) ->
+  fetch onboarding_submissions WHERE user_id = user.id ->
+  if submission.full_name exists -> user metadata queda disponible
 ```
 
-This ensures both users see the same gating behavior, and the correct vault component is shown based on their route type.
+En la practica, el Dashboard ya hace un fetch de `onboarding_submissions` y usa `full_name` de ahi (linea 139-140). Lo que falta es que el sidebar reciba ese nombre actualizado.
+
+**Archivo:** `src/pages/Dashboard.tsx`
+
+- El `userData.name` ya se carga desde `onboarding_submissions.full_name` (linea 139-140)
+- Asegurar que se pasa como `userName` al `DashboardSidebar` (verificar que esto ya funciona)
+- Si el usuario edita su nombre en ProfileSection, actualizar `userData.name` en Dashboard para que el sidebar refleje el cambio sin recargar
 
 ---
 
-## Files to Modify
+## 3. Nombre Actualizado en el Sidebar
 
-| File | Change |
-|------|--------|
-| Database migration | Add trigger for `total_routes_created` increment + sync existing data |
-| `src/hooks/useRoutes.tsx` | Fix `canAddRoute` and `slotExhausted` to use `Math.max(totalRoutesCreated, activeRoutes.length)` |
-| `src/pages/Dashboard.tsx` | Wrap all `handleCheckout` in arrow functions; add `planFeatures.hasDocuments` gate for documents section |
+**Archivo:** `src/pages/Dashboard.tsx`
+
+- Verificar que `userData.name` se pasa al sidebar como `userName`
+- Agregar un listener o callback desde `ProfileSection` al guardar para actualizar el nombre en el estado del Dashboard
+- Si no hay nombre, el fallback `user.email?.split("@")[0]` ya existe (linea 140)
+
+**Cambio concreto:** Hacer que `ProfileSection` reciba un callback `onProfileUpdate` que actualice `userData` en el Dashboard al guardar.
+
+---
+
+## 4. Mejoras en AdminUsersTab
+
+**Archivo:** `src/components/admin/AdminUsersTab.tsx`
+
+**A. Columna "Estatus de Plan" con badges de colores:**
+- La columna "Plan" ya existe (lineas 401-410) pero usa estilos poco diferenciados
+- Cambiar los badges:
+  - `pro` y `premium`: Badge verde (`bg-green-100 text-green-800`)
+  - `free`: Badge gris (`bg-gray-100 text-gray-600`)
+  - `Lead` (sin user_id): Badge outline como esta
+
+**B. Boton "Gestionar Plan" mejorado:**
+- Cambiar el icono de `Settings` a `CreditCard` (tarjeta de credito)
+- Cambiar texto de "Plan" a "Gestionar Plan"
+- Hacerlo visible siempre que `user.user_id` exista (ya funciona asi)
+
+---
+
+## Archivos a Modificar
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/components/onboarding/CountrySelect.tsx` | Agregar prop `compact` para estilo reducido |
+| `src/components/dashboard/ProfileSection.tsx` | Usar `CountrySelect` en lugar de Input para nacionalidad; agregar callback `onProfileUpdate` |
+| `src/pages/Dashboard.tsx` | Pasar callback `onProfileUpdate` a ProfileSection; actualizar `userData` al guardar perfil |
+| `src/components/admin/AdminUsersTab.tsx` | Badges verdes/grises para plan; icono CreditCard en boton |
+
+No se requieren migraciones de base de datos. Todos los textos seran en espanol.
 
