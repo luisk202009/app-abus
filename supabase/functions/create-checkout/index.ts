@@ -87,23 +87,25 @@ serve(async (req) => {
       });
     }
 
-    // Use getUser() for JWT validation
+    // Use getClaims() for JWT validation (works even with expired sessions)
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
     );
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError || !userData?.user) {
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      console.error("[create-checkout] Auth error:", claimsError?.message);
       return new Response(JSON.stringify({ error: "No autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = userData.user.id;
-    const userEmail = userData.user.email;
+    const userId = claimsData.claims.sub as string;
+    const userEmail = claimsData.claims.email as string;
 
     if (!userId || !userEmail) {
       return new Response(JSON.stringify({ error: "No autorizado: faltan datos del usuario" }), {
