@@ -1,88 +1,84 @@
 
-
-# Plan: G06 — Operational Excellence, Manual Plan Management & Usage Limits
+# Plan: G07 — Fix Stripe Errors & Implement Dynamic Plan Management
 
 ## Summary
 
-Four changes: add admin plan management modal, enforce free-tier limit messaging on route buttons, improve checkout error diagnostics, and clean up remaining placeholder text.
+Five changes: fix checkout URL and error handling, add feature-gate columns to the `plans` table, update the Admin Plans editor, make feature gating dynamic from the DB, and make the Pricing Page data-driven.
 
 ---
 
-## Change 1: Manual Plan Management in Admin Users Tab
+## Change 1: Fix Checkout URL & Error Handling
 
-**File:** `src/components/admin/AdminUsersTab.tsx`
+**Problem A:** `useSubscription.tsx` sends `returnUrl: window.location.origin` (e.g., `https://app-abus.lovable.app`). The edge function then builds `success_url: ${returnUrl}/success`. This works. However, the `allowedOrigins` list in `create-checkout` does NOT include the preview URL, causing failures during dev/testing.
 
-Add a "Gestionar Plan" button to each user row (only for registered users with `user_id`). Clicking opens a Dialog with:
-- A Select dropdown for subscription level: `free`, `pro`, `premium`
-- A DatePicker for expiration/next billing date (stored as metadata but not currently in the schema -- see note below)
-- A "Guardar" button that updates `onboarding_submissions.subscription_status` directly
+**Fix:** Add the preview origin to the `allowedOrigins` array. Also add a fallback: if no `returnUrl` is provided, use `req.headers.get("origin")`.
 
-**Schema note:** There is no `next_billing_date` column on `onboarding_submissions`. We need a migration to add it.
+**Problem B:** When `handleCheckout` errors, passing the raw error object to toast can cause "circular structure" issues.
 
-**New migration:**
+**Fix:** Ensure only `error.message` (string) is ever passed to the toast description. Already mostly correct but add a safety wrapper.
+
+**Files:**
+- `supabase/functions/create-checkout/index.ts` — add preview URL to allowedOrigins, add origin fallback
+- `src/hooks/useSubscription.tsx` — ensure error.message safety
+
+---
+
+## Change 2: Add Feature-Gate Columns to Plans Table (Migration)
+
+The `plans` table already has `max_routes` (integer). We need to add boolean feature columns.
+
+**Migration:**
 ```sql
-ALTER TABLE public.onboarding_submissions
-ADD COLUMN IF NOT EXISTS next_billing_date date;
+ALTER TABLE public.plans
+  ADD COLUMN IF NOT EXISTS has_documents boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS has_fiscal_simulator boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS has_appointments boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS has_life_in_spain boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS has_business boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS has_referrals boolean NOT NULL DEFAULT false;
 ```
 
-**UI flow:**
-- Button appears in each user row (visible column or inline)
-- Dialog pre-fills with current `subscription_status` and `next_billing_date`
-- On save: `supabase.from("onboarding_submissions").update({ subscription_status, next_billing_date }).eq("user_id", userId)`
-- Toast confirms success; local state updates immediately
+Then seed existing plans with appropriate values using the insert tool (UPDATE).
 
 ---
 
-## Change 2: Free Tier Limit Enforcement Messaging
+## Change 3: Update Admin Plans Tab
 
-The limit logic already exists in `useRoutes.tsx` (`canAddRoute`, `slotExhausted`). The modals (`RouteLimitModal`, `SlotExhaustedModal`) already trigger correctly.
+**File:** `src/components/admin/AdminPlansTab.tsx`
 
-**Enhancement needed in two places:**
+Add to the Plan interface and form:
+- `max_routes` (number input)
+- Six boolean toggles: `has_documents`, `has_fiscal_simulator`, `has_appointments`, `has_life_in_spain`, `has_business`, `has_referrals`
 
-**A. `RouteExplorer.tsx` (dashboard route explorer):**
-- When `!canAddRoute && slotExhausted`, show a Banner/Alert above the grid:
-  "Limite de ruta gratuita alcanzado. Mejora a Pro para gestionar multiples procesos."
-- Disable the "Iniciar esta ruta" button for non-active routes and change label to "Limite alcanzado"
-
-**B. `RouteDetailModal` (Explorar page detail modal):**
-- Pass `canAddRoute` and `slotExhausted` as props
-- When limits are hit, disable the start button and show inline message
-
-**File:** `src/components/routes/RouteDetailModal.tsx` -- add props for limit state
-**File:** `src/pages/Explorar.tsx` -- pass the new props
+Display `max_routes` and feature toggles in the table and edit dialog.
 
 ---
 
-## Change 3: Checkout Error Diagnostics
+## Change 4: Dynamic Feature Gating via useSubscription
 
-**File:** `supabase/functions/create-checkout/index.ts`
+**Current:** `useSubscription` returns `isPremium` (boolean) and `maxRoutes` (number). Dashboard checks `isPremium` for every section.
 
-In the catch block (line 207-216):
-- Log `error.raw` for Stripe-specific errors: `console.log("Stripe Error Details:", error?.raw || error)`
-- Return a more descriptive error message based on error type:
-  - If `error.type === "StripeInvalidRequestError"` -> "Error de configuracion de Stripe: ID de precio invalido o inexistente"
-  - Otherwise -> current generic message
+**New approach:** Create a `usePlanFeatures` hook (or extend `useSubscription`) that:
+1. Fetches the user's `subscription_status` from `onboarding_submissions`
+2. Fetches the matching plan from `plans` table (by slug matching subscription_status)
+3. Returns individual feature booleans: `hasDocuments`, `hasFiscalSimulator`, `hasAppointments`, `hasLifeInSpain`, `hasBusiness`, `hasReferrals`, `maxRoutes`
 
-**File:** `src/hooks/useSubscription.tsx`
-
-In `handleCheckout` (line 93-97):
-- Before throwing, log the full response: `console.error("Checkout server response:", data)`
-- Show `data.error` in the toast description instead of the generic message
+**Files:**
+- New: `src/hooks/usePlanFeatures.tsx`
+- Update: `src/pages/Dashboard.tsx` — replace `isPremium` checks with specific feature checks
+- Update: `src/components/dashboard/DashboardSidebar.tsx` — optionally show lock icons on gated items
+- Update: `src/hooks/useRoutes.tsx` — use `maxRoutes` from plan features
 
 ---
 
-## Change 4: UI Placeholder Cleanup
+## Change 5: Data-Driven Pricing Page
 
-Search results show "Proximamente" in these files (none are DocumentVault/FiscalSimulator/BusinessOnboarding -- those are clean):
+**File:** `src/components/PricingSection.tsx`
 
-| File | Text | Action |
-|------|------|--------|
-| `src/components/ResourcesSection.tsx` | `tag: "Proximamente"` on 4 items | Keep as-is -- these are marketing landing page items for features not yet built. They are NOT toasts, they are legitimate "coming soon" labels for unreleased content sections. |
-| `src/components/WaitlistModal.tsx` | `"Proximamente: {country.name}"` | Keep -- this is intentional for countries not yet supported |
-| `src/pages/Recursos.tsx` | `"Proximamente"` badge | Keep -- same as ResourcesSection |
-| `src/components/dashboard/ResourcesSection.tsx` | `"Proximamente mas recursos"` | Keep -- empty state for resources section when no resources exist |
-
-**Result:** No "disponible pronto" toasts remain anywhere. The "Proximamente" labels found are all legitimate content labels, not placeholder toasts blocking functionality. No cleanup needed.
+Replace hardcoded feature lists with data fetched from `plans` table:
+- Fetch all active plans on mount
+- Render cards dynamically from DB data (name, price_cents, features array, stripe_price_id)
+- Mark the "Popular" plan based on slug === "pro"
 
 ---
 
@@ -90,21 +86,79 @@ Search results show "Proximamente" in these files (none are DocumentVault/Fiscal
 
 | File | Change |
 |------|--------|
-| Database migration | Add `next_billing_date` column to `onboarding_submissions` |
-| `src/components/admin/AdminUsersTab.tsx` | Add "Gestionar Plan" button + Dialog with plan selector and date picker |
-| `src/components/dashboard/RouteExplorer.tsx` | Add limit-reached banner and disable buttons with message |
-| `src/components/routes/RouteDetailModal.tsx` | Accept limit props and disable start button when exhausted |
-| `src/pages/Explorar.tsx` | Pass `canAddRoute`/`slotExhausted` to `RouteDetailModal` |
-| `supabase/functions/create-checkout/index.ts` | Add `error.raw` logging and descriptive error responses |
-| `src/hooks/useSubscription.tsx` | Log full server response and show specific error in toast |
+| Database migration | Add 6 boolean columns to `plans` |
+| Data update | Seed existing plans with correct feature flags |
+| `supabase/functions/create-checkout/index.ts` | Add preview URL, origin fallback |
+| `src/hooks/useSubscription.tsx` | Safe error message handling |
+| `src/hooks/usePlanFeatures.tsx` | New hook for dynamic feature gating |
+| `src/components/admin/AdminPlansTab.tsx` | Add max_routes input + 6 feature toggles |
+| `src/pages/Dashboard.tsx` | Use `usePlanFeatures` for section gating |
+| `src/components/PricingSection.tsx` | Fetch plans from DB, render dynamically |
 
-## Files NOT Changing
+---
 
-| File | Why |
-|------|-----|
-| `src/components/dashboard/DocumentVault.tsx` | No "disponible pronto" found |
-| `src/components/dashboard/FiscalSimulator.tsx` | No placeholder toasts found |
-| `src/components/dashboard/BusinessOnboardingSection.tsx` | No placeholder toasts found |
-| `src/components/dashboard/DocumentsSection.tsx` | Already fixed in previous sprint |
-| `src/components/admin/AdminSystemStatus.tsx` | Already fixed in previous sprint |
+## Technical Details
 
+### usePlanFeatures hook
+```typescript
+export const usePlanFeatures = () => {
+  const { subscriptionStatus } = useSubscription();
+  const [planFeatures, setPlanFeatures] = useState({
+    maxRoutes: 1,
+    hasDocuments: false,
+    hasFiscalSimulator: false,
+    hasAppointments: false,
+    hasLifeInSpain: false,
+    hasBusiness: false,
+    hasReferrals: false,
+  });
+
+  useEffect(() => {
+    const fetchPlan = async () => {
+      const slug = subscriptionStatus === "free" ? "free" : subscriptionStatus;
+      const { data } = await supabase
+        .from("plans")
+        .select("*")
+        .eq("slug", slug)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (data) {
+        setPlanFeatures({
+          maxRoutes: data.max_routes,
+          hasDocuments: data.has_documents,
+          hasFiscalSimulator: data.has_fiscal_simulator,
+          hasAppointments: data.has_appointments,
+          hasLifeInSpain: data.has_life_in_spain,
+          hasBusiness: data.has_business,
+          hasReferrals: data.has_referrals,
+        });
+      }
+    };
+    fetchPlan();
+  }, [subscriptionStatus]);
+
+  return planFeatures;
+};
+```
+
+### Dashboard gating (before vs after)
+```typescript
+// Before
+case "simulator":
+  if (!isPremium) { /* show upsell */ }
+
+// After
+case "simulator":
+  if (!planFeatures.hasFiscalSimulator) { /* show upsell */ }
+```
+
+### Pricing Section (dynamic)
+```typescript
+const [plans, setPlans] = useState([]);
+useEffect(() => {
+  supabase.from("plans").select("*").eq("is_active", true)
+    .order("price_cents").then(({ data }) => setPlans(data || []));
+}, []);
+// Render plan cards from `plans` array
+```
