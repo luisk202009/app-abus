@@ -205,23 +205,27 @@ export const AdminUsersTab = () => {
   };
 
   const handleSavePlan = async () => {
-    if (!planModalUser?.user_id) return;
+    if (!planModalUser) return;
     setIsSavingPlan(true);
     try {
-      const { error } = await supabase
-        .from("onboarding_submissions")
-        .update({
-          subscription_status: planModalStatus,
-          next_billing_date: planModalDate ? format(planModalDate, "yyyy-MM-dd") : null,
-        } as any)
-        .eq("user_id", planModalUser.user_id);
+      const updateData = {
+        subscription_status: planModalStatus,
+        next_billing_date: planModalDate ? format(planModalDate, "yyyy-MM-dd") : null,
+      } as any;
 
+      let query;
+      if (planModalUser.user_id) {
+        query = supabase.from("onboarding_submissions").update(updateData).eq("user_id", planModalUser.user_id);
+      } else {
+        query = supabase.from("onboarding_submissions").update(updateData).eq("id", planModalUser.id);
+      }
+      const { error } = await query;
       if (error) throw error;
 
       // Update local state
       setUsers((prev) =>
         prev.map((u) =>
-          u.user_id === planModalUser.user_id
+          u.id === planModalUser.id
             ? { ...u, subscription_status: planModalStatus, next_billing_date: planModalDate ? format(planModalDate, "yyyy-MM-dd") : null }
             : u
         )
@@ -229,7 +233,7 @@ export const AdminUsersTab = () => {
       toast.success(`Plan actualizado a "${planModalStatus}" para ${planModalUser.full_name || planModalUser.email}`);
       setPlanModalUser(null);
     } catch (error) {
-      console.error("Error updating plan:", error);
+      console.error("Error al actualizar plan:", error);
       toast.error("Error al actualizar el plan");
     } finally {
       setIsSavingPlan(false);
@@ -447,17 +451,15 @@ export const AdminUsersTab = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      {user.user_id && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5 text-xs"
-                          onClick={() => openPlanModal(user)}
-                        >
-                          <CreditCard className="w-3.5 h-3.5" />
-                          Gestionar Plan
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs"
+                        onClick={() => openPlanModal(user)}
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        Gestionar Plan
+                      </Button>
                       {activeFilter === "pagos_pendientes" && (
                         <Button
                           variant="outline"
