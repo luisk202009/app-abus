@@ -1,84 +1,155 @@
 
-# Plan: G07 — Fix Stripe Errors & Implement Dynamic Plan Management
+
+# Plan: Fix Route Limits, Plan Management, Checkout Errors & Document View Consistency
 
 ## Summary
 
-Five changes: fix checkout URL and error handling, add feature-gate columns to the `plans` table, update the Admin Plans editor, make feature gating dynamic from the DB, and make the Pricing Page data-driven.
+Four bugs to fix: (1) free users can bypass route limit, (2) admin "Plan" button not visible for some users, (3) checkout crashes with circular JSON error, (4) document views inconsistent between users.
 
 ---
 
-## Change 1: Fix Checkout URL & Error Handling
+## Issue 1: Free User Can Add More Than 1 Route
 
-**Problem A:** `useSubscription.tsx` sends `returnUrl: window.location.origin` (e.g., `https://app-abus.lovable.app`). The edge function then builds `success_url: ${returnUrl}/success`. This works. However, the `allowedOrigins` list in `create-checkout` does NOT include the preview URL, causing failures during dev/testing.
+**Root Cause:** The `canAddRoute` check in `useRoutes.tsx` relies on `totalRoutesCreated` fetched from `onboarding_submissions.total_routes_created`. If this counter was never properly incremented (missing DB trigger or the counter is 0 despite having routes), the client-side guard fails. There is no server-side enforcement.
 
-**Fix:** Add the preview origin to the `allowedOrigins` array. Also add a fallback: if no `returnUrl` is provided, use `req.headers.get("origin")`.
+**Fix (two parts):**
 
-**Problem B:** When `handleCheckout` errors, passing the raw error object to toast can cause "circular structure" issues.
-
-**Fix:** Ensure only `error.message` (string) is ever passed to the toast description. Already mostly correct but add a safety wrapper.
-
-**Files:**
-- `supabase/functions/create-checkout/index.ts` — add preview URL to allowedOrigins, add origin fallback
-- `src/hooks/useSubscription.tsx` — ensure error.message safety
-
----
-
-## Change 2: Add Feature-Gate Columns to Plans Table (Migration)
-
-The `plans` table already has `max_routes` (integer). We need to add boolean feature columns.
-
-**Migration:**
+**A. Add a DB trigger** (migration) to auto-increment `total_routes_created` on `user_active_routes` INSERT:
 ```sql
-ALTER TABLE public.plans
-  ADD COLUMN IF NOT EXISTS has_documents boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS has_fiscal_simulator boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS has_appointments boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS has_life_in_spain boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS has_business boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS has_referrals boolean NOT NULL DEFAULT false;
+CREATE OR REPLACE FUNCTION increment_total_routes()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE onboarding_submissions
+  SET total_routes_created = total_routes_created + 1
+  WHERE user_id = NEW.user_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER trg_increment_routes
+AFTER INSERT ON user_active_routes
+FOR EACH ROW
+EXECUTE FUNCTION increment_total_routes();
 ```
 
-Then seed existing plans with appropriate values using the insert tool (UPDATE).
+**B. Fix the client-side fallback** in `useRoutes.tsx`: when `totalRoutesCreated` is 0 but `activeRoutes.length > 0`, use `activeRoutes.length` as the real count. Change `canAddRoute` logic:
+```typescript
+const canAddRoute = useMemo(() => {
+  if (!user) return false;
+  if (isPremium) {
+    return activeRoutes.length < maxRoutes;
+  } else {
+    // Use the higher of totalRoutesCreated or activeRoutes.length
+    const effectiveCount = Math.max(totalRoutesCreated, activeRoutes.length);
+    return effectiveCount < 1;
+  }
+}, [user, isPremium, activeRoutes.length, maxRoutes, totalRoutesCreated]);
+```
+
+Also update `slotExhausted`:
+```typescript
+const slotExhausted = useMemo(() => {
+  const effectiveCount = Math.max(totalRoutesCreated, activeRoutes.length);
+  return !isPremium && effectiveCount >= 1;
+}, [isPremium, totalRoutesCreated, activeRoutes.length]);
+```
+
+**C. Data fix migration:** Sync existing users' `total_routes_created` with their actual route count:
+```sql
+UPDATE onboarding_submissions os
+SET total_routes_created = (
+  SELECT COUNT(*) FROM user_active_routes uar WHERE uar.user_id = os.user_id
+)
+WHERE os.user_id IS NOT NULL;
+```
 
 ---
 
-## Change 3: Update Admin Plans Tab
+## Issue 2: Admin Cannot See "Plan" Button for Some Users
 
-**File:** `src/components/admin/AdminPlansTab.tsx`
+**Root Cause:** The "Plan" button in `AdminUsersTab.tsx` only renders when `user.user_id` is truthy (line 450). Users showing as "Lead" have `user_id = null` in `onboarding_submissions`, so the button is hidden.
 
-Add to the Plan interface and form:
-- `max_routes` (number input)
-- Six boolean toggles: `has_documents`, `has_fiscal_simulator`, `has_appointments`, `has_life_in_spain`, `has_business`, `has_referrals`
+The user luisk20@gmail.com likely has a registered auth account but their `onboarding_submissions.user_id` was never linked. This is a data issue, not a code issue -- the button correctly only shows for registered users.
 
-Display `max_routes` and feature toggles in the table and edit dialog.
+**Fix:** No code change needed for the button visibility logic (it's correct to only manage plans for registered users). However, we should make the button more visible by also showing a "Tipo" indicator:
+- If `user_id` exists: show "Plan" button (already works)
+- Verify the user is actually registered. If luisk20@gmail.com has `user_id` set, then the button should appear. If it shows as "Lead", the `user_id` column is null.
 
----
-
-## Change 4: Dynamic Feature Gating via useSubscription
-
-**Current:** `useSubscription` returns `isPremium` (boolean) and `maxRoutes` (number). Dashboard checks `isPremium` for every section.
-
-**New approach:** Create a `usePlanFeatures` hook (or extend `useSubscription`) that:
-1. Fetches the user's `subscription_status` from `onboarding_submissions`
-2. Fetches the matching plan from `plans` table (by slug matching subscription_status)
-3. Returns individual feature booleans: `hasDocuments`, `hasFiscalSimulator`, `hasAppointments`, `hasLifeInSpain`, `hasBusiness`, `hasReferrals`, `maxRoutes`
-
-**Files:**
-- New: `src/hooks/usePlanFeatures.tsx`
-- Update: `src/pages/Dashboard.tsx` — replace `isPremium` checks with specific feature checks
-- Update: `src/components/dashboard/DashboardSidebar.tsx` — optionally show lock icons on gated items
-- Update: `src/hooks/useRoutes.tsx` — use `maxRoutes` from plan features
+**Action:** Verify in the admin panel that luisk20@gmail.com has `user_id` set. If not, the user needs to log in to link their account. No code change needed.
 
 ---
 
-## Change 5: Data-Driven Pricing Page
+## Issue 3: Circular Structure Error on Checkout
 
-**File:** `src/components/PricingSection.tsx`
+**Root Cause:** In `Dashboard.tsx`, multiple places call `handleCheckout` directly as a button onClick handler:
+```tsx
+<Button onClick={handleCheckout} disabled={isCheckoutLoading}>
+```
 
-Replace hardcoded feature lists with data fetched from `plans` table:
-- Fetch all active plans on mount
-- Render cards dynamically from DB data (name, price_cents, features array, stripe_price_id)
-- Mark the "Popular" plan based on slug === "pro"
+This passes the `MouseEvent` object as the first argument to `handleCheckout(referralCode?: string)`. Inside `handleCheckout`, it then does:
+```typescript
+body: JSON.stringify({
+  returnUrl: window.location.origin,
+  ...(referralCode ? { referralCode } : {}),
+})
+```
+
+Since `referralCode` is actually a MouseEvent (truthy), it spreads the entire MouseEvent into the JSON body. `JSON.stringify` fails because MouseEvent contains circular references (HTMLButtonElement -> React fiber -> stateNode -> back to element).
+
+**Fix in `Dashboard.tsx`:** Wrap all `handleCheckout` calls in arrow functions:
+```tsx
+// Before (6+ places in Dashboard.tsx)
+<Button onClick={handleCheckout}>
+
+// After
+<Button onClick={() => handleCheckout()}>
+```
+
+All affected locations in `renderContent()`:
+- Line 364 (life-in-spain upsell)
+- Line 381 (business upsell)
+- Line 399 (appointment upsell)
+- Line 414 (simulator upsell)
+
+---
+
+## Issue 4: Different Document Views Between Users
+
+**Root Cause:** The document section in `Dashboard.tsx` (line 432-450) uses two completely different components:
+
+- If user has reg2026/arraigos route -> shows `DocumentVault` (new component with categories: Identidad, Residencia, Antecedentes)
+- Otherwise -> shows `DocumentsSection` (old component with generic documents grid)
+
+The admin (l@albus.com.co) in "Pro" test mode may have a different route type than luisk20@gmail.com, resulting in different views.
+
+Additionally, the `DocumentVault` component gates access with `isPremium` but does NOT use `planFeatures.hasDocuments` -- it uses the raw `isPremium` boolean. For free users, it should show the PremiumFeatureModal.
+
+**Fix:** Update the documents case in Dashboard.tsx to use `planFeatures.hasDocuments` for gating:
+```typescript
+case "documents":
+  if (!planFeatures.hasDocuments) {
+    // Show upsell for document access
+    return (
+      <div className="text-center py-16 space-y-4">
+        <FolderLock className="w-12 h-12 mx-auto text-muted-foreground" />
+        <h3 className="text-lg font-semibold">Boveda de Documentos</h3>
+        <p className="text-muted-foreground text-sm max-w-md mx-auto">
+          Organiza y valida tus documentos. Disponible para usuarios Pro y Premium.
+        </p>
+        <Button onClick={() => handleCheckout()}>
+          Mejorar mi plan
+        </Button>
+      </div>
+    );
+  }
+  // Show DocumentVault for reg2026/arraigos, DocumentsSection otherwise
+  if (activeRouteType) {
+    return <DocumentVault routeType={activeRouteType} isPremium={isPremium} />;
+  }
+  return <DocumentsSection ... />;
+```
+
+This ensures both users see the same gating behavior, and the correct vault component is shown based on their route type.
 
 ---
 
@@ -86,79 +157,7 @@ Replace hardcoded feature lists with data fetched from `plans` table:
 
 | File | Change |
 |------|--------|
-| Database migration | Add 6 boolean columns to `plans` |
-| Data update | Seed existing plans with correct feature flags |
-| `supabase/functions/create-checkout/index.ts` | Add preview URL, origin fallback |
-| `src/hooks/useSubscription.tsx` | Safe error message handling |
-| `src/hooks/usePlanFeatures.tsx` | New hook for dynamic feature gating |
-| `src/components/admin/AdminPlansTab.tsx` | Add max_routes input + 6 feature toggles |
-| `src/pages/Dashboard.tsx` | Use `usePlanFeatures` for section gating |
-| `src/components/PricingSection.tsx` | Fetch plans from DB, render dynamically |
+| Database migration | Add trigger for `total_routes_created` increment + sync existing data |
+| `src/hooks/useRoutes.tsx` | Fix `canAddRoute` and `slotExhausted` to use `Math.max(totalRoutesCreated, activeRoutes.length)` |
+| `src/pages/Dashboard.tsx` | Wrap all `handleCheckout` in arrow functions; add `planFeatures.hasDocuments` gate for documents section |
 
----
-
-## Technical Details
-
-### usePlanFeatures hook
-```typescript
-export const usePlanFeatures = () => {
-  const { subscriptionStatus } = useSubscription();
-  const [planFeatures, setPlanFeatures] = useState({
-    maxRoutes: 1,
-    hasDocuments: false,
-    hasFiscalSimulator: false,
-    hasAppointments: false,
-    hasLifeInSpain: false,
-    hasBusiness: false,
-    hasReferrals: false,
-  });
-
-  useEffect(() => {
-    const fetchPlan = async () => {
-      const slug = subscriptionStatus === "free" ? "free" : subscriptionStatus;
-      const { data } = await supabase
-        .from("plans")
-        .select("*")
-        .eq("slug", slug)
-        .eq("is_active", true)
-        .maybeSingle();
-
-      if (data) {
-        setPlanFeatures({
-          maxRoutes: data.max_routes,
-          hasDocuments: data.has_documents,
-          hasFiscalSimulator: data.has_fiscal_simulator,
-          hasAppointments: data.has_appointments,
-          hasLifeInSpain: data.has_life_in_spain,
-          hasBusiness: data.has_business,
-          hasReferrals: data.has_referrals,
-        });
-      }
-    };
-    fetchPlan();
-  }, [subscriptionStatus]);
-
-  return planFeatures;
-};
-```
-
-### Dashboard gating (before vs after)
-```typescript
-// Before
-case "simulator":
-  if (!isPremium) { /* show upsell */ }
-
-// After
-case "simulator":
-  if (!planFeatures.hasFiscalSimulator) { /* show upsell */ }
-```
-
-### Pricing Section (dynamic)
-```typescript
-const [plans, setPlans] = useState([]);
-useEffect(() => {
-  supabase.from("plans").select("*").eq("is_active", true)
-    .order("price_cents").then(({ data }) => setPlans(data || []));
-}, []);
-// Render plan cards from `plans` array
-```
