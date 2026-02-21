@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { TaskList } from "@/components/dashboard/TaskList";
-import { AuthBanner } from "@/components/dashboard/AuthBanner";
 import { AuthModal } from "@/components/auth/AuthModal";
 
 import { ProfileSection } from "@/components/dashboard/ProfileSection";
@@ -556,6 +555,12 @@ const Dashboard = () => {
     }
   }, [user]);
 
+  // Auth guard: redirect unauthenticated users to homepage
+  if (!authLoading && !user) {
+    navigate("/");
+    return null;
+  }
+
   if (isLoading || authLoading || routesLoading) {
     return (
       <div className="min-h-screen bg-secondary flex items-center justify-center">
@@ -618,7 +623,7 @@ const Dashboard = () => {
           <NotificationBanner />
 
           {/* Auth Banner - hide for logged in users AND premium users */}
-          {!user && !isPremium && <AuthBanner onRegister={handleRegister} />}
+          {/* Auth Banner removed - all users are now authenticated */}
 
           {/* Header */}
           <div className="space-y-2">
