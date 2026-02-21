@@ -135,14 +135,18 @@ const Dashboard = () => {
             title?: string;
             visa_type?: string;
           } | null;
-          setUserData({
-            name:
-              submission.full_name || user.email?.split("@")[0] || "Usuario",
-            email: submission.email || user.email || "",
-            visaType:
-              recommendation?.visa_type || recommendation?.type || "consultation",
-            visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
-            leadId: submission.id,
+          setUserData(prev => {
+            const newName = submission.full_name || user.email?.split("@")[0] || "Usuario";
+            // Don't overwrite if user already has a real name (e.g. from profile edit)
+            const keepName = prev.name !== "Usuario" && newName === (user.email?.split("@")[0] || "Usuario");
+            return {
+              name: keepName ? prev.name : newName,
+              email: submission.email || user.email || "",
+              visaType:
+                recommendation?.visa_type || recommendation?.type || "consultation",
+              visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
+              leadId: submission.id,
+            };
           });
         }
 
