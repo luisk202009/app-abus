@@ -361,7 +361,7 @@ const Dashboard = () => {
               <p className="text-muted-foreground text-sm max-w-md mx-auto">
                 Guías post-aprobación, identidad digital y documentos para empleadores. Disponible para usuarios Pro y Premium.
               </p>
-              <Button onClick={handleCheckout} disabled={isCheckoutLoading}>
+              <Button onClick={() => handleCheckout()} disabled={isCheckoutLoading}>
                 Mejorar mi plan
               </Button>
             </div>
@@ -377,13 +377,13 @@ const Dashboard = () => {
               <p className="text-muted-foreground text-sm max-w-md mx-auto">
                 Guía completa para darte de alta como autónomo, calculadora de cuotas y obligaciones fiscales. Disponible para usuarios Pro y Premium.
               </p>
-              <Button onClick={handleCheckout} disabled={isCheckoutLoading}>
+              <Button onClick={() => handleCheckout()} disabled={isCheckoutLoading}>
                 Mejorar mi plan
               </Button>
             </div>
           );
         }
-        return <BusinessOnboardingSection onUpgrade={handleCheckout} />;
+        return <BusinessOnboardingSection onUpgrade={() => handleCheckout()} />;
       case "appointment":
         if (!planFeatures.hasAppointments) {
           return (
@@ -393,7 +393,7 @@ const Dashboard = () => {
               <p className="text-muted-foreground text-sm max-w-md mx-auto">
                 Gestiona tu cita de huellas y el seguimiento de tu TIE. Disponible para usuarios Pro y Premium.
               </p>
-              <Button onClick={handleCheckout} disabled={isCheckoutLoading}>
+              <Button onClick={() => handleCheckout()} disabled={isCheckoutLoading}>
                 Mejorar mi plan
               </Button>
             </div>
@@ -410,7 +410,7 @@ const Dashboard = () => {
               <p className="text-muted-foreground text-sm max-w-md mx-auto">
                 Calcula tu sueldo neto estimado en España. Disponible para usuarios Pro y Premium.
               </p>
-              <Button onClick={handleCheckout} disabled={isCheckoutLoading}>
+              <Button onClick={() => handleCheckout()} disabled={isCheckoutLoading}>
                 Mejorar mi plan
               </Button>
             </div>
@@ -419,7 +419,7 @@ const Dashboard = () => {
         return (
           <FiscalSimulator
             subscriptionStatus={isPremium ? "pro" : "free"}
-            onUpgrade={handleCheckout}
+            onUpgrade={() => handleCheckout()}
           />
         );
       case "profile":
@@ -430,6 +430,21 @@ const Dashboard = () => {
           />
         );
       case "documents":
+        // Gate document access by plan features
+        if (!planFeatures.hasDocuments) {
+          return (
+            <div className="text-center py-16 space-y-4">
+              <Shield className="w-12 h-12 mx-auto text-muted-foreground" />
+              <h3 className="text-lg font-semibold">Bóveda de Documentos</h3>
+              <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                Organiza, sube y valida tus documentos migratorios. Disponible para usuarios Pro y Premium.
+              </p>
+              <Button onClick={() => handleCheckout()} disabled={isCheckoutLoading}>
+                Mejorar mi plan
+              </Button>
+            </div>
+          );
+        }
         // Use new DocumentVault for reg2026/arraigos routes
         if (activeRouteType) {
           return (
@@ -444,7 +459,7 @@ const Dashboard = () => {
           <DocumentsSection
             visaType={userData.visaType}
             isPremium={isPremium}
-            onCheckout={handleCheckout}
+            onCheckout={() => handleCheckout()}
             isCheckoutLoading={isCheckoutLoading}
           />
         );
@@ -452,7 +467,7 @@ const Dashboard = () => {
         return (
           <ResourcesSection
             isPremium={isPremium}
-            onCheckout={handleCheckout}
+            onCheckout={() => handleCheckout()}
             isCheckoutLoading={isCheckoutLoading}
           />
         );
@@ -477,7 +492,7 @@ const Dashboard = () => {
         return (
           <ReferralDashboard
             isPremium={isPremium}
-            onUpgrade={handleCheckout}
+            onUpgrade={() => handleCheckout()}
           />
         );
       case "roadmap":
@@ -673,7 +688,7 @@ const Dashboard = () => {
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         currentLimit={maxRoutes}
-        onUpgrade={handleCheckout}
+        onUpgrade={() => handleCheckout()}
         isUpgrading={isCheckoutLoading}
       />
 
@@ -681,7 +696,7 @@ const Dashboard = () => {
       <SlotExhaustedModal
         isOpen={showSlotExhaustedModal}
         onClose={() => setShowSlotExhaustedModal(false)}
-        onUpgrade={handleCheckout}
+        onUpgrade={() => handleCheckout()}
         isUpgrading={isCheckoutLoading}
       />
 
