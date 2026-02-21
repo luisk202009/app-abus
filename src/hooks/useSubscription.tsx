@@ -101,12 +101,13 @@ export const useSubscription = (): UseSubscriptionReturn => {
       if (data.url) {
         window.location.href = data.url;
       }
-    } catch (error) {
-      console.error("Error en checkout:", error);
+    } catch (error: any) {
+      const rawMessage = error?.message || "Error desconocido";
+      console.error("Error en checkout:", rawMessage, error);
       toast({
         variant: "destructive",
         title: "Error de pago",
-        description: "No se pudo iniciar el proceso de pago. Intenta de nuevo más tarde.",
+        description: rawMessage,
       });
     } finally {
     setIsCheckoutLoading(false);

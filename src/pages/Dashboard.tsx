@@ -4,7 +4,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { TaskList } from "@/components/dashboard/TaskList";
 import { AuthBanner } from "@/components/dashboard/AuthBanner";
 import { AuthModal } from "@/components/auth/AuthModal";
-import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
+
 import { ProfileSection } from "@/components/dashboard/ProfileSection";
 import { FiscalSimulator } from "@/components/dashboard/FiscalSimulator";
 import { AppointmentManager } from "@/components/dashboard/AppointmentManager";
@@ -422,21 +422,10 @@ const Dashboard = () => {
           />
         );
       case "documents":
-        // Always show documents — upload is gated inside components
-        if (activeRouteType) {
-          return (
-            <DocumentVault
-              routeType={activeRouteType}
-              isPremium={planFeatures.hasDocuments ? isPremium : false}
-            />
-          );
-        }
         return (
-          <DocumentsSection
-            visaType={userData.visaType}
+          <DocumentVault
+            routeType={activeRouteType || "regularizacion2026"}
             isPremium={planFeatures.hasDocuments ? isPremium : false}
-            onCheckout={() => handleCheckout()}
-            isCheckoutLoading={isCheckoutLoading}
           />
         );
       case "resources":
