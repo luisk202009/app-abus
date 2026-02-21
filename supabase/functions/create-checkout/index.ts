@@ -204,9 +204,17 @@ serve(async (req) => {
         status: 200,
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Checkout error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.log("Stripe Error Details:", error?.raw || error?.message || error);
+
+    let errorMessage = "Error desconocido en el proceso de pago";
+    if (error?.type === "StripeInvalidRequestError") {
+      errorMessage = "Error de configuración de Stripe: ID de precio inválido o inexistente";
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
     return new Response(
       JSON.stringify({ error: errorMessage }),
       {

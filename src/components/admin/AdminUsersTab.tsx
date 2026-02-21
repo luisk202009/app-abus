@@ -5,11 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Users, Crown, DollarSign, FileSearch, Map, Mail, Filter, Eye, EyeOff } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Loader2, Users, Crown, DollarSign, FileSearch, Map, Mail, Filter, Eye, EyeOff, Settings, CalendarIcon } from "lucide-react";
 import { trackEvent } from "@/lib/trackingService";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 interface UserSubmission {
   id: string;
@@ -26,6 +30,7 @@ interface UserSubmission {
   completedTasks?: number;
   docStatus?: "completos" | "revision" | "pendiente" | "sin_docs";
   routeName?: string;
+  next_billing_date?: string | null;
 }
 
 type FilterType = "todos" | "pagos_pendientes" | "leads_sin_registro";
@@ -43,6 +48,12 @@ export const AdminUsersTab = () => {
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
 
+  // Plan management modal state
+  const [planModalUser, setPlanModalUser] = useState<UserSubmission | null>(null);
+  const [planModalStatus, setPlanModalStatus] = useState<string>("free");
+  const [planModalDate, setPlanModalDate] = useState<Date | undefined>();
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
+
   useEffect(() => {
     fetchData();
     fetchPartners();
@@ -50,7 +61,6 @@ export const AdminUsersTab = () => {
 
   const fetchData = async () => {
     try {
-      // Fetch all submissions
       const { data: submissions, error } = await supabase
         .from("onboarding_submissions")
         .select("*")
@@ -58,7 +68,6 @@ export const AdminUsersTab = () => {
 
       if (error) throw error;
 
-      // Fetch pending reviews count
       const { count: reviewCount } = await supabase
         .from("user_documents")
         .select("*", { count: "exact", head: true })
@@ -66,7 +75,6 @@ export const AdminUsersTab = () => {
 
       setPendingReviews(reviewCount || 0);
 
-      // Fetch all active routes with templates
       const { data: activeRoutes } = await supabase
         .from("user_active_routes")
         .select("user_id, template_id");
@@ -78,7 +86,6 @@ export const AdminUsersTab = () => {
       const templateMap: Record<string, string> = {};
       (templates || []).forEach((t) => { templateMap[t.id] = t.name; });
 
-      // Count routes by type
       let regCount = 0;
       let arrCount = 0;
       const userRouteMap: Record<string, string> = {};
@@ -92,7 +99,6 @@ export const AdminUsersTab = () => {
 
       setRouteCounts({ regularizacion: regCount, arraigos: arrCount });
 
-      // Fetch document statuses per user
       const { data: allDocs } = await supabase
         .from("user_documents")
         .select("user_id, status");
@@ -103,7 +109,6 @@ export const AdminUsersTab = () => {
         userDocMap[d.user_id].push(d.status || "waiting");
       });
 
-      // Build enriched user list
       const enriched = (submissions || []).map((sub) => {
         const statuses = sub.user_id ? (userDocMap[sub.user_id] || []) : [];
         let docStatus: UserSubmission["docStatus"] = "sin_docs";
@@ -115,7 +120,6 @@ export const AdminUsersTab = () => {
 
         const routeName = sub.user_id ? (userRouteMap[sub.user_id] || "") : "";
 
-        // Generate CRM tag
         let crmTag = "";
         if (routeName && sub.subscription_status) {
           const routeSlug = routeName.toLowerCase().includes("regularizaci")
@@ -154,7 +158,6 @@ export const AdminUsersTab = () => {
   };
 
   const handleAssignPartner = async (userId: string, partnerId: string) => {
-    // Remove existing assignment for this user
     const existing = assignments.find((a) => a.user_id === userId);
     if (existing) {
       await supabase.from("partner_assignments").delete()
@@ -192,6 +195,44 @@ export const AdminUsersTab = () => {
         return <Badge className="bg-muted text-muted-foreground">Pendiente</Badge>;
       default:
         return <span className="text-muted-foreground text-xs">—</span>;
+    }
+  };
+
+  const openPlanModal = (user: UserSubmission) => {
+    setPlanModalUser(user);
+    setPlanModalStatus(user.subscription_status || "free");
+    setPlanModalDate(user.next_billing_date ? new Date(user.next_billing_date) : undefined);
+  };
+
+  const handleSavePlan = async () => {
+    if (!planModalUser?.user_id) return;
+    setIsSavingPlan(true);
+    try {
+      const { error } = await supabase
+        .from("onboarding_submissions")
+        .update({
+          subscription_status: planModalStatus,
+          next_billing_date: planModalDate ? format(planModalDate, "yyyy-MM-dd") : null,
+        } as any)
+        .eq("user_id", planModalUser.user_id);
+
+      if (error) throw error;
+
+      // Update local state
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.user_id === planModalUser.user_id
+            ? { ...u, subscription_status: planModalStatus, next_billing_date: planModalDate ? format(planModalDate, "yyyy-MM-dd") : null }
+            : u
+        )
+      );
+      toast.success(`Plan actualizado a "${planModalStatus}" para ${planModalUser.full_name || planModalUser.email}`);
+      setPlanModalUser(null);
+    } catch (error) {
+      console.error("Error updating plan:", error);
+      toast.error("Error al actualizar el plan");
+    } finally {
+      setIsSavingPlan(false);
     }
   };
 
@@ -340,7 +381,7 @@ export const AdminUsersTab = () => {
                 <TableHead>Partner</TableHead>
                 <TableHead>CRM Tag</TableHead>
                 <TableHead>Fecha</TableHead>
-                {activeFilter === "pagos_pendientes" && <TableHead>Acción</TableHead>}
+                <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -404,26 +445,108 @@ export const AdminUsersTab = () => {
                   <TableCell className="text-muted-foreground text-sm">
                     {format(new Date(user.created_at), "d MMM yyyy", { locale: es })}
                   </TableCell>
-                  {activeFilter === "pagos_pendientes" && (
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1 text-xs"
-                        onClick={() => user.email && handleSendReminder(user.email)}
-                        disabled={!user.email}
-                      >
-                        <Mail className="w-3 h-3" />
-                        Recordatorio
-                      </Button>
-                    </TableCell>
-                  )}
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      {user.user_id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs"
+                          onClick={() => openPlanModal(user)}
+                        >
+                          <Settings className="w-3 h-3" />
+                          Plan
+                        </Button>
+                      )}
+                      {activeFilter === "pagos_pendientes" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs"
+                          onClick={() => user.email && handleSendReminder(user.email)}
+                          disabled={!user.email}
+                        >
+                          <Mail className="w-3 h-3" />
+                          Recordatorio
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {/* Plan Management Dialog */}
+      <Dialog open={!!planModalUser} onOpenChange={(open) => !open && setPlanModalUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gestionar Plan</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Usuario: <span className="font-medium text-foreground">{planModalUser?.full_name || planModalUser?.email || "—"}</span>
+            </p>
+
+            {/* Subscription Level */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nivel de suscripción</label>
+              <Select value={planModalStatus} onValueChange={setPlanModalStatus}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="premium">Premium</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Expiration Date */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Fecha de expiración</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !planModalDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {planModalDate ? format(planModalDate, "PPP", { locale: es }) : "Sin fecha"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={planModalDate}
+                    onSelect={setPlanModalDate}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+              {planModalDate && (
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setPlanModalDate(undefined)}>
+                  Quitar fecha
+                </Button>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPlanModalUser(null)}>Cancelar</Button>
+            <Button onClick={handleSavePlan} disabled={isSavingPlan}>
+              {isSavingPlan && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -57,6 +57,7 @@ export type Database = {
           id: string
           monthly_income: number | null
           nationality: string | null
+          next_billing_date: string | null
           professional_profile: string | null
           savings_range: string | null
           stripe_customer_id: string | null
@@ -74,6 +75,7 @@ export type Database = {
           id?: string
           monthly_income?: number | null
           nationality?: string | null
+          next_billing_date?: string | null
           professional_profile?: string | null
           savings_range?: string | null
           stripe_customer_id?: string | null
@@ -91,6 +93,7 @@ export type Database = {
           id?: string
           monthly_income?: number | null
           nationality?: string | null
+          next_billing_date?: string | null
           professional_profile?: string | null
           savings_range?: string | null
           stripe_customer_id?: string | null

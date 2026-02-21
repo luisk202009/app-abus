@@ -1,0 +1,1 @@
+ALTER TABLE public.onboarding_submissions ADD COLUMN IF NOT EXISTS next_billing_date date;

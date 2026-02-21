@@ -170,6 +170,8 @@ const Explorar = () => {
         isActive={selectedTemplate ? isTemplateActive(selectedTemplate.id) : false}
         activeRoutesCount={activeRoutes.length}
         maxRoutes={maxRoutes}
+        canAddRoute={canAddRoute}
+        slotExhausted={slotExhausted}
       />
 
       <RouteLimitModal
