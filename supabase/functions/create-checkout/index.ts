@@ -124,33 +124,39 @@ serve(async (req) => {
     let referralCodeId: string | null = null;
 
     if (referralCode) {
-      // Use service role client to look up referral code
-      const serviceClient = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      );
+      try {
+        // Use service role client to look up referral code
+        const serviceClient = createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+        );
 
-      const { data: refCode } = await serviceClient
-        .from("referral_codes")
-        .select("id, user_id")
-        .eq("code", referralCode)
-        .single();
+        const { data: refCode } = await serviceClient
+          .from("referral_codes")
+          .select("id, user_id")
+          .eq("code", referralCode)
+          .single();
 
-      if (refCode && refCode.user_id !== userId) {
-        referralCodeId = refCode.id;
+        if (refCode && refCode.user_id !== userId) {
+          referralCodeId = refCode.id;
 
-        // Find or create the referral coupon
-        const coupons = await stripe.coupons.list({ limit: 100 });
-        let coupon = coupons.data.find((c: any) => c.name === "REFERRAL_5EUR");
-        if (!coupon) {
-          coupon = await stripe.coupons.create({
-            name: "REFERRAL_5EUR",
-            amount_off: 500,
-            currency: "eur",
-            duration: "once",
-          });
+          // Find or create the referral coupon
+          const coupons = await stripe.coupons.list({ limit: 100 });
+          let coupon = coupons.data.find((c: any) => c.name === "REFERRAL_5EUR");
+          if (!coupon) {
+            coupon = await stripe.coupons.create({
+              name: "REFERRAL_5EUR",
+              amount_off: 500,
+              currency: "eur",
+              duration: "once",
+            });
+          }
+          discounts = [{ coupon: coupon.id }];
         }
-        discounts = [{ coupon: coupon.id }];
+      } catch (refError) {
+        console.error("Referral processing failed (non-blocking):", refError);
+        discounts = undefined;
+        referralCodeId = null;
       }
     }
 
@@ -173,18 +179,22 @@ serve(async (req) => {
       },
     });
 
-    // Track the referral
+    // Track the referral (non-blocking)
     if (referralCodeId) {
-      const serviceClient = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      );
-      await serviceClient.from("referrals").insert({
-        referrer_id: referralCodeId,
-        referred_user_id: userId,
-        referred_name: userEmail?.split("@")[0] || null,
-        status: "pendiente",
-      });
+      try {
+        const serviceClient = createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+        );
+        await serviceClient.from("referrals").insert({
+          referrer_id: referralCodeId,
+          referred_user_id: userId,
+          referred_name: userEmail?.split("@")[0] || null,
+          status: "pendiente",
+        });
+      } catch (refInsertError) {
+        console.error("Referral tracking failed (non-blocking):", refInsertError);
+      }
     }
 
     return new Response(

@@ -50,12 +50,15 @@ export const AdminSystemStatus = () => {
       results.push({ name: "Edge Functions", status: "ok" });
     }
 
-    // Storage
+    // Storage – ping specific bucket; non-5xx means the service is running
     try {
-      const res = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
-        headers: { apikey: SUPABASE_ANON_KEY },
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/bucket/user-documents`, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
       });
-      results.push({ name: "Storage", status: res.ok ? "ok" : "error" });
+      results.push({ name: "Storage", status: res.status < 500 ? "ok" : "error" });
     } catch {
       results.push({ name: "Storage", status: "error" });
     }
