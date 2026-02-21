@@ -103,11 +103,11 @@ export const useSubscription = (): UseSubscriptionReturn => {
       }
     } catch (error) {
       console.error("Checkout error:", error);
-      const errMsg = error instanceof Error ? error.message : "No se pudo iniciar el proceso de pago.";
+      const errMsg = error instanceof Error ? error.message : String(error || "No se pudo iniciar el proceso de pago.");
       toast({
         variant: "destructive",
         title: "Error de pago",
-        description: errMsg,
+        description: typeof errMsg === "string" ? errMsg : "No se pudo iniciar el proceso de pago.",
       });
     } finally {
     setIsCheckoutLoading(false);

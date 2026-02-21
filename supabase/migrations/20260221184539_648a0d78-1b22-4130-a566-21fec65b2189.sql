@@ -1,0 +1,3 @@
+UPDATE public.plans SET has_documents = true, has_fiscal_simulator = true, has_appointments = true, has_life_in_spain = true, has_business = true, has_referrals = true, max_routes = 3 WHERE slug = 'pro';
+UPDATE public.plans SET has_documents = true, has_fiscal_simulator = true, has_appointments = true, has_life_in_spain = true, has_business = true, has_referrals = true, max_routes = 5 WHERE slug = 'premium';
+UPDATE public.plans SET has_documents = false, has_fiscal_simulator = false, has_appointments = false, has_life_in_spain = false, has_business = false, has_referrals = false, max_routes = 1 WHERE slug = 'free';

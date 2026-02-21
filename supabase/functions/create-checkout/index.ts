@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
@@ -14,7 +14,10 @@ serve(async (req) => {
   }
 
   try {
-    const { priceId, returnUrl, referralCode } = await req.json();
+    const body = await req.json();
+    const priceId = body.priceId;
+    const returnUrl = body.returnUrl || req.headers.get("origin") || "https://app-abus.lovable.app";
+    const referralCode = body.referralCode;
 
     // Validate priceId format
     if (priceId && (typeof priceId !== "string" || !priceId.startsWith("price_") || priceId.length > 100)) {
@@ -27,6 +30,7 @@ serve(async (req) => {
     // Validate returnUrl against allowed origins
     const allowedOrigins = [
       "https://app-abus.lovable.app",
+      "https://id-preview--0cfb12a8-a888-4c75-9004-2ceaf24c1e0c.lovable.app",
       "http://localhost:5173",
       "http://localhost:8080",
     ];
