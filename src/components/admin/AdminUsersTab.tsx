@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Loader2, Users, Crown, DollarSign, FileSearch, Map, Mail, Filter, Eye, EyeOff, Settings, CalendarIcon } from "lucide-react";
+import { Loader2, Users, Crown, DollarSign, FileSearch, Map, Mail, Filter, Eye, EyeOff, CreditCard, CalendarIcon } from "lucide-react";
 import { trackEvent } from "@/lib/trackingService";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -400,11 +400,11 @@ export const AdminUsersTab = () => {
                   <TableCell>{user.nationality || "—"}</TableCell>
                   <TableCell>
                     {user.subscription_status === "premium" ? (
-                      <Badge className="bg-primary text-primary-foreground">Premium</Badge>
+                      <Badge className="bg-green-100 text-green-800 border-green-200">Premium</Badge>
                     ) : user.subscription_status === "pro" ? (
-                      <Badge className="bg-primary/10 text-primary border-primary/20">Pro</Badge>
+                      <Badge className="bg-green-100 text-green-800 border-green-200">Pro</Badge>
                     ) : user.user_id ? (
-                      <Badge variant="secondary">Free</Badge>
+                      <Badge className="bg-gray-100 text-gray-600 border-gray-200">Free</Badge>
                     ) : (
                       <Badge variant="outline">Lead</Badge>
                     )}
@@ -451,11 +451,11 @@ export const AdminUsersTab = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="gap-1 text-xs"
+                          className="gap-1.5 text-xs"
                           onClick={() => openPlanModal(user)}
                         >
-                          <Settings className="w-3 h-3" />
-                          Plan
+                          <CreditCard className="w-3.5 h-3.5" />
+                          Gestionar Plan
                         </Button>
                       )}
                       {activeFilter === "pagos_pendientes" && (

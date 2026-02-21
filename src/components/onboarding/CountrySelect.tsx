@@ -32,9 +32,10 @@ const countries = [
 interface CountrySelectProps {
   value: string;
   onChange: (value: string) => void;
+  compact?: boolean;
 }
 
-export const CountrySelect = ({ value, onChange }: CountrySelectProps) => {
+export const CountrySelect = ({ value, onChange, compact = false }: CountrySelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -57,7 +58,8 @@ export const CountrySelect = ({ value, onChange }: CountrySelectProps) => {
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "w-full flex items-center justify-between px-4 py-4 rounded-xl border-2 bg-background text-left transition-all text-base",
+          "w-full flex items-center justify-between rounded-xl border-2 bg-background text-left transition-all",
+          compact ? "px-3 py-2 text-sm border" : "px-4 py-4 text-base",
           isOpen ? "border-primary" : "border-border hover:border-muted-foreground/50",
           value ? "text-foreground" : "text-muted-foreground"
         )}
