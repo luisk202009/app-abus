@@ -60,6 +60,7 @@ serve(async (req) => {
 
     // Initialize Stripe with defensive key validation
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    console.log(`[create-checkout] DEBUG: Prefijo de la llave secreta -> ${stripeKey.substring(0, 7)}...`);
     if (!stripeKey) {
       console.error("[create-checkout] STRIPE_SECRET_KEY is not set");
       return new Response(JSON.stringify({ error: "Error de configuración del servidor" }), {
