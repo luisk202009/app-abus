@@ -93,6 +93,7 @@ export const useSubscription = (): UseSubscriptionReturn => {
       const data = await response.json();
 
       if (data.error) {
+        console.error("Checkout server response:", data);
         throw new Error(data.error);
       }
 
@@ -102,10 +103,11 @@ export const useSubscription = (): UseSubscriptionReturn => {
       }
     } catch (error) {
       console.error("Checkout error:", error);
+      const errMsg = error instanceof Error ? error.message : "No se pudo iniciar el proceso de pago.";
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "No se pudo iniciar el proceso de pago. Intenta de nuevo.",
+        title: "Error de pago",
+        description: errMsg,
       });
     } finally {
     setIsCheckoutLoading(false);

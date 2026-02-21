@@ -23,6 +23,8 @@ interface RouteDetailModalProps {
   isActive: boolean;
   activeRoutesCount: number;
   maxRoutes: number;
+  canAddRoute?: boolean;
+  slotExhausted?: boolean;
 }
 
 export const RouteDetailModal = ({
@@ -34,6 +36,8 @@ export const RouteDetailModal = ({
   isActive,
   activeRoutesCount,
   maxRoutes,
+  canAddRoute = true,
+  slotExhausted = false,
 }: RouteDetailModalProps) => {
   const [steps, setSteps] = useState<TemplateStep[]>([]);
   const [isLoadingSteps, setIsLoadingSteps] = useState(false);
@@ -146,6 +150,15 @@ export const RouteDetailModal = ({
               <CheckCircle2 className="w-4 h-4" />
               Ya tienes esta ruta activa
             </Button>
+          ) : !canAddRoute && slotExhausted ? (
+            <div className="space-y-2">
+              <Button variant="outline" className="w-full" disabled>
+                Límite alcanzado
+              </Button>
+              <p className="text-xs text-center text-amber-600">
+                Límite de ruta gratuita alcanzado. Mejora a Pro para gestionar múltiples procesos.
+              </p>
+            </div>
           ) : (
             <Button
               className="w-full gap-2"

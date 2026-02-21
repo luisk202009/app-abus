@@ -12,6 +12,7 @@ interface RouteExplorerProps {
   canAddRoute: boolean;
   onLimitReached: () => void;
   isLoading?: boolean;
+  slotExhausted?: boolean;
 }
 
 export const RouteExplorer = ({
@@ -22,6 +23,7 @@ export const RouteExplorer = ({
   canAddRoute,
   onLimitReached,
   isLoading = false,
+  slotExhausted = false,
 }: RouteExplorerProps) => {
   const isRouteActive = (templateId: string) =>
     activeRoutes.some((r) => r.template_id === templateId);
@@ -46,6 +48,13 @@ export const RouteExplorer = ({
           Descubre todas las rutas migratorias disponibles para España
         </p>
       </div>
+
+      {/* Limit Banner */}
+      {!canAddRoute && slotExhausted && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-200">
+          Límite de ruta gratuita alcanzado. Mejora a Pro para gestionar múltiples procesos.
+        </div>
+      )}
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -108,6 +117,10 @@ export const RouteExplorer = ({
                 {isActive ? (
                   <Button variant="outline" className="w-full mt-4" disabled>
                     Ya está en tu panel
+                  </Button>
+                ) : !canAddRoute && slotExhausted ? (
+                  <Button variant="outline" className="w-full mt-4" disabled>
+                    Límite alcanzado
                   </Button>
                 ) : (
                   <Button
