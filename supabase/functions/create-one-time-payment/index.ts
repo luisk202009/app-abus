@@ -40,8 +40,44 @@ serve(async (req) => {
 
     const { priceId, email, name, routeTemplateSlug, planType } = await req.json();
 
-    if (!priceId || !email || !name) {
-      throw new Error("Missing required fields: priceId, email, name");
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || typeof email !== "string" || !emailRegex.test(email) || email.length > 254) {
+      return new Response(JSON.stringify({ error: "Invalid email address" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate name
+    if (!name || typeof name !== "string" || name.trim().length === 0 || name.length > 200) {
+      return new Response(JSON.stringify({ error: "Invalid name" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate priceId format (Stripe price IDs start with "price_")
+    if (!priceId || typeof priceId !== "string" || !priceId.startsWith("price_") || priceId.length > 100) {
+      return new Response(JSON.stringify({ error: "Invalid price ID" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate optional metadata fields
+    if (routeTemplateSlug && (typeof routeTemplateSlug !== "string" || routeTemplateSlug.length > 100)) {
+      return new Response(JSON.stringify({ error: "Invalid route template slug" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (planType && (typeof planType !== "string" || !["free", "pro", "digital", "premium"].includes(planType))) {
+      return new Response(JSON.stringify({ error: "Invalid plan type" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Initialize Stripe

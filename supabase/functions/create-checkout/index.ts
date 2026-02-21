@@ -16,6 +16,45 @@ serve(async (req) => {
   try {
     const { priceId, returnUrl, referralCode } = await req.json();
 
+    // Validate priceId format
+    if (priceId && (typeof priceId !== "string" || !priceId.startsWith("price_") || priceId.length > 100)) {
+      return new Response(JSON.stringify({ error: "Invalid price ID" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate returnUrl against allowed origins
+    const allowedOrigins = [
+      "https://app-abus.lovable.app",
+      "http://localhost:5173",
+      "http://localhost:8080",
+    ];
+    if (returnUrl) {
+      try {
+        const url = new URL(returnUrl);
+        if (!allowedOrigins.some((o) => url.origin === o)) {
+          return new Response(JSON.stringify({ error: "Invalid return URL" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid return URL format" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Validate referralCode if provided
+    if (referralCode && (typeof referralCode !== "string" || referralCode.length > 50 || !/^[a-zA-Z0-9_-]+$/.test(referralCode))) {
+      return new Response(JSON.stringify({ error: "Invalid referral code" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Initialize Stripe
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2023-10-16",
