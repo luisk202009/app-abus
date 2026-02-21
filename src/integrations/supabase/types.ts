@@ -164,6 +164,12 @@ export type Database = {
           created_at: string
           currency: string
           features: Json
+          has_appointments: boolean
+          has_business: boolean
+          has_documents: boolean
+          has_fiscal_simulator: boolean
+          has_life_in_spain: boolean
+          has_referrals: boolean
           id: string
           interval: string
           is_active: boolean
@@ -178,6 +184,12 @@ export type Database = {
           created_at?: string
           currency?: string
           features?: Json
+          has_appointments?: boolean
+          has_business?: boolean
+          has_documents?: boolean
+          has_fiscal_simulator?: boolean
+          has_life_in_spain?: boolean
+          has_referrals?: boolean
           id?: string
           interval?: string
           is_active?: boolean
@@ -192,6 +204,12 @@ export type Database = {
           created_at?: string
           currency?: string
           features?: Json
+          has_appointments?: boolean
+          has_business?: boolean
+          has_documents?: boolean
+          has_fiscal_simulator?: boolean
+          has_life_in_spain?: boolean
+          has_referrals?: boolean
           id?: string
           interval?: string
           is_active?: boolean
