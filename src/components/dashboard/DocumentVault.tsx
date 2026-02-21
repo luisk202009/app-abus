@@ -64,6 +64,7 @@ export const DocumentVault = ({ routeType, isPremium }: DocumentVaultProps) => {
       const data = await response.json();
 
       if (data.error) {
+        console.error("Checkout server error:", data);
         throw new Error(data.error);
       }
 

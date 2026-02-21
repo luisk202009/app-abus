@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   FileText,
   Upload,
@@ -171,22 +171,44 @@ export const DocumentsSection = ({
   const { toast } = useToast();
   const documents = getDocumentsByVisaType(visaType);
 
-  const handleUploadClick = (e: React.MouseEvent) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleUploadClick = (docId: string) => (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    // For non-premium users, only show the premium modal
-    // Do NOT trigger any upload functionality
     if (!isPremium) {
       setShowPremiumModal(true);
       return;
     }
-    
-    // Future: Open upload dialog for premium users
-    toast({
-      title: "Subir documento",
-      description: "La funcionalidad de subida estará disponible pronto.",
-    });
+    setUploadingDocId(docId);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !uploadingDocId) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "Archivo muy grande", description: "El tamaño máximo es 5 MB." });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/${uploadingDocId}_${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from("user-documents").upload(path, file);
+      if (error) throw error;
+      toast({ title: "Documento subido", description: `${file.name} subido correctamente.` });
+    } catch (err) {
+      console.error("Upload error:", err);
+      toast({ variant: "destructive", title: "Error al subir", description: "No se pudo subir el archivo. Intenta de nuevo." });
+    } finally {
+      setIsUploading(false);
+      setUploadingDocId(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const handleGenerateTasa790 = async () => {
@@ -371,20 +393,35 @@ export const DocumentsSection = ({
               {/* Right: Upload button */}
               <button
                 type="button"
-                onClick={handleUploadClick}
+                onClick={handleUploadClick(doc.id)}
+                disabled={isUploading && uploadingDocId === doc.id}
                 className={cn(
                   "shrink-0 w-10 h-10 rounded-lg border border-border flex items-center justify-center transition-all duration-200",
                   "hover:bg-primary hover:border-primary hover:text-primary-foreground",
-                  "text-muted-foreground"
+                  "text-muted-foreground",
+                  isUploading && uploadingDocId === doc.id && "opacity-50 cursor-not-allowed"
                 )}
                 title={isPremium ? "Subir documento" : "Función Pro"}
               >
-                <Upload className="w-4 h-4" />
+                {isUploading && uploadingDocId === doc.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+        onChange={handleFileChange}
+      />
 
       {/* Premium Modal */}
       <PremiumModal
