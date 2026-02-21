@@ -1,10 +1,23 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@14.21.0";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import Stripe from "https://esm.sh/stripe@18.5.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+const isAllowedOrigin = (origin: string): boolean => {
+  try {
+    const url = new URL(origin);
+    return (
+      url.hostname === "localhost" ||
+      url.hostname.endsWith(".lovable.app") ||
+      url.hostname.endsWith(".lovableproject.com")
+    );
+  } catch {
+    return false;
+  }
 };
 
 serve(async (req) => {
@@ -21,30 +34,16 @@ serve(async (req) => {
 
     // Validate priceId format
     if (priceId && (typeof priceId !== "string" || !priceId.startsWith("price_") || priceId.length > 100)) {
-      return new Response(JSON.stringify({ error: "Invalid price ID" }), {
+      return new Response(JSON.stringify({ error: "ID de precio inválido" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Validate returnUrl against allowed origins
-    const allowedOrigins = [
-      "https://app-abus.lovable.app",
-      "https://id-preview--0cfb12a8-a888-4c75-9004-2ceaf24c1e0c.lovable.app",
-      "http://localhost:5173",
-      "http://localhost:8080",
-    ];
     if (returnUrl) {
-      try {
-        const url = new URL(returnUrl);
-        if (!allowedOrigins.some((o) => url.origin === o)) {
-          return new Response(JSON.stringify({ error: "Invalid return URL" }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-      } catch {
-        return new Response(JSON.stringify({ error: "Invalid return URL format" }), {
+      if (!isAllowedOrigin(returnUrl)) {
+        return new Response(JSON.stringify({ error: "URL de retorno no permitida" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -53,7 +52,7 @@ serve(async (req) => {
 
     // Validate referralCode if provided
     if (referralCode && (typeof referralCode !== "string" || referralCode.length > 50 || !/^[a-zA-Z0-9_-]+$/.test(referralCode))) {
-      return new Response(JSON.stringify({ error: "Invalid referral code" }), {
+      return new Response(JSON.stringify({ error: "Código de referido inválido" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -61,39 +60,38 @@ serve(async (req) => {
 
     // Initialize Stripe
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2023-10-16",
+      apiVersion: "2025-08-27.basil",
     });
 
     // Validate auth header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Use getClaims() for local JWT validation (faster, no network call)
+    // Use getUser() for JWT validation
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
     );
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
+    if (userError || !userData?.user) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = claimsData.claims.sub;
-    const userEmail = claimsData.claims.email;
+    const userId = userData.user.id;
+    const userEmail = userData.user.email;
 
     if (!userId || !userEmail) {
-      return new Response(JSON.stringify({ error: "Unauthorized: missing user claims" }), {
+      return new Response(JSON.stringify({ error: "No autorizado: faltan datos del usuario" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -129,7 +127,6 @@ serve(async (req) => {
 
     if (referralCode) {
       try {
-        // Use service role client to look up referral code
         const serviceClient = createClient(
           Deno.env.get("SUPABASE_URL") ?? "",
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -144,7 +141,6 @@ serve(async (req) => {
         if (refCode && refCode.user_id !== userId) {
           referralCodeId = refCode.id;
 
-          // Find or create the referral coupon
           const coupons = await stripe.coupons.list({ limit: 100 });
           let coupon = coupons.data.find((c: any) => c.name === "REFERRAL_5EUR");
           if (!coupon) {
@@ -158,7 +154,7 @@ serve(async (req) => {
           discounts = [{ coupon: coupon.id }];
         }
       } catch (refError) {
-        console.error("Referral processing failed (non-blocking):", refError);
+        console.error("Error procesando referido (no bloqueante):", refError);
         discounts = undefined;
         referralCodeId = null;
       }
@@ -197,7 +193,7 @@ serve(async (req) => {
           status: "pendiente",
         });
       } catch (refInsertError) {
-        console.error("Referral tracking failed (non-blocking):", refInsertError);
+        console.error("Error registrando referido (no bloqueante):", refInsertError);
       }
     }
 
@@ -209,8 +205,8 @@ serve(async (req) => {
       }
     );
   } catch (error: any) {
-    console.error("Checkout error:", error);
-    console.log("Stripe Error Details:", error?.raw || error?.message || error);
+    console.error("Error en checkout:", error);
+    console.log("Detalles del error Stripe:", error?.raw || error?.message || error);
 
     let errorMessage = "Error desconocido en el proceso de pago";
     if (error?.type === "StripeInvalidRequestError") {
