@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { useSubscription } from "@/hooks/useSubscription";
+import { usePlanFeatures } from "@/hooks/usePlanFeatures";
 import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
@@ -60,7 +61,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, isLoading: authLoading, signOut } = useAuth();
-  const { isPremium, handleCheckout, isCheckoutLoading } = useSubscription();
+  const { isPremium, handleCheckout, isCheckoutLoading, subscriptionStatus } = useSubscription();
+  const planFeatures = usePlanFeatures();
   const {
     templates,
     activeRoutes,
@@ -351,7 +353,7 @@ const Dashboard = () => {
   const renderContent = () => {
     switch (activeNavItem) {
       case "life-in-spain":
-        if (!isPremium) {
+        if (!planFeatures.hasLifeInSpain) {
           return (
             <div className="text-center py-16 space-y-4">
               <Shield className="w-12 h-12 mx-auto text-muted-foreground" />
@@ -367,7 +369,7 @@ const Dashboard = () => {
         }
         return <LifeInSpainSection userId={user?.id} userName={userData.name} />;
       case "business":
-        if (!isPremium) {
+        if (!planFeatures.hasBusiness) {
           return (
             <div className="text-center py-16 space-y-4">
               <TrendingUp className="w-12 h-12 mx-auto text-muted-foreground" />
@@ -383,7 +385,7 @@ const Dashboard = () => {
         }
         return <BusinessOnboardingSection onUpgrade={handleCheckout} />;
       case "appointment":
-        if (!isPremium) {
+        if (!planFeatures.hasAppointments) {
           return (
             <div className="text-center py-16 space-y-4">
               <CalendarCheck className="w-12 h-12 mx-auto text-muted-foreground" />
@@ -400,7 +402,7 @@ const Dashboard = () => {
         return <AppointmentManager userId={user?.id} />;
       case "simulator":
         // Pro and Premium users get the simulator; free users see upsell
-        if (!isPremium) {
+        if (!planFeatures.hasFiscalSimulator) {
           return (
             <div className="text-center py-16 space-y-4">
               <Calculator className="w-12 h-12 mx-auto text-muted-foreground" />
@@ -591,7 +593,7 @@ const Dashboard = () => {
         isPremium={isPremium}
         userName={userData.name}
         userEmail={user?.email}
-        subscriptionStatus={isPremium ? "pro" : "free"}
+        subscriptionStatus={subscriptionStatus}
       />
 
       {/* Main Content */}
