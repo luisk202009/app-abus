@@ -401,25 +401,11 @@ const Dashboard = () => {
         }
         return <AppointmentManager userId={user?.id} />;
       case "simulator":
-        // Pro and Premium users get the simulator; free users see upsell
-        if (!planFeatures.hasFiscalSimulator) {
-          return (
-            <div className="text-center py-16 space-y-4">
-              <Calculator className="w-12 h-12 mx-auto text-muted-foreground" />
-              <h3 className="text-lg font-semibold">Simulador Fiscal</h3>
-              <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                Calcula tu sueldo neto estimado en España. Disponible para usuarios Pro y Premium.
-              </p>
-              <Button onClick={() => handleCheckout()} disabled={isCheckoutLoading}>
-                Mejorar mi plan
-              </Button>
-            </div>
-          );
-        }
         return (
           <FiscalSimulator
-            subscriptionStatus={isPremium ? "pro" : "free"}
+            subscriptionStatus={planFeatures.hasFiscalSimulator ? (isPremium ? "pro" : "free") : "free"}
             onUpgrade={() => handleCheckout()}
+            isLocked={!planFeatures.hasFiscalSimulator}
           />
         );
       case "profile":
@@ -436,35 +422,19 @@ const Dashboard = () => {
           />
         );
       case "documents":
-        // Gate document access by plan features
-        if (!planFeatures.hasDocuments) {
-          return (
-            <div className="text-center py-16 space-y-4">
-              <Shield className="w-12 h-12 mx-auto text-muted-foreground" />
-              <h3 className="text-lg font-semibold">Bóveda de Documentos</h3>
-              <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                Organiza, sube y valida tus documentos migratorios. Disponible para usuarios Pro y Premium.
-              </p>
-              <Button onClick={() => handleCheckout()} disabled={isCheckoutLoading}>
-                Mejorar mi plan
-              </Button>
-            </div>
-          );
-        }
-        // Use new DocumentVault for reg2026/arraigos routes
+        // Always show documents — upload is gated inside components
         if (activeRouteType) {
           return (
             <DocumentVault
               routeType={activeRouteType}
-              isPremium={isPremium}
+              isPremium={planFeatures.hasDocuments ? isPremium : false}
             />
           );
         }
-        // Fallback to old DocumentsSection for other visa types
         return (
           <DocumentsSection
             visaType={userData.visaType}
-            isPremium={isPremium}
+            isPremium={planFeatures.hasDocuments ? isPremium : false}
             onCheckout={() => handleCheckout()}
             isCheckoutLoading={isCheckoutLoading}
           />

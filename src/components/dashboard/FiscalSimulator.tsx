@@ -19,6 +19,7 @@ import {
   Crown,
   Briefcase,
   ArrowRight,
+  Lock,
 } from "lucide-react";
 import {
   calculateNetSalary,
@@ -31,6 +32,7 @@ import {
 interface FiscalSimulatorProps {
   subscriptionStatus?: string;
   onUpgrade?: () => void;
+  isLocked?: boolean;
 }
 
 const fmt = new Intl.NumberFormat("es-ES", {
@@ -43,6 +45,7 @@ const fmt = new Intl.NumberFormat("es-ES", {
 export const FiscalSimulator = ({
   subscriptionStatus = "free",
   onUpgrade,
+  isLocked = false,
 }: FiscalSimulatorProps) => {
   const [grossSalary, setGrossSalary] = useState<number>(25000);
   const [familyStatus, setFamilyStatus] = useState<FamilyStatus>("single");
@@ -164,7 +167,21 @@ export const FiscalSimulator = ({
         </Card>
 
         {/* Right: Results */}
-        <Card className="border-border rounded-2xl">
+        <Card className="border-border rounded-2xl relative overflow-hidden">
+          {isLocked && (
+            <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4 p-6">
+              <Lock className="w-10 h-10 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground text-center font-medium">
+                Disponible para usuarios Pro y Premium
+              </p>
+              {onUpgrade && (
+                <Button onClick={onUpgrade} className="gap-1">
+                  Desbloquear Simulador
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          )}
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />

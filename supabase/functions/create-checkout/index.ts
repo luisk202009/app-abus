@@ -58,8 +58,23 @@ serve(async (req) => {
       });
     }
 
-    // Initialize Stripe
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+    // Initialize Stripe with defensive key validation
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    if (!stripeKey) {
+      console.error("[create-checkout] STRIPE_SECRET_KEY is not set");
+      return new Response(JSON.stringify({ error: "Error de configuración del servidor" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!stripeKey.startsWith("sk_")) {
+      console.error(`[create-checkout] STRIPE_SECRET_KEY has invalid prefix: ${stripeKey.substring(0, 7)}... Expected sk_live_ or sk_test_`);
+      return new Response(JSON.stringify({ error: "Error de configuración del servidor. Contacta al administrador." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const stripe = new Stripe(stripeKey, {
       apiVersion: "2025-08-27.basil",
     });
 
