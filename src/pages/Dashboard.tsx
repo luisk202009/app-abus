@@ -46,6 +46,7 @@ interface UserData {
   visaTitle: string;
   leadId?: string;
   source?: string;
+  avatarUrl?: string;
 }
 
 interface Task {
@@ -144,6 +145,7 @@ const Dashboard = () => {
                 recommendation?.visa_type || recommendation?.type || "consultation",
               visaTitle: recommendation?.title || "Consulta Inicial Personalizada",
               leadId: submission.id,
+              avatarUrl: (submission as any).avatar_url || prev.avatarUrl,
             };
           });
         } else {
@@ -426,6 +428,7 @@ const Dashboard = () => {
               setUserData(prev => ({
                 ...prev,
                 name: data.full_name || prev.name,
+                avatarUrl: data.avatar_url || prev.avatarUrl,
               }));
             }}
           />
@@ -591,6 +594,7 @@ const Dashboard = () => {
         userName={userData.name}
         userEmail={user?.email}
         subscriptionStatus={subscriptionStatus}
+        avatarUrl={userData.avatarUrl}
       />
 
       {/* Main Content */}

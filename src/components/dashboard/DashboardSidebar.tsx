@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { AdminModeSwitcher } from "@/components/admin/AdminModeSwitcher";
 import albusLogo from "@/assets/albus-logo.png";
 
@@ -36,6 +37,7 @@ interface DashboardSidebarProps {
   userName?: string;
   userEmail?: string;
   subscriptionStatus?: string;
+  avatarUrl?: string;
 }
 
 const ADMIN_EMAIL = "l@albus.com.co";
@@ -50,6 +52,7 @@ export const DashboardSidebar = ({
   userName,
   userEmail,
   subscriptionStatus = "free",
+  avatarUrl,
 }: DashboardSidebarProps) => {
   const navigate = useNavigate();
   const isAdmin = userEmail === ADMIN_EMAIL;
@@ -65,9 +68,14 @@ export const DashboardSidebar = ({
       {isLoggedIn && (
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <User className="w-5 h-5 text-primary" />
-            </div>
+            <Avatar className="w-10 h-10">
+              {avatarUrl ? (
+                <AvatarImage src={avatarUrl} alt="Foto de perfil" />
+              ) : null}
+              <AvatarFallback className="bg-primary/10">
+                <User className="w-5 h-5 text-primary" />
+              </AvatarFallback>
+            </Avatar>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium truncate">
