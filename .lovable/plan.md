@@ -1,88 +1,39 @@
 
 
-# Cambiar flujo: Registro obligatorio antes del Dashboard
+# Fix: Perfil no se actualiza + Pago muestra pantalla en blanco
 
-## Resumen
+## Problema 1: Perfil no se actualiza
 
-Actualmente un usuario puede llegar al Dashboard sin registrarse (el AnalysisModal navega directamente a `/dashboard` despues del analisis). El cambio hace que el registro sea **obligatorio** antes de acceder al Dashboard. Los datos del onboarding se vinculan al usuario al momento del registro, eliminando el problema de perfil que no se guarda.
+**Causa raiz:** El `upsert` en `ProfileSection.tsx` puede fallar si el usuario no tiene una fila previa en `onboarding_submissions`. Ademas, el manejo de errores no muestra detalles utiles para diagnosticar.
 
----
+**Solucion:**
+- Mejorar `handleSave` en `ProfileSection.tsx` para usar una estrategia de "intentar UPDATE, si no hay filas afectadas entonces INSERT"
+- Agregar log detallado del error (`error.message`, `error.code`, `error.details`) para diagnostico
+- Mostrar el mensaje de error real en el toast
 
-## Flujo actual vs nuevo
-
-```text
-ACTUAL:
-AnalysisModal (5 pasos) --> Guarda en DB (anonimo) --> Navega a /dashboard --> AuthBanner opcional
-
-NUEVO:
-AnalysisModal (5 pasos) --> Guarda en DB (anonimo) --> Muestra recomendacion --> 
-  "Iniciar ruta" abre AuthModal (registro obligatorio) --> 
-  Al registrarse, vincula lead con user_id --> Navega a /dashboard
-```
+**Archivo:** `src/components/dashboard/ProfileSection.tsx` (lineas 72-94)
 
 ---
 
-## Cambios detallados
+## Problema 2: Pago lleva a pantalla en blanco
 
-### 1. AnalysisModal.tsx - Registro obligatorio antes de navegar
+**Causa raiz:** La consola muestra claramente: `"Stripe Checkout is not able to run in an iFrame. Please redirect to Checkout at the top level."` El codigo actual usa `window.location.href = data.url` (linea 102 de `useSubscription.tsx`), que intenta navegar dentro del iframe del preview, pero Stripe lo bloquea.
 
-En la pantalla de exito (recommendation screen), el boton "Iniciar esta ruta ahora" ya no navega directamente a `/dashboard`. En su lugar:
+**Solucion:**
+- Cambiar `window.location.href` por `window.open(data.url, '_blank')` para abrir Stripe Checkout en una nueva pestana
+- Esto funciona tanto en el preview de Lovable como en produccion
 
-- Abre el `AuthModal` integrado dentro del AnalysisModal
-- Pasa el `leadId` y `email` al AuthModal para vincular el lead
-- Solo despues de un registro/login exitoso, navega a `/dashboard`
-- El boton "Ver otros destinos" tambien requiere auth primero
+**Archivo:** `src/hooks/useSubscription.tsx` (linea 102)
 
-Esto implica agregar estado `showAuthInModal` y renderizar `AuthModal` dentro del componente.
-
-### 2. AuthModal.tsx - Vincular datos del onboarding al registrarse
-
-El AuthModal ya tiene logica para vincular el `leadId` al usuario despues del signup (lineas 96-104). Este flujo se mantiene intacto. Solo se asegura que despues del signup exitoso, el `onSuccess` callback dispare la navegacion.
-
-### 3. Dashboard.tsx - Proteger ruta (requiere auth)
-
-- Agregar un guard al inicio: si `!user && !authLoading`, redirigir a `/` (homepage)
-- Eliminar el `AuthBanner` ya que todos los usuarios del Dashboard estaran autenticados
-- Eliminar la logica de estado para usuarios anonimos
-- Simplificar `loadData` ya que siempre habra un `user`
-
-### 4. App.tsx - Ruta protegida (opcional)
-
-Se puede crear un componente `ProtectedRoute` que envuelva `/dashboard` y `/dashboard/route/:routeId` para redirigir automaticamente si no hay sesion. Alternativamente, el guard dentro de Dashboard es suficiente.
-
-### 5. RLS Policy - INSERT para usuarios autenticados
-
-Agregar la politica que permite a usuarios autenticados insertar su propia fila en `onboarding_submissions`:
-
-```sql
-CREATE POLICY "Users can insert their own submissions"
-ON onboarding_submissions
-FOR INSERT
-TO authenticated
-WITH CHECK (auth.uid() = user_id);
-```
-
-Esto permite que el `upsert` del ProfileSection funcione correctamente para usuarios que se registraron sin pasar por el onboarding.
+Tambien hay otro lugar que hace checkout en `src/components/dashboard/DocumentVault.tsx` que usa el mismo patron y necesita el mismo fix.
 
 ---
 
-## Archivos a modificar
+## Resumen de cambios
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/components/AnalysisModal.tsx` | Boton "Iniciar ruta" abre AuthModal en vez de navegar directo. Navegar solo despues de auth exitoso |
-| `src/pages/Dashboard.tsx` | Guard de auth (redirect a `/` si no logueado). Eliminar AuthBanner y logica anonima |
-| `src/components/dashboard/AuthBanner.tsx` | Se puede eliminar (ya no se usa) |
-| Migracion SQL | Agregar politica RLS INSERT para authenticated users |
-
----
-
-## Que NO cambia
-
-- Diseno, UX y CSS del AnalysisModal (los 5 pasos se mantienen identicos)
-- Pantalla de recomendacion (se mantiene intacta visualmente)
-- AuthModal (se reutiliza tal cual, solo se integra en el flujo del AnalysisModal)
-- Flujo de upgrade de plan dentro del Dashboard
-- EligibilityModals (Reg2026, Arraigos) no se modifican
-- RegistrationModal del pricing se mantiene
+| `src/components/dashboard/ProfileSection.tsx` | Mejorar upsert con fallback INSERT y log de errores detallado |
+| `src/hooks/useSubscription.tsx` | Cambiar `window.location.href` a `window.open(url, '_blank')` |
+| `src/components/dashboard/DocumentVault.tsx` | Mismo fix de checkout que useSubscription |
 
