@@ -76,7 +76,6 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
     const payload = {
       full_name: editData.full_name.trim(),
       nationality: editData.nationality.trim(),
-      email: user.email || "",
     };
 
     // Try UPDATE first
@@ -93,17 +92,31 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
       return;
     }
 
-    // If no row existed, INSERT
+    // If no row with user_id existed, try to claim existing lead row by email
     if (!updated || updated.length === 0) {
-      const { error: insertError } = await supabase
+      const { data: claimed, error: claimError } = await supabase
         .from("onboarding_submissions")
-        .insert({ ...payload, user_id: user.id });
+        .update({ ...payload, user_id: user.id })
+        .eq("email", user.email || "")
+        .is("user_id", null)
+        .select("id");
 
-      if (insertError) {
-        console.error("Profile insert error:", insertError.message, insertError.code, insertError.details);
-        toast({ variant: "destructive", title: "Error", description: insertError.message || "No se pudo crear el perfil." });
-        setIsSaving(false);
-        return;
+      if (claimError) {
+        console.error("Profile claim error:", claimError.message, claimError.code, claimError.details);
+      }
+
+      // If no lead row to claim either, INSERT a new one
+      if (!claimed || claimed.length === 0) {
+        const { error: insertError } = await supabase
+          .from("onboarding_submissions")
+          .insert({ ...payload, user_id: user.id, email: user.email || "" });
+
+        if (insertError) {
+          console.error("Profile insert error:", insertError.message, insertError.code, insertError.details);
+          toast({ variant: "destructive", title: "Error", description: insertError.message || "No se pudo crear el perfil." });
+          setIsSaving(false);
+          return;
+        }
       }
     }
 

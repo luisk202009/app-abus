@@ -213,13 +213,23 @@ export const AdminUsersTab = () => {
         next_billing_date: planModalDate ? format(planModalDate, "yyyy-MM-dd") : null,
       } as any;
 
-      let query;
-      if (planModalUser.user_id) {
-        query = supabase.from("onboarding_submissions").update(updateData).eq("user_id", planModalUser.user_id);
-      } else {
-        query = supabase.from("onboarding_submissions").update(updateData).eq("id", planModalUser.id);
+      // Always update by row id first
+      const { error } = await supabase
+        .from("onboarding_submissions")
+        .update(updateData)
+        .eq("id", planModalUser.id);
+
+      if (error) throw error;
+
+      // If this lead has a user_id, also ensure the user_id row is updated
+      // If lead has NO user_id but has email, also update any row with that email + user_id
+      if (!planModalUser.user_id && planModalUser.email) {
+        await supabase
+          .from("onboarding_submissions")
+          .update(updateData)
+          .eq("email", planModalUser.email)
+          .not("user_id", "is", null);
       }
-      const { error } = await query;
       if (error) throw error;
 
       // Update local state

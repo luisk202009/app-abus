@@ -9,7 +9,7 @@ import { FiscalSimulator } from "@/components/dashboard/FiscalSimulator";
 import { AppointmentManager } from "@/components/dashboard/AppointmentManager";
 import { LifeInSpainSection } from "@/components/dashboard/LifeInSpainSection";
 import { BusinessOnboardingSection } from "@/components/dashboard/BusinessOnboardingSection";
-import { DocumentVault } from "@/components/dashboard/DocumentVault";
+import { DocumentsSection } from "@/components/dashboard/DocumentsSection";
 import { ResourcesSection } from "@/components/dashboard/ResourcesSection";
 import { SupportModal } from "@/components/dashboard/SupportModal";
 import { RouteSelector } from "@/components/dashboard/RouteSelector";
@@ -432,9 +432,11 @@ const Dashboard = () => {
         );
       case "documents":
         return (
-          <DocumentVault
-            routeType={activeRouteType || "regularizacion2026"}
+          <DocumentsSection
+            visaType={userData.visaType}
             isPremium={planFeatures.hasDocuments ? isPremium : false}
+            onCheckout={() => handleCheckout()}
+            isCheckoutLoading={isCheckoutLoading}
           />
         );
       case "resources":
