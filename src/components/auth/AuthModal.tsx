@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import isotipoAlbus from "@/assets/isotipo-albus.png";
+import albusLogo from "@/assets/albus-logo.png";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -179,7 +179,7 @@ export const AuthModal = ({
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <img src={isotipoAlbus} alt="Albus" className="h-10 w-10" />
+            <img src={albusLogo} alt="Albus" className="h-8 w-auto" />
           </div>
           <DialogTitle className="text-xl font-semibold">
             {mode === "signup" ? "Crea tu cuenta" : "Inicia sesión"}

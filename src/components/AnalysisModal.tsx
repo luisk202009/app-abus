@@ -12,7 +12,7 @@ import { StepProgress } from "@/components/onboarding/StepProgress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { Json } from "@/integrations/supabase/types";
-import isotipoAlbus from "@/assets/isotipo-albus.png";
+import albusLogo from "@/assets/albus-logo.png";
 
 interface AnalysisModalProps {
   isOpen: boolean;
@@ -312,7 +312,7 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
             {/* Recommendation Card */}
             <div className="bg-secondary/50 rounded-xl p-6 mb-8 text-left">
               <div className="flex items-center gap-2 mb-3">
-                <img src={isotipoAlbus} alt="" className="w-5 h-5" />
+                <img src={albusLogo} alt="" className="h-4 w-auto" />
                 <span className="text-sm font-medium text-muted-foreground">
                   Tu mejor opción
                 </span>
@@ -551,9 +551,9 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
             <div className="flex flex-col items-center justify-center h-[300px] animate-fade-in">
               <div className="relative">
                 <img 
-                  src={isotipoAlbus} 
+                  src={albusLogo} 
                   alt="Albus" 
-                  className="w-16 h-16 animate-pulse"
+                  className="h-12 w-auto animate-pulse"
                 />
               </div>
               <p className="mt-6 text-lg font-medium text-center">
@@ -580,7 +580,7 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
           
           {isAnalyzing ? (
             <Button variant="hero" disabled className="gap-2 min-w-[140px]">
-              <img src={isotipoAlbus} alt="" className="w-4 h-4 animate-spin" />
+              <img src={albusLogo} alt="" className="h-4 w-auto animate-spin" />
               Analizando...
             </Button>
           ) : (

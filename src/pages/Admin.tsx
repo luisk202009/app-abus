@@ -13,7 +13,7 @@ import { AdminRoutesTab } from "@/components/admin/AdminRoutesTab";
 import { AdminDocumentsTab } from "@/components/admin/AdminDocumentsTab";
 import { AdminAnalyticsTab } from "@/components/admin/AdminAnalyticsTab";
 import { AdminSystemStatus } from "@/components/admin/AdminSystemStatus";
-import isotipoAlbus from "@/assets/isotipo-albus.png";
+import albusLogo from "@/assets/albus-logo.png";
 
 const ADMIN_EMAIL = "l@albus.com.co";
 
@@ -52,9 +52,9 @@ const Admin = () => {
       <div className="min-h-screen bg-secondary flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <img
-            src={isotipoAlbus}
+            src={albusLogo}
             alt="Albus"
-            className="w-12 h-12 animate-pulse"
+            className="h-10 w-auto animate-pulse"
           />
           <p className="text-muted-foreground">Verificando acceso...</p>
         </div>
@@ -77,7 +77,7 @@ const Admin = () => {
               Dashboard
             </Button>
             <div className="flex items-center gap-2">
-              <img src={isotipoAlbus} alt="Albus" className="w-6 h-6" />
+              <img src={albusLogo} alt="Albus" className="h-5 w-auto" />
               <span className="font-semibold">Admin Panel</span>
             </div>
           </div>
