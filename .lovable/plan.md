@@ -1,71 +1,33 @@
 
 
-# Foto de perfil: subir avatar y mostrar en dashboard
+# Reemplazar isotipo (letra "a") por logo completo
 
 ## Resumen
 
-Agregar la funcionalidad para que el usuario pueda subir una foto de perfil desde la seccion "Editar Perfil". La foto se mostrara tanto en la seccion de perfil como en el sidebar del dashboard (reemplazando el icono generico de usuario).
+Cambiar la imagen del isotipo (`isotipo-albus.png` - solo la letra "a") por el logo completo (`albus-logo.png` - "albus") en dos contextos: el modal de login y todos los spinners de carga.
 
-## Cambios necesarios
+## Archivos a modificar
 
-### 1. Base de datos: nueva columna `avatar_url`
+| Archivo | Uso actual | Cambio |
+|---------|-----------|--------|
+| `src/components/auth/AuthModal.tsx` | Isotipo en modal de login | Cambiar import y referencia a `albus-logo.png` |
+| `src/pages/Dashboard.tsx` | Isotipo en spinner "Cargando tu dashboard..." | Cambiar import a `albus-logo.png`, ajustar tamano |
+| `src/pages/RouteDetail.tsx` | Isotipo en spinner de carga | Cambiar import a `albus-logo.png` |
+| `src/pages/Admin.tsx` | Isotipo en spinner de carga y header | Cambiar import a `albus-logo.png` |
+| `src/components/AnalysisModal.tsx` | Posible uso de isotipo en evaluacion | Verificar y cambiar si aplica |
 
-Agregar columna `avatar_url` (tipo text, nullable) a la tabla `onboarding_submissions` para almacenar la URL publica de la foto.
+## Archivos que NO se modifican
 
-```sql
-ALTER TABLE onboarding_submissions ADD COLUMN avatar_url text;
-```
-
-### 2. Storage: nuevo bucket `avatars`
-
-Crear un bucket publico `avatars` con politicas RLS que permitan:
-- INSERT: usuarios autenticados pueden subir su propia foto (path = `user_id/filename`)
-- UPDATE: usuarios autenticados pueden reemplazar su foto
-- SELECT: cualquiera puede ver las fotos (bucket publico)
-- DELETE: usuarios autenticados pueden borrar su propia foto
-
-### 3. ProfileSection.tsx - UI de subida
-
-Cuando el usuario esta en modo edicion:
-- Mostrar un avatar circular con un boton de camara/upload encima
-- Al hacer clic, abrir un file input que acepte imagenes (jpg, png, webp)
-- Subir la imagen al bucket `avatars` con path `{user_id}/avatar.{ext}`
-- Guardar la URL publica en `avatar_url` de `onboarding_submissions`
-- Mostrar preview inmediato de la foto seleccionada
-
-Cuando no esta editando:
-- Mostrar la foto si existe, o el icono generico de User si no
-
-### 4. DashboardSidebar.tsx - Mostrar avatar
-
-- Recibir nueva prop `avatarUrl?: string`
-- Si tiene valor, mostrar la imagen en el circulo del sidebar en lugar del icono `<User />`
-- Usar el componente `Avatar` / `AvatarImage` / `AvatarFallback` de shadcn
-
-### 5. Dashboard.tsx - Pasar avatar al sidebar
-
-- Leer `avatar_url` del perfil del usuario (ya se hace query a `onboarding_submissions`)
-- Pasar el valor como prop `avatarUrl` al `DashboardSidebar`
-- Actualizar el estado cuando el usuario cambia su foto desde ProfileSection
-
----
+- `src/components/dashboard/PremiumModal.tsx` - El isotipo ahi es decorativo con corona, se mantiene
+- `src/components/dashboard/DocumentsSection.tsx` - Watermark sutil, se mantiene
+- `src/pages/NotFound.tsx` - Pagina 404, se mantiene con isotipo
+- `src/pages/AdminManual.tsx` - Header admin, se mantiene
+- `src/hooks/usePushNotifications.tsx` - Icono de notificaciones push, se mantiene (necesita ser cuadrado)
 
 ## Detalle tecnico
 
-| Archivo | Cambio |
-|---------|--------|
-| Migracion SQL | Agregar columna `avatar_url` + crear bucket `avatars` + politicas RLS |
-| `src/components/dashboard/ProfileSection.tsx` | Agregar input de imagen, preview, subida a Storage, guardar URL |
-| `src/components/dashboard/DashboardSidebar.tsx` | Recibir `avatarUrl` prop, mostrar Avatar con imagen o fallback |
-| `src/pages/Dashboard.tsx` | Leer `avatar_url` de la query, pasarlo al sidebar, actualizar al cambiar |
+En cada archivo afectado:
+1. Cambiar el import de `isotipo-albus.png` a `albus-logo.png`
+2. Ajustar las clases CSS del `<img>` para que el logo completo se vea bien (el logo completo es horizontal/mas ancho, asi que cambiar de `w-12 h-12` a algo como `h-10 w-auto` para mantener proporcion)
 
-### Flujo de subida
-
-1. Usuario hace clic en "Editar Perfil"
-2. Aparece avatar con overlay de camara
-3. Selecciona imagen desde su dispositivo
-4. Se sube al bucket `avatars/{user_id}/avatar.webp`
-5. Se obtiene URL publica
-6. Al guardar, se incluye `avatar_url` en el payload del UPDATE
-7. Sidebar y perfil muestran la nueva foto inmediatamente
-
+Para el AuthModal especificamente, el logo pasara de ser un cuadrado pequeno a mostrar la palabra "albus" completa, centrada sobre el titulo "Inicia sesion".
