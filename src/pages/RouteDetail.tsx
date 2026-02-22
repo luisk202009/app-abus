@@ -11,7 +11,7 @@ import { DeleteRouteModal } from "@/components/dashboard/DeleteRouteModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { SupportModal } from "@/components/dashboard/SupportModal";
-import isotipoAlbus from "@/assets/isotipo-albus.png";
+import albusLogo from "@/assets/albus-logo.png";
 
 const RouteDetail = () => {
   const navigate = useNavigate();
@@ -88,9 +88,9 @@ const RouteDetail = () => {
       <div className="min-h-screen bg-secondary flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <img
-            src={isotipoAlbus}
+            src={albusLogo}
             alt="Albus"
-            className="w-12 h-12 animate-pulse"
+            className="h-10 w-auto animate-pulse"
           />
           <p className="text-muted-foreground">Cargando tu ruta...</p>
         </div>

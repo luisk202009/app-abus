@@ -34,7 +34,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { usePlanFeatures } from "@/hooks/usePlanFeatures";
 import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import isotipoAlbus from "@/assets/isotipo-albus.png";
+import albusLogo from "@/assets/albus-logo.png";
 import { Button } from "@/components/ui/button";
 import { Compass, ArrowRight, Calculator, CalendarCheck, Shield, TrendingUp, Bell } from "lucide-react";
 import type { RouteType } from "@/lib/documentConfig";
@@ -571,9 +571,9 @@ const Dashboard = () => {
       <div className="min-h-screen bg-secondary flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <img
-            src={isotipoAlbus}
+            src={albusLogo}
             alt="Albus"
-            className="w-12 h-12 animate-pulse"
+            className="h-10 w-auto animate-pulse"
           />
           <p className="text-muted-foreground">Cargando tu dashboard...</p>
         </div>
