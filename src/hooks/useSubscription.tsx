@@ -97,9 +97,9 @@ export const useSubscription = (): UseSubscriptionReturn => {
         throw new Error(data.error);
       }
 
-      // Redirect to Stripe Checkout
+      // Open Stripe Checkout in new tab (avoids iframe restriction)
       if (data.url) {
-        window.location.href = data.url;
+        window.open(data.url, '_blank');
       }
     } catch (error: any) {
       const rawMessage = error?.message || "Error desconocido";

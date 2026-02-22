@@ -73,23 +73,44 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
     if (!user) return;
     setIsSaving(true);
 
-    const { error } = await supabase
-      .from("onboarding_submissions")
-      .upsert({
-        user_id: user.id,
-        full_name: editData.full_name.trim(),
-        nationality: editData.nationality.trim(),
-        email: user.email || "",
-      }, { onConflict: "user_id" });
+    const payload = {
+      full_name: editData.full_name.trim(),
+      nationality: editData.nationality.trim(),
+      email: user.email || "",
+    };
 
-    if (error) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el perfil." });
-    } else {
-      setProfileData(prev => ({ ...prev, full_name: editData.full_name.trim(), nationality: editData.nationality.trim() }));
-      setIsEditing(false);
-      toast({ title: "Perfil actualizado", description: "Tus datos se han guardado correctamente." });
-      onProfileUpdate?.({ full_name: editData.full_name.trim(), nationality: editData.nationality.trim() });
+    // Try UPDATE first
+    const { data: updated, error: updateError } = await supabase
+      .from("onboarding_submissions")
+      .update(payload)
+      .eq("user_id", user.id)
+      .select("id");
+
+    if (updateError) {
+      console.error("Profile update error:", updateError.message, updateError.code, updateError.details);
+      toast({ variant: "destructive", title: "Error", description: updateError.message || "No se pudo actualizar el perfil." });
+      setIsSaving(false);
+      return;
     }
+
+    // If no row existed, INSERT
+    if (!updated || updated.length === 0) {
+      const { error: insertError } = await supabase
+        .from("onboarding_submissions")
+        .insert({ ...payload, user_id: user.id });
+
+      if (insertError) {
+        console.error("Profile insert error:", insertError.message, insertError.code, insertError.details);
+        toast({ variant: "destructive", title: "Error", description: insertError.message || "No se pudo crear el perfil." });
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    setProfileData(prev => ({ ...prev, full_name: payload.full_name, nationality: payload.nationality }));
+    setIsEditing(false);
+    toast({ title: "Perfil actualizado", description: "Tus datos se han guardado correctamente." });
+    onProfileUpdate?.({ full_name: payload.full_name, nationality: payload.nationality });
     setIsSaving(false);
   };
 
