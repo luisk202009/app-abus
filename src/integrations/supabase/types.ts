@@ -49,6 +49,7 @@ export type Database = {
       onboarding_submissions: {
         Row: {
           ai_recommendation: Json | null
+          avatar_url: string | null
           created_at: string
           crm_tag: string | null
           current_location: string | null
@@ -67,6 +68,7 @@ export type Database = {
         }
         Insert: {
           ai_recommendation?: Json | null
+          avatar_url?: string | null
           created_at?: string
           crm_tag?: string | null
           current_location?: string | null
@@ -85,6 +87,7 @@ export type Database = {
         }
         Update: {
           ai_recommendation?: Json | null
+          avatar_url?: string | null
           created_at?: string
           crm_tag?: string | null
           current_location?: string | null

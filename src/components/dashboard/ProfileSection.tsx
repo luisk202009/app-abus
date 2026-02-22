@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
-import { User, Mail, Globe, Crown, Lock, Pencil, Save, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { User, Mail, Globe, Crown, Lock, Pencil, Save, X, Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,15 +13,19 @@ import { CountrySelect } from "@/components/onboarding/CountrySelect";
 interface ProfileSectionProps {
   isPremium: boolean;
   subscriptionStatus: string;
-  onProfileUpdate?: (data: { full_name: string; nationality: string }) => void;
+  onProfileUpdate?: (data: { full_name: string; nationality: string; avatar_url?: string }) => void;
 }
 
 export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate }: ProfileSectionProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [profileData, setProfileData] = useState({
     full_name: "",
     nationality: "",
@@ -36,7 +40,7 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
     const fetchProfile = async () => {
       const { data } = await supabase
         .from("onboarding_submissions")
-        .select("full_name, nationality, email, subscription_status")
+        .select("full_name, nationality, email, subscription_status, avatar_url")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -50,6 +54,9 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
           full_name: data.full_name || "",
           nationality: data.nationality || "",
         });
+        if ((data as any).avatar_url) {
+          setAvatarUrl((data as any).avatar_url);
+        }
       } else {
         setProfileData(prev => ({ ...prev, email: user.email || "" }));
       }
@@ -68,6 +75,70 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
 
     fetchProfile();
   }, [user, subscriptionStatus]);
+
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast({ variant: "destructive", title: "Formato no válido", description: "Solo se permiten imágenes JPG, PNG o WebP." });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "Archivo muy grande", description: "La imagen no puede superar 5MB." });
+      return;
+    }
+
+    // Show preview immediately
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarPreview(previewUrl);
+
+    // Upload to Storage
+    setIsUploadingAvatar(true);
+    const ext = file.name.split(".").pop() || "jpg";
+    const filePath = `${user.id}/avatar.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      console.error("Avatar upload error:", uploadError);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo subir la imagen." });
+      setAvatarPreview(null);
+      setIsUploadingAvatar(false);
+      return;
+    }
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(filePath);
+
+    const newAvatarUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+
+    // Save to database
+    const { error: dbError } = await supabase
+      .from("onboarding_submissions")
+      .update({ avatar_url: newAvatarUrl } as any)
+      .eq("user_id", user.id);
+
+    if (dbError) {
+      console.error("Avatar DB update error:", dbError);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la URL de la imagen." });
+    } else {
+      setAvatarUrl(newAvatarUrl);
+      toast({ title: "Foto actualizada", description: "Tu foto de perfil se ha actualizado." });
+      onProfileUpdate?.({ full_name: profileData.full_name, nationality: profileData.nationality, avatar_url: newAvatarUrl });
+    }
+
+    setAvatarPreview(null);
+    setIsUploadingAvatar(false);
+  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -153,6 +224,8 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
     return <Badge variant="outline" className="text-muted-foreground">Gratis</Badge>;
   };
 
+  const displayAvatar = avatarPreview || avatarUrl;
+
   return (
     <div className="space-y-6">
       <div>
@@ -182,6 +255,44 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
           )}
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Avatar */}
+          <div className="flex items-center gap-4">
+            <div className="relative group">
+              <Avatar className="w-16 h-16">
+                {displayAvatar ? (
+                  <AvatarImage src={displayAvatar} alt="Foto de perfil" />
+                ) : null}
+                <AvatarFallback className="bg-secondary">
+                  <User className="w-7 h-7 text-muted-foreground" />
+                </AvatarFallback>
+              </Avatar>
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                  className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  <Camera className="w-5 h-5 text-white" />
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarSelect}
+              />
+            </div>
+            <div className="flex-1">
+              <p className="font-medium">{profileData.full_name || "Sin definir"}</p>
+              <p className="text-xs text-muted-foreground">{profileData.email}</p>
+              {isEditing && (
+                <p className="text-xs text-muted-foreground mt-1">Haz clic en la foto para cambiarla</p>
+              )}
+            </div>
+          </div>
+
           {/* Full Name */}
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
