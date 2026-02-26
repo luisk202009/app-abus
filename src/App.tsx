@@ -22,6 +22,7 @@ import Admin from "./pages/Admin";
 import AdminManual from "./pages/AdminManual";
 import PartnerDashboard from "./pages/PartnerDashboard";
 import NotFound from "./pages/NotFound";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
                 {/* Legacy redirect */}
                 <Route path="/regularizacion" element={<Navigate to="/españa/arraigos" replace />} />
                 <Route path="/success" element={<Success />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/terminos" element={<Terms />} />
                 <Route path="/privacidad" element={<Privacy />} />
                 <Route path="/destinos/:countryId" element={<ComingSoon />} />

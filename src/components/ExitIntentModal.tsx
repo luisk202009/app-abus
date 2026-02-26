@@ -10,6 +10,8 @@ export const ExitIntentModal = () => {
 
   const show = useCallback(() => {
     if (sessionStorage.getItem(SESSION_KEY)) return;
+    // Don't show if another dialog is already open
+    if (document.querySelector('[role="dialog"]')) return;
     sessionStorage.setItem(SESSION_KEY, "1");
     setIsOpen(true);
     trackEvent("exit_intent_shown");
