@@ -1,202 +1,91 @@
 
 
-# Corregir flujo completo: Elegibilidad -> Pago -> Registro -> Dashboard con ruta activa
+# Plan: Unificar flujo de Regularizacion y corregir error de pago
 
-## Problemas identificados (6 issues)
+## Diagnostico del error de pago
 
-1. **ChecklistModal CTA "Activar Plan Pro ahora" lleva a /explorar** en vez de iniciar checkout de suscripcion
-2. **En /explorar, al iniciar ruta sin auth, muestra AuthModal de registro** -- pero tras registrarse muestra "creada con exito" y vuelve a pedir registro, generando error de duplicado
-3. **Regularizacion/Arraigo son rutas premium** que no deberian ser accesibles en plan gratis; el CTA debe llevar a pagar, no a /explorar
-4. **Tras registro (signup), la cuenta no tiene user_id vinculado en onboarding_submissions**, por lo que el Dashboard no puede auto-iniciar la ruta
-5. **Email de confirmacion de cuenta redirige a `window.location.origin`** (raiz `/`) en vez de `/dashboard` con la ruta apropiada
-6. **RegistrationModal (pago one-time) requiere auth** pero no crea cuenta Supabase, solo guarda en localStorage y redirige a Stripe
+El error 401 en las capturas viene de `create-one-time-payment`, que es la edge function antigua que requiere autenticacion. El componente `RegistrationModal.tsx` sigue existiendo en el proyecto y llama a esa funcion SIN crear una cuenta auth de Supabase primero. Aunque `QualificationSuccess` ya fue refactorizado para usar `create-checkout` (suscripcion con auth), el archivo `RegistrationModal.tsx` sigue presente y podria estar siendo referenciado por una version publicada anterior.
 
-## Solucion propuesta
+## Cambios propuestos
 
-### Flujo objetivo (Regularizacion/Arraigo):
+### 1. Eliminar `RegistrationModal.tsx`
+**Archivo**: `src/components/eligibility/RegistrationModal.tsx`
+- Eliminar completamente este archivo. Ya no es importado por ningun componente.
+- Era el origen del error: llamaba a `create-one-time-payment` sin sesion auth, resultando en 401.
 
-```text
-Landing -> Elegibilidad Modal -> QualificationSuccess (pricing)
-  -> RegistrationModal: nombre + email -> Stripe Checkout (suscripcion)
-  -> /success -> auto-login o magic-link -> /dashboard -> ruta auto-activada
-```
+### 2. Simplificar la landing de Regularizacion 2026
+**Archivo**: `src/pages/espana/Regularizacion2026.tsx`
+- **Problema actual**: Tiene 3 puntos de entrada redundantes:
+  1. Hero CTA "Analizar mi elegibilidad" → abre `EligibilityModalReg2026`
+  2. Seccion CTA "Verificar si califico" → abre la misma modal
+  3. `EligibilityCalculator` con fecha + lead capture + ChecklistModal
+- **Cambio**: Eliminar el componente `EligibilityCalculator` de esta pagina (ya esta en el Home). Mantener solo el flujo de `EligibilityModalReg2026` con los 2 CTAs del hero y de la seccion inferior, que es mas directo para conversion.
 
-### Flujo objetivo (ChecklistModal CTA):
+### 3. Agregar CTA en el Home para ir a la landing de Regularizacion
+**Archivo**: `src/components/eligibility/EligibilityCalculator.tsx`
+- Despues de que el usuario ve que es "eligible" y completa el lead capture (o tras ver el checklist), agregar un boton secundario: "Conoce mas sobre la Regularizacion 2026" que navega a `/españa/regularizacion`.
+- Esto conecta el flujo del Home (calculadora gratuita) con la landing de conversion (pricing).
 
-```text
-Checklist CTA "Activar Plan Pro" -> Checkout de suscripcion (no /explorar)
-```
-
----
-
-## Archivos a modificar
-
-### 1. `src/components/eligibility/ChecklistModal.tsx`
-**Problema**: El boton "Activar Plan Pro ahora" navega a `/explorar`.
-**Cambio**: 
-- Si el usuario esta autenticado, llamar a `handleCheckout()` de `useSubscription` directamente
-- Si NO esta autenticado, abrir el AuthModal con `onSuccess` que redirige a `/dashboard` con `source` en localStorage
-- Importar `useAuth`, `useSubscription`, y `AuthModal`
-
-### 2. `src/components/eligibility/QualificationSuccess.tsx`
-**Problema**: Muestra pricing con RegistrationModal que hace pago one-time sin crear cuenta auth.
-**Cambio**:
-- Reemplazar la logica de `RegistrationModal` por un flujo que:
-  1. Primero abra `AuthModal` para crear cuenta (signup) si no esta autenticado
-  2. Tras auth exitosa, inicie checkout de suscripcion via `create-checkout`
-  3. Guarde `onboarding_source` en localStorage para auto-activar la ruta tras pago
-- Agregar estado para manejar si el usuario ya esta autenticado (skip auth, ir directo a checkout)
-
-### 3. `src/components/eligibility/RegistrationModal.tsx`
-**Problema**: Invoca `create-one-time-payment` sin crear cuenta auth de Supabase. El usuario paga pero no tiene cuenta.
-**Cambio**: 
-- Transformar para que primero verifique si hay session auth activa
-- Si no hay session: abrir AuthModal antes de proceder al checkout
-- Tras auth, usar `create-checkout` (suscripcion) en vez de `create-one-time-payment`
-- O alternativamente: eliminar `RegistrationModal` y consolidar la logica en `QualificationSuccess`
-
-### 4. `src/hooks/useAuth.tsx`
-**Problema**: `signUp` usa `emailRedirectTo: window.location.origin` que lleva a `/` en vez de `/dashboard`.
-**Cambio**:
-- Cambiar `emailRedirectTo` a `window.location.origin + "/dashboard"`
-- Esto asegura que cuando el usuario confirma su email, llega al dashboard
-
-### 5. `src/pages/Explorar.tsx`
-**Problema**: `handleStartRoute` muestra AuthModal generico. Tras registrarse con exito, no navega correctamente y genera loop de re-registro.
-**Cambio**:
-- Agregar `onSuccess` al AuthModal que, tras login/signup exitoso, reintente `handleStartRoute` con el template seleccionado
-- Guardar el `templateId` pendiente en estado para reintentarlo tras auth
-
-### 6. `src/components/AnalysisModal.tsx`
-**Problema**: Tras el AuthModal de signup, navega a `/dashboard` con state. Pero si el email no esta confirmado, el usuario queda en limbo. Si el usuario ya existe, genera error de duplicado en onboarding_submissions.
-**Cambio**:
-- Verificar si ya existe registro en `onboarding_submissions` antes de INSERT (usar upsert o SELECT previo)
-- En `handleAuthSuccess`, guardar `onboarding_source` en localStorage para que el Dashboard auto-active la ruta
-
-### 7. `src/pages/Dashboard.tsx` (lineas 170-201)
-**Problema**: Auto-start logic depende de `canAddRoute` que es `false` para free users que ya usaron su slot. Regularizacion/Arraigo requieren plan Pro.
-**Cambio**:
-- En el auto-start logic, si `source` es "reg2026" o "arraigos" y el usuario es free, mostrar el SlotExhaustedModal o redirigir a checkout en vez de intentar crear la ruta
-- Leer `payment_success` de localStorage para detectar post-pago exitoso y activar la ruta
-
-### 8. `src/pages/Success.tsx`
-**Problema**: Tras el pago (one-time o suscripcion), actualiza `onboarding_submissions` sin tener `user_id`. El usuario no tiene sesion auth activa.
-**Cambio**:
-- Si el usuario llega de un flujo de suscripcion (`create-checkout`), ya tiene auth session activa
-- Verificar session auth, si existe: vincular user_id al onboarding_submission
-- Guardar `onboarding_source` basado en `routeTemplateSlug` del pago para que Dashboard auto-active la ruta
-- Redirigir automaticamente a `/dashboard` tras procesar
+### 4. Agregar CTA en el ChecklistModal hacia la landing
+**Archivo**: `src/components/eligibility/ChecklistModal.tsx`
+- Debajo del CTA "Activar Plan Pro ahora", agregar un enlace secundario: "Ver detalles del proceso de Regularizacion" que lleva a `/españa/regularizacion`.
+- El CTA principal de pago ya funciona correctamente (usa `handleCheckout` con auth).
 
 ---
 
 ## Detalle tecnico
 
-### Flujo simplificado post-implementacion:
+### Regularizacion2026.tsx - remover EligibilityCalculator:
 
 ```text
-1. Usuario pasa elegibilidad en landing de Regularizacion/Arraigo
-2. Ve QualificationSuccess con planes Pro/Premium
-3. Elige plan -> Se abre AuthModal (signup/login)
-4. Tras auth exitosa:
-   a. Se guarda onboarding_source en localStorage
-   b. Se inicia checkout de suscripcion (create-checkout)
-   c. Stripe redirige a /success
-5. /success detecta session auth, actualiza subscription_status
-6. /success guarda onboarding_source y redirige a /dashboard
-7. Dashboard detecta source, auto-activa la ruta correspondiente
+Antes:
+  HeroReg2026 → EligibilityModalReg2026
+  RequirementsSection
+  DeadlineSection → EligibilityModalReg2026
+  EligibilityCalculator (duplicado del Home)
+  TestimonialsCarousel
+
+Despues:
+  HeroReg2026 → EligibilityModalReg2026
+  RequirementsSection
+  DeadlineSection → EligibilityModalReg2026
+  TestimonialsCarousel
 ```
 
-### Cambio en emailRedirectTo (useAuth.tsx):
+### EligibilityCalculator.tsx - nuevo CTA secundario:
 
-```typescript
-// Antes:
-emailRedirectTo: window.location.origin
-// Despues:
-emailRedirectTo: window.location.origin + "/dashboard"
+En la seccion de resultado "eligible", despues del formulario de lead capture o tras mostrar el checklist, agregar:
+```tsx
+<Button variant="outline" onClick={() => navigate("/españa/regularizacion")} className="w-full gap-2">
+  Conoce mas sobre la Regularizacion 2026
+  <ArrowRight className="w-4 h-4" />
+</Button>
 ```
 
-### ChecklistModal CTA (ChecklistModal.tsx):
+### ChecklistModal.tsx - enlace a landing:
 
-```typescript
-// Antes: navigate("/explorar")
-// Despues:
-if (user) {
-  onClose();
-  handleCheckout(); // Stripe subscription checkout
-} else {
-  setShowAuth(true); // AuthModal -> onSuccess -> handleCheckout
-}
-```
-
-### QualificationSuccess flujo revisado:
-
-En vez de abrir RegistrationModal (nombre+email+stripe one-time), el nuevo flujo:
-1. Al seleccionar plan, guardar plan seleccionado en estado
-2. Si NO hay user auth -> abrir AuthModal
-3. Tras auth exitosa -> guardar `onboarding_source` + llamar `create-checkout` con el priceId del plan seleccionado
-4. Si YA hay user auth -> ir directo a checkout
-
-### Dashboard auto-start con gating:
-
-```typescript
-// Verificar si el usuario tiene el plan necesario para la ruta
-if (source === "reg2026" || source === "arraigos") {
-  if (!isPremium) {
-    // No tiene plan Pro/Premium, mostrar modal de upgrade
-    setShowSlotExhaustedModal(true);
-    localStorage.removeItem("onboarding_source");
-    return;
-  }
-  // Tiene plan, proceder a crear la ruta
-  templateToStart = source === "reg2026" 
-    ? TEMPLATE_IDS.regularizacion2026 
-    : TEMPLATE_IDS.arraigoSocial;
-}
-```
-
-### AnalysisModal - Evitar duplicados:
-
-```typescript
-// Usar upsert por email en vez de insert
-const { data: existing } = await supabase
-  .from("onboarding_submissions")
-  .select("id")
-  .eq("email", submissionData.email)
-  .maybeSingle();
-
-if (existing) {
-  setLeadId(existing.id);
-  // Update en vez de insert
-  await supabase.from("onboarding_submissions")
-    .update(submissionData)
-    .eq("id", existing.id);
-} else {
-  const { data } = await supabase.from("onboarding_submissions")
-    .insert([submissionData]).select("id").single();
-  setLeadId(data?.id);
-}
+Despues del bloque de CTA "Activar Plan Pro ahora":
+```tsx
+<Button variant="ghost" size="sm" onClick={() => { onClose(); navigate("/españa/regularizacion"); }}>
+  Ver detalles del proceso
+</Button>
 ```
 
 ---
 
-## Archivos que NO se modifican
+## Archivos impactados
 
-- `supabase/functions/create-checkout/index.ts` -- ya funciona correctamente para suscripciones
-- `supabase/functions/stripe-webhook/index.ts` -- ya actualiza subscription_status correctamente
-- `src/hooks/useSubscription.tsx` -- ya lee correctamente el status
-- `src/hooks/useRoutes.tsx` -- la logica de canAddRoute ya es correcta
-- `src/components/auth/AuthModal.tsx` -- ya tiene login/signup/magic-link/forgot, no requiere cambios
+| Archivo | Cambio |
+|---------|--------|
+| `RegistrationModal.tsx` | Eliminar archivo |
+| `Regularizacion2026.tsx` | Remover EligibilityCalculator de la pagina |
+| `EligibilityCalculator.tsx` | Agregar CTA secundario hacia landing |
+| `ChecklistModal.tsx` | Agregar enlace secundario hacia landing |
 
-## Resumen de impacto
+## Archivos que NO cambian
 
-| Archivo | Tipo de cambio |
-|---------|---------------|
-| `ChecklistModal.tsx` | CTA: `/explorar` -> checkout suscripcion |
-| `QualificationSuccess.tsx` | Integrar auth + checkout directo |
-| `RegistrationModal.tsx` | Refactorizar o eliminar (consolidar en QualificationSuccess) |
-| `useAuth.tsx` | emailRedirectTo -> `/dashboard` |
-| `Explorar.tsx` | Fix auth loop en startRoute |
-| `AnalysisModal.tsx` | Upsert en vez de insert |
-| `Dashboard.tsx` | Gating premium en auto-start |
-| `Success.tsx` | Vincular user_id + guardar source + redirect a dashboard |
+- `QualificationSuccess.tsx` - ya usa AuthModal + create-checkout correctamente
+- `EligibilityModalReg2026.tsx` - flujo de 2 preguntas funciona bien
+- `create-checkout/index.ts` - edge function de suscripcion funciona correctamente
+- `ChecklistModal.tsx` CTA principal - ya llama handleCheckout con auth
 
