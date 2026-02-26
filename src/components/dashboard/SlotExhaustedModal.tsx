@@ -35,7 +35,7 @@ export const SlotExhaustedModal = ({
             </p>
             <p>
               Pásate al <span className="font-semibold text-primary">Plan Pro</span> por solo{" "}
-              <span className="font-semibold">€6,99/mes</span> para:
+              <span className="font-semibold">€9,99/mes</span> para:
             </p>
             <ul className="text-left space-y-2 mt-4">
               <li className="flex items-start gap-2">
@@ -57,7 +57,7 @@ export const SlotExhaustedModal = ({
         <div className="flex flex-col gap-3 mt-4">
           <Button onClick={onUpgrade} disabled={isUpgrading} className="gap-2">
             <Crown className="w-4 h-4" />
-            {isUpgrading ? "Procesando..." : "Mejorar a Pro - €6,99/mes"}
+            {isUpgrading ? "Procesando..." : "Mejorar a Pro - €9,99/mes"}
           </Button>
           <Button variant="ghost" onClick={onClose}>
             Entendido
