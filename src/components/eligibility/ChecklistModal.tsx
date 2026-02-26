@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { CheckCircle2, Download, ArrowRight, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { generateChecklistPDF } from "@/lib/generateChecklistPDF";
+import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
+import { AuthModal } from "@/components/auth/AuthModal";
 
 interface ChecklistModalProps {
   isOpen: boolean;
@@ -59,7 +61,10 @@ const countryNames: Record<string, string> = {
 };
 
 export const ChecklistModal = ({ isOpen, onClose, userName, userEmail, country }: ChecklistModalProps) => {
-  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { handleCheckout, isCheckoutLoading } = useSubscription();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   const allItems = [...(country ? countrySpecificItems[country] || [] : []), ...generalItems];
   const [checked, setChecked] = useState<Set<string>>(new Set());
 
@@ -82,37 +87,74 @@ export const ChecklistModal = ({ isOpen, onClose, userName, userEmail, country }
     });
   };
 
+  const handleActivatePro = () => {
+    if (user) {
+      onClose();
+      handleCheckout();
+    } else {
+      setShowAuthModal(true);
+    }
+  };
+
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false);
+    onClose();
+    // After auth, trigger checkout
+    handleCheckout();
+  };
+
   const countrySpecific = allItems.filter((i) => i.isCountrySpecific);
   const general = allItems.filter((i) => !i.isCountrySpecific);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold">
-            Tu Hoja de Ruta Personalizada
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            {userName} • {country ? countryNames[country] || "General" : "General"}
-          </p>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">
+              Tu Hoja de Ruta Personalizada
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {userName} • {country ? countryNames[country] || "General" : "General"}
+            </p>
+          </DialogHeader>
 
-        {/* Progress */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Progreso</span>
-            <span className="font-medium">{progress}%</span>
+          {/* Progress */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Progreso</span>
+              <span className="font-medium">{progress}%</span>
+            </div>
+            <Progress value={progress} className="h-2" />
           </div>
-          <Progress value={progress} className="h-2" />
-        </div>
 
-        {/* Country-specific items */}
-        {countrySpecific.length > 0 && (
+          {/* Country-specific items */}
+          {countrySpecific.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                Requisitos — {country ? countryNames[country] : ""}
+              </h3>
+              {countrySpecific.map((item) => (
+                <label key={item.id} className="flex items-start gap-3 cursor-pointer group">
+                  <Checkbox
+                    checked={checked.has(item.id)}
+                    onCheckedChange={() => toggle(item.id)}
+                    className="mt-0.5"
+                  />
+                  <span className={`text-sm leading-snug transition-colors ${checked.has(item.id) ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                    {item.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {/* General items */}
           <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-              Requisitos — {country ? countryNames[country] : ""}
+              Documentación General
             </h3>
-            {countrySpecific.map((item) => (
+            {general.map((item) => (
               <label key={item.id} className="flex items-start gap-3 cursor-pointer group">
                 <Checkbox
                   checked={checked.has(item.id)}
@@ -125,51 +167,37 @@ export const ChecklistModal = ({ isOpen, onClose, userName, userEmail, country }
               </label>
             ))}
           </div>
-        )}
 
-        {/* General items */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-            Documentación General
-          </h3>
-          {general.map((item) => (
-            <label key={item.id} className="flex items-start gap-3 cursor-pointer group">
-              <Checkbox
-                checked={checked.has(item.id)}
-                onCheckedChange={() => toggle(item.id)}
-                className="mt-0.5"
-              />
-              <span className={`text-sm leading-snug transition-colors ${checked.has(item.id) ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                {item.label}
-              </span>
-            </label>
-          ))}
-        </div>
-
-        {/* Download PDF */}
-        <Button variant="outline" className="w-full gap-2" onClick={handleDownloadPDF}>
-          <Download className="w-4 h-4" />
-          Descargar en PDF
-        </Button>
-
-        {/* CTA Plan Pro */}
-        <div className="border border-border rounded-xl p-5 space-y-3 bg-muted/30">
-          <p className="text-sm text-foreground leading-relaxed">
-            ¿Te abruma tanto papeleo? Por solo <span className="font-bold">9,99€</span>, el Plan Pro organiza estos documentos en tu Bóveda Segura y valida tus fechas automáticamente.
-          </p>
-          <Button
-            variant="hero"
-            className="w-full gap-2"
-            onClick={() => {
-              onClose();
-              navigate("/explorar");
-            }}
-          >
-            Activar Plan Pro ahora
-            <ArrowRight className="w-4 h-4" />
+          {/* Download PDF */}
+          <Button variant="outline" className="w-full gap-2" onClick={handleDownloadPDF}>
+            <Download className="w-4 h-4" />
+            Descargar en PDF
           </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+
+          {/* CTA Plan Pro */}
+          <div className="border border-border rounded-xl p-5 space-y-3 bg-muted/30">
+            <p className="text-sm text-foreground leading-relaxed">
+              ¿Te abruma tanto papeleo? Por solo <span className="font-bold">9,99€</span>, el Plan Pro organiza estos documentos en tu Bóveda Segura y valida tus fechas automáticamente.
+            </p>
+            <Button
+              variant="hero"
+              className="w-full gap-2"
+              onClick={handleActivatePro}
+              disabled={isCheckoutLoading}
+            >
+              Activar Plan Pro ahora
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        defaultEmail={userEmail}
+        onSuccess={handleAuthSuccess}
+      />
+    </>
   );
 };

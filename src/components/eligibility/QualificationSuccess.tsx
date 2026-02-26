@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { CheckCircle, Shield, Sparkles } from "lucide-react";
+import { CheckCircle, Shield, Sparkles, Loader2 } from "lucide-react";
 import { PricingCard } from "./PricingCard";
-import { RegistrationModal } from "./RegistrationModal";
+import { AuthModal } from "@/components/auth/AuthModal";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export type RouteType = "regularizacion2026" | "arraigo_social" | "arraigo_laboral" | "arraigo_formativo";
 
@@ -42,28 +45,95 @@ const PLANS = [
   },
 ];
 
-const ROUTE_TEMPLATE_MAP: Record<RouteType, string> = {
-  regularizacion2026: "regularizacion-2026",
-  arraigo_social: "arraigo-social",
-  arraigo_laboral: "arraigo-laboral",
-  arraigo_formativo: "arraigo-formativo",
+const ROUTE_SOURCE_MAP: Record<RouteType, string> = {
+  regularizacion2026: "reg2026",
+  arraigo_social: "arraigos",
+  arraigo_laboral: "arraigos",
+  arraigo_formativo: "arraigos",
 };
 
 export const QualificationSuccess = ({ routeType, onClose }: QualificationSuccessProps) => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[number] | null>(null);
-  const [showRegistration, setShowRegistration] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
   const handleSelectPlan = (planId: "pro" | "premium") => {
     const plan = PLANS.find((p) => p.id === planId);
-    if (plan) {
-      setSelectedPlan(plan);
-      setShowRegistration(true);
+    if (!plan) return;
+    setSelectedPlan(plan);
+
+    if (user) {
+      // Already authenticated, go directly to checkout
+      initiateCheckout(plan);
+    } else {
+      // Need to authenticate first
+      setShowAuthModal(true);
     }
   };
 
-  const handleRegistrationClose = () => {
-    setShowRegistration(false);
-    setSelectedPlan(null);
+  const initiateCheckout = async (plan: typeof PLANS[number]) => {
+    setIsCheckoutLoading(true);
+
+    // Store source for dashboard auto-activation after payment
+    const source = ROUTE_SOURCE_MAP[routeType];
+    localStorage.setItem("onboarding_source", source);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        toast({
+          title: "Sesión expirada",
+          description: "Por favor inicia sesión de nuevo.",
+          variant: "destructive",
+        });
+        setIsCheckoutLoading(false);
+        return;
+      }
+
+      const response = await fetch(
+        "https://uidwcgxbybjpbteowrnh.supabase.co/functions/v1/create-checkout",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            returnUrl: window.location.origin,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      if (data.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (error: any) {
+      console.error("Checkout error:", error);
+      toast({
+        title: "Error de pago",
+        description: error.message || "No se pudo iniciar el checkout.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckoutLoading(false);
+    }
+  };
+
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false);
+    // After auth, initiate checkout with the selected plan
+    if (selectedPlan) {
+      initiateCheckout(selectedPlan);
+    }
   };
 
   return (
@@ -94,6 +164,13 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
           ))}
         </div>
 
+        {isCheckoutLoading && (
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Iniciando checkout...</span>
+          </div>
+        )}
+
         {/* Trust Badges */}
         <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
@@ -107,16 +184,15 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
         </div>
       </div>
 
-      {/* Registration Modal */}
-      {selectedPlan && (
-        <RegistrationModal
-          isOpen={showRegistration}
-          onClose={handleRegistrationClose}
-          plan={selectedPlan}
-          routeType={routeType}
-          routeTemplateSlug={ROUTE_TEMPLATE_MAP[routeType]}
-        />
-      )}
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => {
+          setShowAuthModal(false);
+          setSelectedPlan(null);
+        }}
+        onSuccess={handleAuthSuccess}
+      />
     </>
   );
 };

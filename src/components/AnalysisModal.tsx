@@ -171,18 +171,40 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
     const minWait = new Promise(resolve => setTimeout(resolve, 3000));
 
     try {
-      const [_, dbResult] = await Promise.all([
+      // Check if a record with this email already exists (upsert logic)
+      const { data: existing } = await supabase
+        .from("onboarding_submissions")
+        .select("id")
+        .eq("email", submissionData.email)
+        .maybeSingle();
+
+      let dbResultId: string | null = null;
+
+      const [_] = await Promise.all([
         minWait,
-        supabase.from("onboarding_submissions").insert([submissionData]).select("id").single()
+        (async () => {
+          if (existing) {
+            // Update existing record instead of inserting
+            await supabase
+              .from("onboarding_submissions")
+              .update(submissionData)
+              .eq("id", existing.id);
+            dbResultId = existing.id;
+          } else {
+            const { data, error } = await supabase
+              .from("onboarding_submissions")
+              .insert([submissionData])
+              .select("id")
+              .single();
+            if (error) throw error;
+            dbResultId = data?.id || null;
+          }
+        })(),
       ]);
 
-      if (dbResult.error) {
-        throw dbResult.error;
-      }
-
       // Store the lead ID for linking after signup
-      if (dbResult.data?.id) {
-        setLeadId(dbResult.data.id);
+      if (dbResultId) {
+        setLeadId(dbResultId);
       }
 
       // Success - show success screen
@@ -237,6 +259,10 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
 
   const handleAuthSuccess = () => {
     setShowAuthModal(false);
+    // Store onboarding_source in localStorage for Dashboard auto-activation
+    if (source) {
+      localStorage.setItem("onboarding_source", source);
+    }
     if (pendingAction === "roadmap") {
       navigate("/dashboard", {
         state: {

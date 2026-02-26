@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Crown, CheckCircle, Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import albusLogo from "@/assets/albus-logo.png";
 
 const Success = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("session_id");
   const [isProcessing, setIsProcessing] = useState(true);
@@ -22,12 +24,12 @@ const Success = () => {
       }
 
       try {
-        // Get pending registration data
+        // Get pending registration data (from old one-time flow)
         const pendingData = localStorage.getItem("pending_registration");
         
         if (pendingData) {
-          const { name, email, planType, routeTemplateSlug } = JSON.parse(pendingData);
-          setPlanType(planType);
+          const { name, email, planType: pt, routeTemplateSlug } = JSON.parse(pendingData);
+          setPlanType(pt);
 
           // Check if user exists with this email
           const { data: existingUser } = await supabase
@@ -37,37 +39,65 @@ const Success = () => {
             .maybeSingle();
 
           if (!existingUser) {
-            // Create new onboarding submission for this purchase
-            const { error: insertError } = await supabase
+            await supabase
               .from("onboarding_submissions")
               .insert({
                 email,
                 full_name: name,
-                subscription_status: planType === "premium" ? "premium" : "digital",
+                subscription_status: pt === "premium" ? "premium" : "pro",
+                ...(user ? { user_id: user.id } : {}),
               });
-
-            if (insertError) {
-              console.error("Error creating submission:", insertError);
-            }
           } else {
-            // Update existing submission
             await supabase
               .from("onboarding_submissions")
               .update({
-                subscription_status: planType === "premium" ? "premium" : "digital",
+                subscription_status: pt === "premium" ? "premium" : "pro",
+                ...(user && !existingUser.user_id ? { user_id: user.id } : {}),
               })
-              .eq("email", email);
+              .eq("id", existingUser.id);
           }
 
-          // Clear pending registration
           localStorage.removeItem("pending_registration");
           
-          // Store success info for dashboard
-          localStorage.setItem("payment_success", JSON.stringify({
-            planType,
-            routeTemplateSlug,
-            timestamp: Date.now(),
-          }));
+          // Store source for dashboard auto-activation
+          if (routeTemplateSlug) {
+            const sourceMap: Record<string, string> = {
+              "regularizacion-2026": "reg2026",
+              "arraigo-social": "arraigos",
+              "arraigo-laboral": "arraigos",
+              "arraigo-formativo": "arraigos",
+            };
+            const source = sourceMap[routeTemplateSlug];
+            if (source) {
+              localStorage.setItem("onboarding_source", source);
+            }
+          }
+        } else if (user) {
+          // Subscription flow (create-checkout) - user is already authenticated
+          // Update their onboarding_submissions with new status
+          const { data: submission } = await supabase
+            .from("onboarding_submissions")
+            .select("id, subscription_status")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (submission) {
+            await supabase
+              .from("onboarding_submissions")
+              .update({ subscription_status: "pro" })
+              .eq("id", submission.id);
+            setPlanType("pro");
+          } else {
+            // Create submission if none exists
+            await supabase
+              .from("onboarding_submissions")
+              .insert({
+                user_id: user.id,
+                email: user.email,
+                subscription_status: "pro",
+              });
+            setPlanType("pro");
+          }
         }
 
         console.log("Payment successful, session:", sessionId);
@@ -84,7 +114,7 @@ const Success = () => {
     };
 
     processPayment();
-  }, [sessionId, toast]);
+  }, [sessionId, toast, user]);
 
   const isPremium = planType === "premium";
 
@@ -111,7 +141,7 @@ const Success = () => {
               : "bg-primary text-primary-foreground"
           }`}>
             <Crown className="w-4 h-4" />
-            {isPremium ? "Premium" : "Digital"}
+            {isPremium ? "Premium" : "Pro"}
           </div>
         </div>
 
@@ -130,12 +160,12 @@ const Success = () => {
         {/* Content */}
         <div className="space-y-4">
           <h1 className="text-3xl font-bold tracking-tight">
-            ¡Gracias por tu compra!
+            ¡Bienvenido a Albus {isPremium ? "Premium" : "Pro"}!
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
             {isPremium 
               ? "Tu Plan Premium está activo. Tienes acceso completo a todas las funcionalidades."
-              : "Tu Plan Digital está activo. Ya puedes comenzar tu trámite."}
+              : "Tu Plan Pro está activo. Ya puedes comenzar tu trámite."}
           </p>
         </div>
 
@@ -149,21 +179,17 @@ const Success = () => {
             </li>
             <li className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-              Generador de Tasa 790-052
+              Bóveda de documentos segura
             </li>
             <li className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-              Checklist de documentos personalizado
+              Rutas de Regularización y Arraigos
             </li>
             {isPremium && (
               <>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
                   Revisión humana de documentos
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-                  Carga en plataforma Mercurio
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
