@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ChecklistModal } from "./ChecklistModal";
+import { AuthModal } from "@/components/auth/AuthModal";
 
 type Result = "eligible" | "not-eligible" | null;
 
@@ -31,6 +32,7 @@ export const EligibilityCalculator = ({ onStartProcess, country }: EligibilityCa
   const [leadEmail, setLeadEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const navigate = useNavigate();
 
   const cutoffDate = new Date("2025-12-31");
@@ -69,7 +71,15 @@ export const EligibilityCalculator = ({ onStartProcess, country }: EligibilityCa
         crm_tag: crmTag,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Duplicate email — user already exists
+        if (error.code === "23505") {
+          toast.info("Ya tienes una cuenta. Inicia sesión para continuar.");
+          setShowAuthModal(true);
+          return;
+        }
+        throw error;
+      }
 
       setShowChecklist(true);
       toast.success("¡Tu hoja de ruta está lista!");
@@ -223,6 +233,13 @@ export const EligibilityCalculator = ({ onStartProcess, country }: EligibilityCa
         userName={leadName}
         userEmail={leadEmail}
         country={country}
+      />
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        defaultEmail={leadEmail}
+        defaultMode="login"
       />
     </>
   );
