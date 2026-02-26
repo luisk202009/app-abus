@@ -1,98 +1,202 @@
 
 
-# Corregir flujo de elegibilidad, exit intent y autenticacion
+# Corregir flujo completo: Elegibilidad -> Pago -> Registro -> Dashboard con ruta activa
 
-## Problemas identificados
+## Problemas identificados (6 issues)
 
-1. **Exit Intent Modal bloquea la pantalla**: El modal de inactividad (30s) aparece pero no se puede cerrar porque usa un overlay custom sin boton de cierre accesible, y el click en el backdrop puede no funcionar correctamente cuando hay otros modales abiertos (como el ChecklistModal).
+1. **ChecklistModal CTA "Activar Plan Pro ahora" lleva a /explorar** en vez de iniciar checkout de suscripcion
+2. **En /explorar, al iniciar ruta sin auth, muestra AuthModal de registro** -- pero tras registrarse muestra "creada con exito" y vuelve a pedir registro, generando error de duplicado
+3. **Regularizacion/Arraigo son rutas premium** que no deberian ser accesibles en plan gratis; el CTA debe llevar a pagar, no a /explorar
+4. **Tras registro (signup), la cuenta no tiene user_id vinculado en onboarding_submissions**, por lo que el Dashboard no puede auto-iniciar la ruta
+5. **Email de confirmacion de cuenta redirige a `window.location.origin`** (raiz `/`) en vez de `/dashboard` con la ruta apropiada
+6. **RegistrationModal (pago one-time) requiere auth** pero no crea cuenta Supabase, solo guarda en localStorage y redirige a Stripe
 
-2. **Error al registrar email duplicado en calculadora**: `EligibilityCalculator.tsx` linea 65 hace un INSERT directo en `onboarding_submissions` sin verificar si el email ya existe. Si el usuario repite el proceso, falla por duplicado. Debe detectar el duplicado y mostrar "Ya tienes una cuenta" + abrir AuthModal en modo login.
+## Solucion propuesta
 
-3. **Usuario registrado sin contrasena**: El flujo de lead capture (nombre + email) crea un registro en `onboarding_submissions` pero nunca crea una cuenta auth. Cuando el usuario intenta iniciar sesion, no tiene contrasena porque nunca paso por signup. Hay que ofrecer una opcion de "Recuperar contrasena" o "Magic Link" para estos casos.
+### Flujo objetivo (Regularizacion/Arraigo):
 
-4. **Login sin opcion de recuperar contrasena**: `AuthModal.tsx` no tiene enlace "Olvidé mi contraseña". Falta implementar el flujo de password reset.
+```text
+Landing -> Elegibilidad Modal -> QualificationSuccess (pricing)
+  -> RegistrationModal: nombre + email -> Stripe Checkout (suscripcion)
+  -> /success -> auto-login o magic-link -> /dashboard -> ruta auto-activada
+```
 
-## Cambios a realizar
+### Flujo objetivo (ChecklistModal CTA):
 
-### 1. ExitIntentModal.tsx — No mostrar si hay un dialog abierto
+```text
+Checklist CTA "Activar Plan Pro" -> Checkout de suscripcion (no /explorar)
+```
 
-- Antes de mostrar el modal, verificar si hay algun `[role="dialog"]` abierto en el DOM
-- Si hay un dialog abierto, posponer el timer en vez de mostrar el exit intent
-- Esto evita que se superponga al ChecklistModal u otros modales
-
-### 2. EligibilityCalculator.tsx — Manejar email duplicado
-
-- En `handleLeadSubmit`, usar `upsert` o hacer un SELECT previo para verificar si el email ya existe
-- Si existe: mostrar toast "Ya tienes una cuenta" y abrir el AuthModal en modo login con el email prellenado
-- Agregar estado para controlar la apertura del AuthModal
-- Importar y renderizar `AuthModal`
-
-### 3. AuthModal.tsx — Agregar "Olvidé mi contraseña"
-
-- Agregar un enlace "¿Olvidaste tu contraseña?" debajo del campo de contrasena cuando `mode === "login"`
-- Al hacer clic, mostrar un formulario simplificado que solo pida el email
-- Llamar a `supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })`
-- Mostrar confirmacion de que se envio el email
-
-### 4. Crear pagina /reset-password
-
-- Nueva pagina `src/pages/ResetPassword.tsx`
-- Detectar `type=recovery` en el URL hash
-- Mostrar formulario para nueva contrasena
-- Llamar a `supabase.auth.updateUser({ password })`
-- Redirigir al dashboard tras exito
-- Agregar ruta en `App.tsx`
+---
 
 ## Archivos a modificar
 
-| Archivo | Cambio |
-|---------|--------|
-| `src/components/ExitIntentModal.tsx` | No mostrar si hay un dialog abierto |
-| `src/components/eligibility/EligibilityCalculator.tsx` | Detectar email duplicado, abrir AuthModal |
-| `src/components/auth/AuthModal.tsx` | Agregar flujo "Olvidé mi contraseña" |
-| `src/pages/ResetPassword.tsx` | **Nuevo** — pagina para resetear contrasena |
-| `src/App.tsx` | Agregar ruta `/reset-password` |
+### 1. `src/components/eligibility/ChecklistModal.tsx`
+**Problema**: El boton "Activar Plan Pro ahora" navega a `/explorar`.
+**Cambio**: 
+- Si el usuario esta autenticado, llamar a `handleCheckout()` de `useSubscription` directamente
+- Si NO esta autenticado, abrir el AuthModal con `onSuccess` que redirige a `/dashboard` con `source` en localStorage
+- Importar `useAuth`, `useSubscription`, y `AuthModal`
+
+### 2. `src/components/eligibility/QualificationSuccess.tsx`
+**Problema**: Muestra pricing con RegistrationModal que hace pago one-time sin crear cuenta auth.
+**Cambio**:
+- Reemplazar la logica de `RegistrationModal` por un flujo que:
+  1. Primero abra `AuthModal` para crear cuenta (signup) si no esta autenticado
+  2. Tras auth exitosa, inicie checkout de suscripcion via `create-checkout`
+  3. Guarde `onboarding_source` en localStorage para auto-activar la ruta tras pago
+- Agregar estado para manejar si el usuario ya esta autenticado (skip auth, ir directo a checkout)
+
+### 3. `src/components/eligibility/RegistrationModal.tsx`
+**Problema**: Invoca `create-one-time-payment` sin crear cuenta auth de Supabase. El usuario paga pero no tiene cuenta.
+**Cambio**: 
+- Transformar para que primero verifique si hay session auth activa
+- Si no hay session: abrir AuthModal antes de proceder al checkout
+- Tras auth, usar `create-checkout` (suscripcion) en vez de `create-one-time-payment`
+- O alternativamente: eliminar `RegistrationModal` y consolidar la logica en `QualificationSuccess`
+
+### 4. `src/hooks/useAuth.tsx`
+**Problema**: `signUp` usa `emailRedirectTo: window.location.origin` que lleva a `/` en vez de `/dashboard`.
+**Cambio**:
+- Cambiar `emailRedirectTo` a `window.location.origin + "/dashboard"`
+- Esto asegura que cuando el usuario confirma su email, llega al dashboard
+
+### 5. `src/pages/Explorar.tsx`
+**Problema**: `handleStartRoute` muestra AuthModal generico. Tras registrarse con exito, no navega correctamente y genera loop de re-registro.
+**Cambio**:
+- Agregar `onSuccess` al AuthModal que, tras login/signup exitoso, reintente `handleStartRoute` con el template seleccionado
+- Guardar el `templateId` pendiente en estado para reintentarlo tras auth
+
+### 6. `src/components/AnalysisModal.tsx`
+**Problema**: Tras el AuthModal de signup, navega a `/dashboard` con state. Pero si el email no esta confirmado, el usuario queda en limbo. Si el usuario ya existe, genera error de duplicado en onboarding_submissions.
+**Cambio**:
+- Verificar si ya existe registro en `onboarding_submissions` antes de INSERT (usar upsert o SELECT previo)
+- En `handleAuthSuccess`, guardar `onboarding_source` en localStorage para que el Dashboard auto-active la ruta
+
+### 7. `src/pages/Dashboard.tsx` (lineas 170-201)
+**Problema**: Auto-start logic depende de `canAddRoute` que es `false` para free users que ya usaron su slot. Regularizacion/Arraigo requieren plan Pro.
+**Cambio**:
+- En el auto-start logic, si `source` es "reg2026" o "arraigos" y el usuario es free, mostrar el SlotExhaustedModal o redirigir a checkout en vez de intentar crear la ruta
+- Leer `payment_success` de localStorage para detectar post-pago exitoso y activar la ruta
+
+### 8. `src/pages/Success.tsx`
+**Problema**: Tras el pago (one-time o suscripcion), actualiza `onboarding_submissions` sin tener `user_id`. El usuario no tiene sesion auth activa.
+**Cambio**:
+- Si el usuario llega de un flujo de suscripcion (`create-checkout`), ya tiene auth session activa
+- Verificar session auth, si existe: vincular user_id al onboarding_submission
+- Guardar `onboarding_source` basado en `routeTemplateSlug` del pago para que Dashboard auto-active la ruta
+- Redirigir automaticamente a `/dashboard` tras procesar
+
+---
 
 ## Detalle tecnico
 
-### ExitIntentModal - Verificacion de dialogs abiertos
+### Flujo simplificado post-implementacion:
 
-```typescript
-const show = useCallback(() => {
-  if (sessionStorage.getItem(SESSION_KEY)) return;
-  // Don't show if another dialog is open
-  if (document.querySelector('[role="dialog"]')) return;
-  sessionStorage.setItem(SESSION_KEY, "1");
-  setIsOpen(true);
-}, []);
+```text
+1. Usuario pasa elegibilidad en landing de Regularizacion/Arraigo
+2. Ve QualificationSuccess con planes Pro/Premium
+3. Elige plan -> Se abre AuthModal (signup/login)
+4. Tras auth exitosa:
+   a. Se guarda onboarding_source en localStorage
+   b. Se inicia checkout de suscripcion (create-checkout)
+   c. Stripe redirige a /success
+5. /success detecta session auth, actualiza subscription_status
+6. /success guarda onboarding_source y redirige a /dashboard
+7. Dashboard detecta source, auto-activa la ruta correspondiente
 ```
 
-### EligibilityCalculator - Manejo de duplicados
-
-En `handleLeadSubmit`, capturar el error de constraint unique y abrir AuthModal:
+### Cambio en emailRedirectTo (useAuth.tsx):
 
 ```typescript
-if (error) {
-  if (error.code === "23505") { // unique violation
-    toast.info("Ya tienes una cuenta. Inicia sesión.");
-    setShowAuthModal(true);
-    return;
-  }
-  throw error;
+// Antes:
+emailRedirectTo: window.location.origin
+// Despues:
+emailRedirectTo: window.location.origin + "/dashboard"
+```
+
+### ChecklistModal CTA (ChecklistModal.tsx):
+
+```typescript
+// Antes: navigate("/explorar")
+// Despues:
+if (user) {
+  onClose();
+  handleCheckout(); // Stripe subscription checkout
+} else {
+  setShowAuth(true); // AuthModal -> onSuccess -> handleCheckout
 }
 ```
 
-### AuthModal - Flujo de recuperacion
+### QualificationSuccess flujo revisado:
 
-Agregar un tercer modo `"forgot"` al estado del modal:
-- Muestra solo campo de email + boton "Enviar enlace de recuperación"
-- Llama a `resetPasswordForEmail` con `redirectTo` al `/reset-password`
-- Muestra confirmacion y permite volver al login
+En vez de abrir RegistrationModal (nombre+email+stripe one-time), el nuevo flujo:
+1. Al seleccionar plan, guardar plan seleccionado en estado
+2. Si NO hay user auth -> abrir AuthModal
+3. Tras auth exitosa -> guardar `onboarding_source` + llamar `create-checkout` con el priceId del plan seleccionado
+4. Si YA hay user auth -> ir directo a checkout
 
-### ResetPassword page
+### Dashboard auto-start con gating:
 
-- Lee el hash fragment para detectar `type=recovery`
-- Muestra formulario de nueva contrasena con confirmacion
-- Usa `supabase.auth.updateUser({ password })` 
-- Redirige a `/dashboard` tras exito
+```typescript
+// Verificar si el usuario tiene el plan necesario para la ruta
+if (source === "reg2026" || source === "arraigos") {
+  if (!isPremium) {
+    // No tiene plan Pro/Premium, mostrar modal de upgrade
+    setShowSlotExhaustedModal(true);
+    localStorage.removeItem("onboarding_source");
+    return;
+  }
+  // Tiene plan, proceder a crear la ruta
+  templateToStart = source === "reg2026" 
+    ? TEMPLATE_IDS.regularizacion2026 
+    : TEMPLATE_IDS.arraigoSocial;
+}
+```
+
+### AnalysisModal - Evitar duplicados:
+
+```typescript
+// Usar upsert por email en vez de insert
+const { data: existing } = await supabase
+  .from("onboarding_submissions")
+  .select("id")
+  .eq("email", submissionData.email)
+  .maybeSingle();
+
+if (existing) {
+  setLeadId(existing.id);
+  // Update en vez de insert
+  await supabase.from("onboarding_submissions")
+    .update(submissionData)
+    .eq("id", existing.id);
+} else {
+  const { data } = await supabase.from("onboarding_submissions")
+    .insert([submissionData]).select("id").single();
+  setLeadId(data?.id);
+}
+```
+
+---
+
+## Archivos que NO se modifican
+
+- `supabase/functions/create-checkout/index.ts` -- ya funciona correctamente para suscripciones
+- `supabase/functions/stripe-webhook/index.ts` -- ya actualiza subscription_status correctamente
+- `src/hooks/useSubscription.tsx` -- ya lee correctamente el status
+- `src/hooks/useRoutes.tsx` -- la logica de canAddRoute ya es correcta
+- `src/components/auth/AuthModal.tsx` -- ya tiene login/signup/magic-link/forgot, no requiere cambios
+
+## Resumen de impacto
+
+| Archivo | Tipo de cambio |
+|---------|---------------|
+| `ChecklistModal.tsx` | CTA: `/explorar` -> checkout suscripcion |
+| `QualificationSuccess.tsx` | Integrar auth + checkout directo |
+| `RegistrationModal.tsx` | Refactorizar o eliminar (consolidar en QualificationSuccess) |
+| `useAuth.tsx` | emailRedirectTo -> `/dashboard` |
+| `Explorar.tsx` | Fix auth loop en startRoute |
+| `AnalysisModal.tsx` | Upsert en vez de insert |
+| `Dashboard.tsx` | Gating premium en auto-start |
+| `Success.tsx` | Vincular user_id + guardar source + redirect a dashboard |
 
