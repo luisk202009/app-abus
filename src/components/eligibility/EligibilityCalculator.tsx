@@ -194,6 +194,15 @@ export const EligibilityCalculator = ({ onStartProcess, country }: EligibilityCa
                   </Button>
                 </form>
 
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => navigate("/españa/regularizacion")}
+                >
+                  Conoce más sobre la Regularización 2026
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+
                 <button onClick={handleReset} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                   Verificar otra fecha
                 </button>
