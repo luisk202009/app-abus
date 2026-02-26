@@ -35,7 +35,8 @@ export const AuthModal = ({
   const { signUp, signIn } = useAuth();
   const { toast } = useToast();
 
-  const [mode, setMode] = useState<"signup" | "login" | "forgot">(defaultMode);
+  const [mode, setMode] = useState<"signup" | "login" | "forgot" | "magiclink">(defaultMode);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   // Sync mode with defaultMode when modal opens
   useEffect(() => {
@@ -196,6 +197,30 @@ export const AuthModal = ({
     }
   };
 
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin + "/dashboard",
+        },
+      });
+      if (error) throw error;
+      setMagicLinkSent(true);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo enviar el enlace.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
@@ -204,14 +229,16 @@ export const AuthModal = ({
             <img src={albusLogo} alt="Albus" className="h-8 w-auto" />
           </div>
           <DialogTitle className="text-xl font-semibold">
-            {mode === "signup" ? "Crea tu cuenta" : mode === "login" ? "Inicia sesión" : "Recuperar contraseña"}
+            {mode === "signup" ? "Crea tu cuenta" : mode === "login" ? "Inicia sesión" : mode === "forgot" ? "Recuperar contraseña" : "Acceso sin contraseña"}
           </DialogTitle>
           <DialogDescription>
             {mode === "signup"
               ? "Guarda tu progreso y accede a tu hoja de ruta personalizada"
               : mode === "login"
               ? "Accede a tu cuenta de Albus"
-              : "Te enviaremos un enlace para restablecer tu contraseña"}
+              : mode === "forgot"
+              ? "Te enviaremos un enlace para restablecer tu contraseña"
+              : "Te enviaremos un enlace mágico a tu email para iniciar sesión"}
           </DialogDescription>
         </DialogHeader>
 
@@ -251,6 +278,53 @@ export const AuthModal = ({
               </div>
             </div>
           </div>
+        ) : mode === "magiclink" ? (
+          magicLinkSent ? (
+            <div className="space-y-4 mt-4 text-center">
+              <div className="p-4 bg-muted border border-border rounded-lg">
+                <Mail className="h-10 w-10 mx-auto text-primary mb-3" />
+                <h3 className="font-semibold mb-2">¡Enlace enviado!</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Revisa tu bandeja de entrada en <strong>{email}</strong> y haz clic en el enlace para acceder.
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => { setMode("login"); setMagicLinkSent(false); }}
+                >
+                  Volver a iniciar sesión
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleMagicLink} className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  "Enviar enlace mágico"
+                )}
+              </Button>
+            </form>
+          )
         ) : mode === "forgot" ? (
           forgotSent ? (
             <div className="space-y-4 mt-4 text-center">
@@ -367,10 +441,22 @@ export const AuthModal = ({
                 "Iniciar sesión"
               )}
             </Button>
+
+            {mode === "login" && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setMode("magiclink")}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Acceder con enlace mágico
+              </Button>
+            )}
           </form>
         )}
 
-        {mode !== "forgot" && (
+        {mode !== "forgot" && mode !== "magiclink" && (
           <div className="mt-4 text-center text-sm text-muted-foreground">
             {mode === "signup" ? (
               <>
@@ -397,7 +483,7 @@ export const AuthModal = ({
             )}
           </div>
         )}
-        {mode === "forgot" && !forgotSent && (
+        {(mode === "forgot" && !forgotSent) || (mode === "magiclink" && !magicLinkSent) ? (
           <div className="mt-4 text-center text-sm text-muted-foreground">
             <button
               type="button"
@@ -407,7 +493,7 @@ export const AuthModal = ({
               Volver a iniciar sesión
             </button>
           </div>
-        )}
+        ) : null}
       </DialogContent>
     </Dialog>
   );
