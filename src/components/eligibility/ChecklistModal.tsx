@@ -9,6 +9,7 @@ import { generateChecklistPDF } from "@/lib/generateChecklistPDF";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ChecklistModalProps {
   isOpen: boolean;
@@ -98,11 +99,32 @@ export const ChecklistModal = ({ isOpen, onClose, userName, userEmail, country }
     }
   };
 
-  const handleAuthSuccess = () => {
+  const handleAuthSuccess = async () => {
     setShowAuthModal(false);
     onClose();
-    // After auth, trigger checkout
-    handleCheckout();
+    // Call checkout directly since useSubscription.user is stale after signup
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      localStorage.setItem("onboarding_source", "reg2026");
+
+      const response = await fetch(
+        `https://uidwcgxbybjpbteowrnh.supabase.co/functions/v1/create-checkout`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ returnUrl: window.location.origin }),
+        }
+      );
+      const data = await response.json();
+      if (data.url) window.open(data.url, "_blank");
+    } catch (error) {
+      console.error("Checkout error:", error);
+    }
   };
 
   const countrySpecific = allItems.filter((i) => i.isCountrySpecific);

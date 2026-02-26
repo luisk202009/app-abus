@@ -36,7 +36,8 @@ import { useRoutes, ActiveRoute } from "@/hooks/useRoutes";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import albusLogo from "@/assets/albus-logo.png";
 import { Button } from "@/components/ui/button";
-import { Compass, ArrowRight, Calculator, CalendarCheck, Shield, TrendingUp, Bell } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Compass, ArrowRight, Calculator, CalendarCheck, Shield, TrendingUp, Bell, Mail, RefreshCw } from "lucide-react";
 import type { RouteType } from "@/lib/documentConfig";
 
 interface UserData {
@@ -569,6 +570,22 @@ const Dashboard = () => {
   };
 
   const { isSupported: pushSupported, requestPermission } = usePushNotifications(user?.id);
+  const isEmailUnconfirmed = user && !user.email_confirmed_at;
+  const [resendingEmail, setResendingEmail] = useState(false);
+
+  const handleResendVerification = async () => {
+    if (!user?.email) return;
+    setResendingEmail(true);
+    try {
+      const { error } = await supabase.auth.resend({ type: "signup", email: user.email });
+      if (error) throw error;
+      toast({ title: "Email enviado", description: "Revisa tu bandeja de entrada." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo reenviar el email." });
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   const handleRefresh = useCallback(async () => {
     if (user) {
@@ -598,7 +615,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-secondary flex">
+    <div className="min-h-screen bg-secondary flex relative">
       {/* Sidebar */}
       <DashboardSidebar
         activeItem={activeNavItem}
@@ -614,7 +631,7 @@ const Dashboard = () => {
       />
 
       {/* Main Content */}
-      <main className="flex-1 p-4 sm:p-8">
+      <main className={`flex-1 p-4 sm:p-8 transition-all ${isEmailUnconfirmed ? "blur-sm pointer-events-none select-none" : ""}`}>
         <PullToRefresh onRefresh={handleRefresh}>
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Install App Banner */}
@@ -644,7 +661,6 @@ const Dashboard = () => {
           {/* Notification Banners */}
           <NotificationBanner />
 
-          {/* Auth Banner - hide for logged in users AND premium users */}
           {/* Auth Banner removed - all users are now authenticated */}
 
           {/* Header */}
@@ -668,6 +684,35 @@ const Dashboard = () => {
         </div>
         </PullToRefresh>
       </main>
+
+      {/* Email Verification Overlay */}
+      {isEmailUnconfirmed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+          <Card className="max-w-md w-full mx-4 shadow-2xl">
+            <CardContent className="pt-8 pb-6 px-6 text-center space-y-4">
+              <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                <Mail className="w-7 h-7 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold">Verifica tu cuenta</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Revisa tu email en <span className="font-medium text-foreground">{user?.email}</span> y haz clic en el enlace de confirmación para activar tu cuenta.
+              </p>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleResendVerification}
+                disabled={resendingEmail}
+              >
+                <RefreshCw className={`w-4 h-4 ${resendingEmail ? "animate-spin" : ""}`} />
+                {resendingEmail ? "Enviando..." : "Reenviar email de verificación"}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Una vez verificado, recarga esta página para continuar.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Auth Modal */}
       <AuthModal
