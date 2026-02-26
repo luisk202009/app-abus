@@ -1,91 +1,87 @@
 
 
-# Plan: Unificar flujo de Regularizacion y corregir error de pago
+# Fix: Checkout after registration + Dashboard email verification UX
 
-## Diagnostico del error de pago
+## Root Cause
 
-El error 401 en las capturas viene de `create-one-time-payment`, que es la edge function antigua que requiere autenticacion. El componente `RegistrationModal.tsx` sigue existiendo en el proyecto y llama a esa funcion SIN crear una cuenta auth de Supabase primero. Aunque `QualificationSuccess` ya fue refactorizado para usar `create-checkout` (suscripcion con auth), el archivo `RegistrationModal.tsx` sigue presente y podria estar siendo referenciado por una version publicada anterior.
+**ChecklistModal "Inicia sesión" error**: After signup, `handleAuthSuccess` calls `handleCheckout()` from `useSubscription`. But `useSubscription` reads `user` from React state which hasn't re-rendered yet — so `user` is still `null` and the guard at line 64 fires the toast "Necesitas iniciar sesión para suscribirte."
 
-## Cambios propuestos
+**No "verify email" experience on Dashboard**: After signup + payment, the user lands on Dashboard but there's no blurred-background modal prompting them to verify their email before proceeding.
 
-### 1. Eliminar `RegistrationModal.tsx`
-**Archivo**: `src/components/eligibility/RegistrationModal.tsx`
-- Eliminar completamente este archivo. Ya no es importado por ningun componente.
-- Era el origen del error: llamaba a `create-one-time-payment` sin sesion auth, resultando en 401.
+## Changes
 
-### 2. Simplificar la landing de Regularizacion 2026
-**Archivo**: `src/pages/espana/Regularizacion2026.tsx`
-- **Problema actual**: Tiene 3 puntos de entrada redundantes:
-  1. Hero CTA "Analizar mi elegibilidad" → abre `EligibilityModalReg2026`
-  2. Seccion CTA "Verificar si califico" → abre la misma modal
-  3. `EligibilityCalculator` con fecha + lead capture + ChecklistModal
-- **Cambio**: Eliminar el componente `EligibilityCalculator` de esta pagina (ya esta en el Home). Mantener solo el flujo de `EligibilityModalReg2026` con los 2 CTAs del hero y de la seccion inferior, que es mas directo para conversion.
+### 1. `src/components/eligibility/ChecklistModal.tsx` (lines 101-106)
+**Fix stale `user` in `handleAuthSuccess`**: Instead of calling `handleCheckout()` (which reads stale React state), call the Stripe checkout API directly using `supabase.auth.getSession()` — same pattern as `QualificationSuccess.initiateCheckout`.
 
-### 3. Agregar CTA en el Home para ir a la landing de Regularizacion
-**Archivo**: `src/components/eligibility/EligibilityCalculator.tsx`
-- Despues de que el usuario ve que es "eligible" y completa el lead capture (o tras ver el checklist), agregar un boton secundario: "Conoce mas sobre la Regularizacion 2026" que navega a `/españa/regularizacion`.
-- Esto conecta el flujo del Home (calculadora gratuita) con la landing de conversion (pricing).
+Replace `handleAuthSuccess`:
+```typescript
+const handleAuthSuccess = async () => {
+  setShowAuthModal(false);
+  onClose();
+  // Call checkout directly since useSubscription.user is stale after signup
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    
+    localStorage.setItem("onboarding_source", "reg2026");
+    
+    const response = await fetch(
+      "https://uidwcgxbybjpbteowrnh.supabase.co/functions/v1/create-checkout",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ returnUrl: window.location.origin }),
+      }
+    );
+    const data = await response.json();
+    if (data.url) window.open(data.url, "_blank");
+  } catch (error) {
+    console.error("Checkout error:", error);
+  }
+};
+```
 
-### 4. Agregar CTA en el ChecklistModal hacia la landing
-**Archivo**: `src/components/eligibility/ChecklistModal.tsx`
-- Debajo del CTA "Activar Plan Pro ahora", agregar un enlace secundario: "Ver detalles del proceso de Regularizacion" que lleva a `/españa/regularizacion`.
-- El CTA principal de pago ya funciona correctamente (usa `handleCheckout` con auth).
+Add import for `supabase` from `@/integrations/supabase/client`.
+
+### 2. `src/pages/Dashboard.tsx` — Add email verification reminder modal
+**New behavior**: If `user` exists but `user.email_confirmed_at` is null/undefined, show a blurred overlay with a modal prompting the user to check their email. The dashboard content is visible but blurred behind it.
+
+Add state + check:
+```typescript
+const isEmailUnconfirmed = user && !user.email_confirmed_at;
+```
+
+Add UI at the end of the return JSX:
+- A full-screen overlay with `backdrop-blur-sm bg-background/60`
+- A centered card with:
+  - Mail icon
+  - "Verifica tu cuenta" title
+  - "Revisa tu email en {user.email} y haz clic en el enlace de confirmación"
+  - "Reenviar email" button (calls `supabase.auth.resend`)
+  - The dashboard content remains visible but blurred behind
+
+### 3. `src/pages/Dashboard.tsx` — Wrap main content in blur container
+Wrap the main dashboard content div with a conditional `filter: blur(4px)` class when `isEmailUnconfirmed` is true, making the content visible but not interactive.
 
 ---
 
-## Detalle tecnico
-
-### Regularizacion2026.tsx - remover EligibilityCalculator:
+## Expected Flow After Fix
 
 ```text
-Antes:
-  HeroReg2026 → EligibilityModalReg2026
-  RequirementsSection
-  DeadlineSection → EligibilityModalReg2026
-  EligibilityCalculator (duplicado del Home)
-  TestimonialsCarousel
-
-Despues:
-  HeroReg2026 → EligibilityModalReg2026
-  RequirementsSection
-  DeadlineSection → EligibilityModalReg2026
-  TestimonialsCarousel
+Home → Calculator → Checklist → "Activar Plan Pro"
+  → AuthModal (signup) → Stripe Checkout opens in new tab
+  → User pays → redirected to /success → /dashboard
+  → Dashboard shows blurred + "Verifica tu cuenta" modal
+  → User confirms email → refreshes → Dashboard loads normally with auto-activated route
 ```
 
-### EligibilityCalculator.tsx - nuevo CTA secundario:
+## Files impacted
 
-En la seccion de resultado "eligible", despues del formulario de lead capture o tras mostrar el checklist, agregar:
-```tsx
-<Button variant="outline" onClick={() => navigate("/españa/regularizacion")} className="w-full gap-2">
-  Conoce mas sobre la Regularizacion 2026
-  <ArrowRight className="w-4 h-4" />
-</Button>
-```
-
-### ChecklistModal.tsx - enlace a landing:
-
-Despues del bloque de CTA "Activar Plan Pro ahora":
-```tsx
-<Button variant="ghost" size="sm" onClick={() => { onClose(); navigate("/españa/regularizacion"); }}>
-  Ver detalles del proceso
-</Button>
-```
-
----
-
-## Archivos impactados
-
-| Archivo | Cambio |
-|---------|--------|
-| `RegistrationModal.tsx` | Eliminar archivo |
-| `Regularizacion2026.tsx` | Remover EligibilityCalculator de la pagina |
-| `EligibilityCalculator.tsx` | Agregar CTA secundario hacia landing |
-| `ChecklistModal.tsx` | Agregar enlace secundario hacia landing |
-
-## Archivos que NO cambian
-
-- `QualificationSuccess.tsx` - ya usa AuthModal + create-checkout correctamente
-- `EligibilityModalReg2026.tsx` - flujo de 2 preguntas funciona bien
-- `create-checkout/index.ts` - edge function de suscripcion funciona correctamente
-- `ChecklistModal.tsx` CTA principal - ya llama handleCheckout con auth
+| File | Change |
+|------|--------|
+| `ChecklistModal.tsx` | Direct API call for checkout instead of stale hook |
+| `Dashboard.tsx` | Email verification overlay with blur |
 
