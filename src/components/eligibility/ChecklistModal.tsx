@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CheckCircle2, Download, ArrowRight, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ export const ChecklistModal = ({ isOpen, onClose, userName, userEmail, country }
   const { user } = useAuth();
   const { handleCheckout, isCheckoutLoading } = useSubscription();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const navigate = useNavigate();
 
   const allItems = [...(country ? countrySpecificItems[country] || [] : []), ...generalItems];
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -187,6 +189,14 @@ export const ChecklistModal = ({ isOpen, onClose, userName, userEmail, country }
             >
               Activar Plan Pro ahora
               <ArrowRight className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-muted-foreground"
+              onClick={() => { onClose(); navigate("/españa/regularizacion"); }}
+            >
+              Ver detalles del proceso de Regularización
             </Button>
           </div>
         </DialogContent>
