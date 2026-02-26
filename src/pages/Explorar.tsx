@@ -73,8 +73,11 @@ const Explorar = () => {
     navigate("/dashboard", { state: { section: id } });
   };
 
+  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
+
   const handleStartRoute = async (templateId: string) => {
     if (!user) {
+      setPendingTemplateId(templateId);
       setShowAuthModal(true);
       return;
     }
@@ -96,6 +99,19 @@ const Explorar = () => {
       setTimeout(() => {
         navigate("/dashboard");
       }, 1500);
+    }
+  };
+
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false);
+    // After successful auth, retry starting the pending route
+    if (pendingTemplateId) {
+      const tid = pendingTemplateId;
+      setPendingTemplateId(null);
+      // Small delay to allow auth state to propagate
+      setTimeout(() => {
+        handleStartRoute(tid);
+      }, 500);
     }
   };
 
@@ -191,7 +207,11 @@ const Explorar = () => {
 
       <AuthModal
         isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
+        onClose={() => {
+          setShowAuthModal(false);
+          setPendingTemplateId(null);
+        }}
+        onSuccess={handleAuthSuccess}
       />
 
       <SuccessConfetti trigger={showConfetti} onComplete={handleConfettiComplete} />

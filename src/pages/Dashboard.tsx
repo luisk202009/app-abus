@@ -171,7 +171,7 @@ const Dashboard = () => {
   useEffect(() => {
     const source = localStorage.getItem("onboarding_source") || userData.source;
     
-    if (!user || routesLoading || templates.length === 0 || !canAddRoute || activeRoutes.length > 0) {
+    if (!user || routesLoading || templates.length === 0 || activeRoutes.length > 0) {
       return;
     }
 
@@ -192,13 +192,29 @@ const Dashboard = () => {
     if (templateToStart) {
       // Clear localStorage
       localStorage.removeItem("onboarding_source");
+
+      // Premium routes require a paid plan
+      if (!isPremium) {
+        // User is free - show upgrade modal instead of starting route
+        setShowSlotExhaustedModal(true);
+        return;
+      }
       
+      if (!canAddRoute) {
+        if (slotExhausted) {
+          setShowSlotExhaustedModal(true);
+        } else {
+          setShowLimitModal(true);
+        }
+        return;
+      }
+
       const template = templates.find(t => t.id === templateToStart);
       if (template) {
         handleStartRoute(template.id);
       }
     }
-  }, [user, routesLoading, templates, canAddRoute, userData.source, activeRoutes.length]);
+  }, [user, routesLoading, templates, canAddRoute, userData.source, activeRoutes.length, isPremium, slotExhausted]);
 
   const fetchTasks = async (userId: string) => {
     try {
