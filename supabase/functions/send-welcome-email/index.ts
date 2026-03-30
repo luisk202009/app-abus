@@ -106,7 +106,7 @@ const handler = async (req: Request): Promise<Response> => {
         <p style="color: #e5e5e5; font-size: 16px; line-height: 26px; margin: 0 0 24px 0;">
           Tu hoja de ruta para el <strong style="color: #ffffff;">${visaDisplayName}</strong> ya está desbloqueada. Puedes empezar a subir tus documentos y generar tus tasas oficiales ahora mismo.
         </p>
-        <a href="https://app-abus.lovable.app/dashboard" style="display: inline-block; background-color: #ffffff; color: #000000; font-size: 14px; font-weight: 600; text-decoration: none; padding: 14px 28px; border-radius: 6px; margin-top: 16px;">
+        <a href="<a href="https://www.albus.com.co/dashboard" style="display: inline-block; background-color: #ffffff; color: #000000; font-size: 14px; font-weight: 600; text-decoration: none; padding: 14px 28px; border-radius: 6px; margin-top: 16px;">" style="display: inline-block; background-color: #ffffff; color: #000000; font-size: 14px; font-weight: 600; text-decoration: none; padding: 14px 28px; border-radius: 6px; margin-top: 16px;">
           Ir a mi Dashboard →
         </a>
       </td>

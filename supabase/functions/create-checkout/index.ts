@@ -29,7 +29,7 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const priceId = body.priceId;
-    const returnUrl = body.returnUrl || req.headers.get("origin") || "https://app-abus.lovable.app";
+    const returnUrl = body.returnUrl || req.headers.get("origin") || "https://www.albus.com.co";
     const referralCode = body.referralCode;
 
     // Validate priceId format
