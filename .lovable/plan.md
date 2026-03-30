@@ -1,48 +1,31 @@
 
 
-# Marca Blanca: Eliminar rastros de Lovable y URLs por defecto
+# Reemplazar icono de marca en favicon, PWA y OG image
 
-## Resumen
-Reemplazar todas las referencias a `app-abus.lovable.app` con el dominio personalizado `albus.com.co`, eliminar `favicon.ico` por defecto, y limpiar metadatos SEO. No existe `manifest.json` independiente (se genera vía VitePWA en `vite.config.ts`), y el badge de Lovable ya está oculto.
+## Problema
+El archivo `isotipo-albus.png` actual en `/public` sigue mostrando un icono antiguo o de Lovable. El usuario ha subido el logo oficial de Albus (`Logo_Albus_redes.jpeg`) para reemplazarlo en todas las ubicaciones.
 
 ## Cambios
 
-### 1. Eliminar `public/favicon.ico`
-- Borrar el archivo — el navegador lo solicita por defecto y podría mostrar un icono genérico/Lovable.
-- El favicon correcto ya está configurado como `/isotipo-albus.png` en `index.html`.
+### 1. Copiar el logo subido a `public/`
+- Copiar `user-uploads://Logo_Albus_redes.jpeg` → `public/Logo_Albus_redes.jpeg`
+- Este archivo servirá como imagen OG/Twitter (formato JPEG, alta calidad para redes sociales)
 
-### 2. `index.html` — Actualizar metadatos y URLs
-- Cambiar `lang="en"` → `lang="es"`
-- Agregar `<link rel="canonical" href="https://www.albus.com.co" />`
-- `og:url` → `https://www.albus.com.co`
-- `og:image` → `https://www.albus.com.co/isotipo-albus.png`
-- `twitter:image` → `https://www.albus.com.co/isotipo-albus.png`
+### 2. Reemplazar `isotipo-albus.png`
+- Copiar `user-uploads://Logo_Albus_redes.jpeg` → `public/isotipo-albus.png` (sobrescribir el actual)
+- Esto actualiza automáticamente: favicon, apple-touch-icon, iconos PWA y OG image sin cambiar ninguna referencia en el código
 
-### 3. `public/robots.txt` — Agregar Sitemap
-- Agregar línea: `Sitemap: https://www.albus.com.co/sitemap.xml`
+### 3. `index.html` — Actualizar OG image a JPEG dedicado
+- Línea 20: `og:image` → `https://www.albus.com.co/Logo_Albus_redes.jpeg`
+- Línea 23: `twitter:image` → `https://www.albus.com.co/Logo_Albus_redes.jpeg`
+- Esto da mejor calidad en previsualizaciones de redes sociales (imagen más grande y nítida)
 
-### 4. `supabase/functions/create-checkout/index.ts` (línea 32)
-- Cambiar fallback de `https://app-abus.lovable.app` → `https://www.albus.com.co`
-- Mantener `.lovable.app` y `.lovableproject.com` en la lista de orígenes permitidos (necesario para preview/desarrollo)
+### 4. `vite.config.ts` — Agregar el JPEG a assets incluidos
+- Línea 21: agregar `"Logo_Albus_redes.jpeg"` al array `includeAssets`
 
-### 5. `supabase/functions/create-one-time-payment/index.ts` (línea 113)
-- Cambiar fallback de `https://app-abus.lovable.app` → `https://www.albus.com.co`
-
-### 6. `supabase/functions/send-welcome-email/index.ts` (línea 109)
-- Cambiar enlace del dashboard de `https://app-abus.lovable.app/dashboard` → `https://www.albus.com.co/dashboard`
-
-### 7. `vite.config.ts` — Sin cambios necesarios
-- El `lovable-tagger` solo se activa en desarrollo (`mode === "development"`), no afecta producción ni SEO.
-- El manifest PWA ya usa datos correctos de Albus.
-
-## Archivos impactados
-
-| Archivo | Acción |
-|---------|--------|
-| `public/favicon.ico` | Eliminar |
-| `index.html` | Actualizar lang, canonical, og:url, og:image, twitter:image |
-| `public/robots.txt` | Agregar Sitemap |
-| `supabase/functions/create-checkout/index.ts` | Actualizar fallback URL |
-| `supabase/functions/create-one-time-payment/index.ts` | Actualizar fallback URL |
-| `supabase/functions/send-welcome-email/index.ts` | Actualizar enlace dashboard |
+## Resultado
+- **Favicon del navegador**: Logo Albus ✓
+- **Icono PWA (instalación)**: Logo Albus ✓
+- **Apple touch icon**: Logo Albus ✓
+- **Open Graph / Twitter Cards**: Logo Albus en alta calidad ✓
 
