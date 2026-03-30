@@ -24,7 +24,7 @@ export function usePushNotifications(userId?: string) {
       } catch {
         // SW notification fallback
         navigator.serviceWorker?.ready.then((reg) =>
-          reg.showNotification(title, { body, icon: "/isotipo-albus.png" })
+          reg.showNotification(title, { body, icon: "/pwa-192x192.png" })
         );
       }
     },

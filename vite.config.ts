@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["isotipo-albus.png", "Logo_Albus_redes.jpeg"],
+      includeAssets: ["favicon.png", "apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png", "Logo_Albus_redes.jpeg"],
       manifest: {
         name: "Albus - Tu asistente de migración",
         short_name: "Albus",
@@ -28,8 +28,8 @@ export default defineConfig(({ mode }) => ({
         display: "standalone",
         start_url: "/dashboard",
         icons: [
-          { src: "/isotipo-albus.png", sizes: "192x192", type: "image/png" },
-          { src: "/isotipo-albus.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+          { src: "/pwa-192x192.png?v=3", sizes: "192x192", type: "image/png" },
+          { src: "/pwa-512x512.png?v=3", sizes: "512x512", type: "image/png", purpose: "any maskable" },
         ],
       },
       workbox: {
