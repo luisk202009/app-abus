@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["isotipo-albus.png"],
+      includeAssets: ["isotipo-albus.png", "Logo_Albus_redes.jpeg"],
       manifest: {
         name: "Albus - Tu asistente de migración",
         short_name: "Albus",
