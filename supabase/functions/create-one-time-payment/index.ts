@@ -110,7 +110,7 @@ serve(async (req) => {
     }
 
     // Get origin for redirect URLs
-    const origin = req.headers.get("origin") || "https://app-abus.lovable.app";
+    const origin = req.headers.get("origin") || "https://www.albus.com.co";
 
     // Create one-time payment checkout session
     const session = await stripe.checkout.sessions.create({
