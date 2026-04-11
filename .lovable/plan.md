@@ -1,111 +1,96 @@
 
-Objetivo: corregir de forma definitiva el favicon e iconos PWA para que no vuelva a aparecer el de Lovable por caché, formato incorrecto o rutas antiguas.
+Objetivo: reemplazar de forma definitiva el icono que Google, navegadores y la PWA siguen arrastrando del estado anterior.
 
-## Diagnóstico
-He revisado el proyecto y veo 3 causas probables:
+## Hallazgo clave
+Revisé el código actual y ya apunta a assets de Albus:
+- `index.html` usa `/favicon.png?v=3` y `/apple-touch-icon.png?v=3`
+- `vite.config.ts` usa iconos PWA de Albus
+- `usePushNotifications.tsx` ya no apunta a Lovable
 
-1. `public/isotipo-albus.png` se está usando en todos lados:
-   - favicon en `index.html`
-   - `apple-touch-icon`
-   - iconos del manifest PWA en `vite.config.ts`
-   - icono/badge de notificaciones en `src/hooks/usePushNotifications.tsx`
+Eso significa que el problema restante no es solo “el HTML”, sino una combinación de:
+1. caché de Google y del navegador
+2. ausencia de un `favicon.ico` real en la raíz
+3. caché del service worker/PWA
+4. posible arrastre del dominio publicado `app-abus.lovable.app`
 
-2. El proyecto sigue publicado en:
-   - `https://app-abus.lovable.app`
-   Esto significa que buscadores, PWA y previews públicas pueden seguir cacheando assets antiguos de ese dominio.
+## Plan de corrección definitiva
 
-3. La causa más fuerte: el PNG probablemente quedó inválido porque antes se reemplazó con un JPEG renombrado a `.png`. Eso suele hacer que navegador, PWA o service worker ignoren el archivo nuevo y mantengan el icono viejo.
+### 1. Añadir un `favicon.ico` real
+Crear un `public/favicon.ico` válido desde el logo de Albus.
+Motivo:
+- muchos navegadores y crawlers siguen consultando `/favicon.ico`
+- hoy ese archivo no existe, así que pueden reutilizar un icono viejo cacheado
 
-## Solución definitiva que implementaría
-
-### 1. Crear iconos reales y separados
-Usar el archivo que subiste para generar assets válidos, no renombrados:
-- `public/favicon.png`
+### 2. Publicar una familia de iconos limpia y estable
+Generar desde el logo oficial estos archivos reales:
+- `public/favicon.ico`
+- `public/favicon-48x48.png`
+- `public/favicon-32x32.png`
 - `public/apple-touch-icon.png`
 - `public/pwa-192x192.png`
 - `public/pwa-512x512.png`
-- opcional: `public/favicon.ico`
 
 Importante:
-- cada archivo debe tener el formato real correcto
-- no reutilizar un JPEG con extensión `.png`
+- formato real correcto
+- no JPEG renombrado a PNG
+- tamaños cuadrados y nítidos
 
-### 2. Cambiar todas las referencias del proyecto
-Actualizar `index.html` para que deje de depender de `isotipo-albus.png` como icono principal:
-- `<link rel="icon" href="/favicon.png?v=3" type="image/png" />`
-- `<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3" />`
+### 3. Hacer explícitas todas las referencias en `index.html`
+Actualizar el head para que no dependa de una sola referencia:
+- `rel="icon"` a PNG 48x48
+- `rel="shortcut icon"` a `/favicon.ico`
+- `rel="apple-touch-icon"` a su archivo propio
+- mantener OG/Twitter con la imagen de Albus
 
-Y también versionar:
-- `og:image`
-- `twitter:image`
+Así Google y navegadores tienen rutas claras y compatibles.
 
-Ejemplo:
-- `https://www.albus.com.co/Logo_Albus_redes.jpeg?v=3`
+### 4. Endurecer el manifest PWA
+En `vite.config.ts`:
+- mantener `includeAssets` con todos los iconos nuevos
+- usar iconos del manifest sin depender de assets heredados
+- preferir rutas directas de archivos finales de Albus
+- añadir `id`/`scope` consistentes si hace falta para que la instalación se refresque correctamente
 
-Esto fuerza a navegador, bots y redes a pedir una URL nueva.
+### 5. Limpiar el arrastre del service worker
+Agregar en `src/main.tsx` una protección para:
+- evitar registros problemáticos en preview/iframe
+- desregistrar service workers antiguos cuando corresponda en entornos de preview
+- reducir que la PWA siga mostrando iconos viejos por caché local
 
-### 3. Corregir el manifest PWA
-En `vite.config.ts` actualizar:
-- `includeAssets`
-- `manifest.icons`
-
-Para que usen:
-- `/pwa-192x192.png?v=3`
-- `/pwa-512x512.png?v=3`
-
-Así el icono instalable de la PWA deja de apuntar al asset conflictivo actual.
-
-### 4. Corregir iconos de notificaciones
-En `src/hooks/usePushNotifications.tsx` reemplazar:
-- `icon: "/isotipo-albus.png"`
-- `badge: "/isotipo-albus.png"`
-
-por un asset limpio y versionado, por ejemplo:
-- `"/pwa-192x192.png?v=3"`
-
-### 5. Mantener o retirar `isotipo-albus.png`
-Hay dos opciones seguras:
-- conservarlo solo para uso interno si realmente lo usan algunos componentes visuales
-- pero dejar de usarlo para favicon, PWA y notificaciones
-
-No lo usaría más como fuente maestra de iconos públicos.
-
-### 6. Publicación y limpieza de caché
-Para que se vea “definitivamente” corregido, después de implementar hay que:
-1. publicar la app de nuevo
-2. abrir el sitio en ventana incógnita
-3. desinstalar la PWA anterior si ya estaba instalada
-4. volver a instalarla
-5. pedir reindexación si el problema visible es en buscadores
+### 6. Unificar también notificaciones
+Actualizar `src/hooks/usePushNotifications.tsx` para usar el nuevo icono final de PWA y no una ruta heredada si todavía queda alguna inconsistencia.
 
 ## Archivos a tocar
 - `index.html`
 - `vite.config.ts`
+- `src/main.tsx`
 - `src/hooks/usePushNotifications.tsx`
-- `public/`:
-  - `favicon.png`
-  - `apple-touch-icon.png`
-  - `pwa-192x192.png`
-  - `pwa-512x512.png`
-  - opcional `favicon.ico`
+- `public/favicon.ico`
+- `public/favicon-48x48.png`
+- `public/favicon-32x32.png`
+- `public/apple-touch-icon.png`
+- `public/pwa-192x192.png`
+- `public/pwa-512x512.png`
+
+## Pasos fuera del código que sí son necesarios
+Después de implementar:
+1. publicar el frontend con **Update**
+2. abrir `www.albus.com.co` en incógnito
+3. borrar datos del sitio si el navegador sigue mostrando el anterior
+4. desinstalar y reinstalar la PWA
+5. solicitar reindexación en Google Search Console para la home
 
 ## Resultado esperado
-Después de eso:
-- el navegador mostrará el favicon correcto
-- la PWA instalada usará el icono correcto
-- las notificaciones usarán la marca correcta
-- buscadores y redes dejarán de arrastrar assets viejos al cambiar las URLs con versión
+- navegador: favicon correcto de Albus
+- Google: nuevo favicon tras recrawl
+- PWA instalada: icono correcto
+- notificaciones: icono correcto
+- menos riesgo de que reaparezca el de Lovable por caché o rutas antiguas
 
-## Nota importante
-Aunque el código quede bien, si Google o el navegador ya cachearon el asset viejo, puede tardar un poco en reflejarse. La parte “definitiva” del fix es:
-- usar archivos válidos
-- no renombrar formatos
-- versionar URLs
-- volver a publicar
+## Detalle técnico importante
+La corrección “definitiva” no depende de un solo cambio. Requiere estas tres capas juntas:
+- archivos de icono válidos
+- referencias explícitas y compatibles
+- limpieza de caché/publicación/reindexación
 
-## Siguiente implementación concreta
-Si apruebas, haría exactamente esto:
-1. reemplazar todos los iconos públicos por PNGs reales generados desde tu logo
-2. versionar las URLs de favicon, apple-touch-icon, OG y PWA
-3. actualizar el manifest PWA y notificaciones
-4. dejar el proyecto sin depender de `isotipo-albus.png` para branding público
+Si solo se cambia una de las tres, Google o la PWA pueden seguir enseñando el icono anterior.
