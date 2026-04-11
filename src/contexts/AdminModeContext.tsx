@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 export type TestMode = "admin" | "free" | "pro";
 
-const ADMIN_EMAIL = "l@albus.com.co";
 const ADMIN_MODE_KEY = "albus_admin_test_mode";
 
 interface AdminModeContextType {
@@ -19,7 +19,21 @@ const AdminModeContext = createContext<AdminModeContextType | undefined>(undefin
 
 export const AdminModeProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle()
+      .then(({ data }) => setIsAdmin(!!data));
+  }, [user]);
 
   const [testMode, setTestModeState] = useState<TestMode>(() => {
     if (typeof window !== "undefined") {

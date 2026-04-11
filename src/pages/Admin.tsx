@@ -15,7 +15,7 @@ import { AdminAnalyticsTab } from "@/components/admin/AdminAnalyticsTab";
 import { AdminSystemStatus } from "@/components/admin/AdminSystemStatus";
 import albusLogo from "@/assets/albus-logo.png";
 
-const ADMIN_EMAIL = "l@albus.com.co";
+
 
 const Admin = () => {
   const { user, isLoading: authLoading } = useAuth();
@@ -32,19 +32,26 @@ const Admin = () => {
       return;
     }
 
-    // Check if user is admin
-    if (user.email === ADMIN_EMAIL) {
-      setIsAuthorized(true);
-    } else {
-      toast({
-        variant: "destructive",
-        title: "Acceso denegado",
-        description: "No tienes permisos para acceder a esta página.",
+    // Check if user has admin role in database
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setIsAuthorized(true);
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Acceso denegado",
+            description: "No tienes permisos para acceder a esta página.",
+          });
+          navigate("/");
+        }
+        setCheckingAuth(false);
       });
-      navigate("/");
-    }
-    
-    setCheckingAuth(false);
   }, [user, authLoading, navigate, toast]);
 
   if (authLoading || checkingAuth) {

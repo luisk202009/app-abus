@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import isotipoAlbus from "@/assets/isotipo-albus.png";
-
-const ADMIN_EMAIL = "l@albus.com.co";
 
 const AdminManual = () => {
   const { user, isLoading } = useAuth();
@@ -16,11 +15,23 @@ const AdminManual = () => {
 
   useEffect(() => {
     if (isLoading) return;
-    if (!user || user.email !== ADMIN_EMAIL) {
+    if (!user) {
       navigate("/");
       return;
     }
-    setAuthorized(true);
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) {
+          navigate("/");
+          return;
+        }
+        setAuthorized(true);
+      });
   }, [user, isLoading, navigate]);
 
   if (isLoading || !authorized) {
