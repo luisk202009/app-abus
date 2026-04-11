@@ -18,7 +18,8 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.png", "apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png", "Logo_Albus_redes.jpeg"],
+      devOptions: { enabled: false },
+      includeAssets: ["favicon.ico", "favicon-32x32.png", "favicon-48x48.png", "apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png", "Logo_Albus_redes.jpeg"],
       manifest: {
         name: "Albus - Tu asistente de migración",
         short_name: "Albus",
