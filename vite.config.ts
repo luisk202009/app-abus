@@ -28,8 +28,8 @@ export default defineConfig(({ mode }) => ({
         display: "standalone",
         start_url: "/dashboard",
         icons: [
-          { src: "/pwa-192x192.png?v=3", sizes: "192x192", type: "image/png" },
-          { src: "/pwa-512x512.png?v=3", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+          { src: "/pwa-192x192.png?v=4", sizes: "192x192", type: "image/png" },
+          { src: "/pwa-512x512.png?v=4", sizes: "512x512", type: "image/png", purpose: "any maskable" },
         ],
       },
       workbox: {
