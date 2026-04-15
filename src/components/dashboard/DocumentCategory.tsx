@@ -71,6 +71,7 @@ export const DocumentCategory = ({
                 document={doc}
                 status={(userDoc?.status as DocumentStatus) || "waiting"}
                 fileName={userDoc?.file_name}
+                fileUrl={userDoc?.file_url}
                 validationMessage={userDoc?.validation_message}
                 onUpload={(file) => onUpload(doc.type, file)}
                 onDelete={userDoc ? () => onDelete(userDoc.id) : undefined}

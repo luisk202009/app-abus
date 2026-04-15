@@ -109,7 +109,7 @@ export const useDocumentVault = (routeType: RouteType | null): UseDocumentVaultR
           document_type: documentType,
           file_url: urlData.publicUrl,
           file_name: file.name,
-          status: "analyzing" as DocumentStatus,
+          status: "valid" as DocumentStatus,
           route_type: routeType,
           validation_message: null,
           updated_at: new Date().toISOString(),
@@ -136,42 +136,9 @@ export const useDocumentVault = (routeType: RouteType | null): UseDocumentVaultR
         await fetchDocuments();
 
         toast({
-          title: "Documento subido",
-          description: "Analizando el documento...",
+          title: "¡Documento subido!",
+          description: "El documento se guardó correctamente.",
         });
-
-        // Start mock AI validation
-        const validationResult = await validateDocument(documentType, routeType);
-
-        // Update with validation result
-        const { error: updateError } = await supabase
-          .from("user_documents")
-          .update({
-            status: validationResult.status,
-            validation_message: validationResult.message || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", user.id)
-          .eq("route_type", routeType)
-          .eq("document_type", documentType);
-
-        if (updateError) throw updateError;
-
-        // Refresh again
-        await fetchDocuments();
-
-        if (validationResult.status === "valid") {
-          toast({
-            title: "¡Documento validado!",
-            description: "El documento cumple con los requisitos.",
-          });
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Error de validación",
-            description: validationResult.message,
-          });
-        }
       } catch (error) {
         console.error("Error uploading document:", error);
         toast({

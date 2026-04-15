@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Upload, Trash2, AlertCircle } from "lucide-react";
+import { FileText, Upload, Trash2, AlertCircle, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ interface DocumentStatusCardProps {
   document: DocumentType;
   status: DocumentStatus;
   fileName?: string | null;
+  fileUrl?: string | null;
   validationMessage?: string | null;
   onUpload: (file: File) => void;
   onDelete?: () => void;
@@ -22,6 +23,7 @@ export const DocumentStatusCard = ({
   document,
   status,
   fileName,
+  fileUrl,
   validationMessage,
   onUpload,
   onDelete,
@@ -148,6 +150,17 @@ export const DocumentStatusCard = ({
                 <Upload className="w-4 h-4" />
               </Button>
               
+              {fileUrl && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => window.open(fileUrl, "_blank")}
+                  className="h-9 w-9"
+                  title="Ver documento"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </Button>
+              )}
               {fileName && onDelete && (
                 <Button
                   variant="outline"
