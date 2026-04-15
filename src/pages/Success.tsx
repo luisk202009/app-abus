@@ -15,6 +15,7 @@ const Success = () => {
   const sessionId = searchParams.get("session_id");
   const [isProcessing, setIsProcessing] = useState(true);
   const [planType, setPlanType] = useState<string | null>(null);
+  const [isRegularizacion, setIsRegularizacion] = useState(false);
 
   useEffect(() => {
     const processPayment = async () => {

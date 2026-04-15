@@ -191,4 +191,18 @@ export const STRIPE_PRICES = {
     price: 19.99,
     name: "Plan Premium",
   },
+  regularizacion2026: {
+    pro: {
+      priceId: "price_1Sw4PkGVNlA5jALgylRm8JEG",
+      price: 9.99,
+      name: "Regularización Pro",
+      type: "one_time" as const,
+    },
+    premium: {
+      priceId: "price_1TMU19GVNlA5jALguBJfwIwb",
+      price: 19.99,
+      name: "Regularización Premium",
+      type: "one_time" as const,
+    },
+  },
 } as const;
