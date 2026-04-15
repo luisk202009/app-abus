@@ -9,6 +9,7 @@ interface UserDocument {
   document_type: string;
   status: DocumentStatus;
   file_name: string | null;
+  file_url: string | null;
   validation_message: string | null;
 }
 
