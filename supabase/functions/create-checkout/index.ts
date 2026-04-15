@@ -12,6 +12,8 @@ const isAllowedOrigin = (origin: string): boolean => {
     const url = new URL(origin);
     return (
       url.hostname === "localhost" ||
+      url.hostname === "albus.com.co" ||
+      url.hostname === "www.albus.com.co" ||
       url.hostname.endsWith(".lovable.app") ||
       url.hostname.endsWith(".lovableproject.com")
     );
