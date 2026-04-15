@@ -171,41 +171,21 @@ export const AnalysisModal = ({ isOpen, onClose, source }: AnalysisModalProps) =
     const minWait = new Promise(resolve => setTimeout(resolve, 3000));
 
     try {
-      // Check if a record with this email already exists (upsert logic)
-      const { data: existing } = await supabase
-        .from("onboarding_submissions")
-        .select("id")
-        .eq("email", submissionData.email)
-        .maybeSingle();
-
-      let dbResultId: string | null = null;
+      // Generate client-side ID to avoid needing SELECT after INSERT
+      const clientId = crypto.randomUUID();
 
       const [_] = await Promise.all([
         minWait,
         (async () => {
-          if (existing) {
-            // Update existing record instead of inserting
-            await supabase
-              .from("onboarding_submissions")
-              .update(submissionData)
-              .eq("id", existing.id);
-            dbResultId = existing.id;
-          } else {
-            const { data, error } = await supabase
-              .from("onboarding_submissions")
-              .insert([submissionData])
-              .select("id")
-              .single();
-            if (error) throw error;
-            dbResultId = data?.id || null;
-          }
+          const { error } = await supabase
+            .from("onboarding_submissions")
+            .insert([{ id: clientId, ...submissionData }]);
+          if (error) throw error;
         })(),
       ]);
 
       // Store the lead ID for linking after signup
-      if (dbResultId) {
-        setLeadId(dbResultId);
-      }
+      setLeadId(clientId);
 
       // Success - show success screen
       setIsAnalyzing(false);
