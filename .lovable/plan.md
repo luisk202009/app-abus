@@ -1,30 +1,31 @@
 
 
-# Plan: Corregir error 401 en Paso 5 del AnalysisModal
+# Plan: Separar modelo de pagos — pago único para Regularización 2026
 
-## Causa raíz
+## Resumen
+Modificar el flujo de pago para que la Regularización 2026 use pagos únicos (via `create-one-time-payment`), mientras las demás rutas mantienen suscripción mensual (via `create-checkout`).
 
-En `handleSubmit` (línea 151), hay tres operaciones que fallan para usuarios no autenticados:
+## Archivos a modificar
 
-1. **Línea 175**: `.select("id")` en `onboarding_submissions` -- no hay política RLS de SELECT para usuarios anónimos
-2. **Línea 188**: `.update()` -- no hay política RLS de UPDATE para usuarios anónimos
-3. **Línea 196**: `.insert([...]).select("id").single()` -- el `.select()` encadenado después del insert también requiere SELECT, que el anónimo no tiene
+### 1. `src/lib/documentConfig.ts` — Agregar precios de Regularización 2026
+Añadir al objeto `STRIPE_PRICES` la nueva clave `regularizacion2026` con los Price IDs de pago único proporcionados.
 
-No hay llamada a `send-welcome-email` en este paso, así que ese punto no aplica.
+### 2. `src/components/eligibility/QualificationSuccess.tsx` — Lógica condicional de checkout
+- Cuando `routeType === "regularizacion2026"`, usar planes con `isSubscription: false`, los Price IDs de pago único, y llamar a `create-one-time-payment` en vez de `create-checkout`.
+- Para los demás `routeType` (arraigos), mantener el flujo actual de suscripción con `create-checkout`.
+- Crear dos arrays de planes: `PLANS_SUBSCRIPTION` (actual) y `PLANS_REG2026` (pago único con los nuevos Price IDs).
+- En `initiateCheckout`, condicionar la URL del endpoint según el tipo de ruta.
 
-## Corrección en `src/components/AnalysisModal.tsx`
+### 3. `src/components/eligibility/PricingCard.tsx` — Línea de contexto
+- Añadir prop opcional `contextLine` al componente.
+- Cuando `isSubscription === false`, mostrar debajo del precio: "Acceso hasta julio 2026 · Sin renovación automática".
 
-Simplificar `handleSubmit` para que solo haga un INSERT sin intentar leer ni actualizar:
+### 4. `src/pages/Success.tsx` — Mensaje específico para Regularización
+- En `pendingData`, detectar si `routeTemplateSlug` corresponde a `"regularizacion-2026"`.
+- Si es pago único de regularización, mostrar título: "¡Acceso activado! Tu proceso de Regularización 2026 está listo." en lugar del genérico "¡Bienvenido a Albus Pro/Premium!".
 
-1. **Eliminar** la consulta previa de "check existing" (`.select("id").eq("email", ...).maybeSingle()`)
-2. **Eliminar** la rama de `.update()` para registros existentes
-3. **Cambiar** el insert para que NO encadene `.select()` -- solo `.insert([submissionData])`
-4. **Generar** el `leadId` del lado del cliente con `crypto.randomUUID()` y pasarlo como campo `id` en el insert, así no necesitamos leer el ID de vuelta
-
-Esto resulta en un flujo donde el Paso 5 solo ejecuta un INSERT puro, que sí está permitido por la política RLS `"Allow anonymous inserts for lead capture"`.
-
-## Archivos modificados
-- `src/components/AnalysisModal.tsx` (solo la función `handleSubmit`, ~20 líneas)
-
-No se requieren migraciones ni cambios en Edge Functions.
+## Lo que NO cambia
+- `create-checkout` edge function (suscripciones mensuales para arraigos/dashboard).
+- `useSubscription.tsx` y `ChecklistModal.tsx` (flujo de suscripción del dashboard).
+- `create-one-time-payment` edge function (ya existe y funciona).
 
