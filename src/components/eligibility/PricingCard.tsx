@@ -11,6 +11,7 @@ interface PricingCardProps {
     highlighted?: boolean;
     badge?: string;
     isSubscription?: boolean;
+    contextLine?: string;
   };
   onSelect: () => void;
 }
@@ -59,6 +60,14 @@ export const PricingCard = ({ plan, onSelect }: PricingCardProps) => {
               {plan.isSubscription ? "/mes" : "pago único"}
             </span>
           </div>
+          {plan.contextLine && (
+            <p className={cn(
+              "text-xs",
+              isHighlighted ? "text-primary-foreground/70" : "text-muted-foreground"
+            )}>
+              {plan.contextLine}
+            </p>
+          )}
         </div>
 
         {/* Divider */}

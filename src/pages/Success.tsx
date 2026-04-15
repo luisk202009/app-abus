@@ -15,6 +15,7 @@ const Success = () => {
   const sessionId = searchParams.get("session_id");
   const [isProcessing, setIsProcessing] = useState(true);
   const [planType, setPlanType] = useState<string | null>(null);
+  const [isRegularizacion, setIsRegularizacion] = useState(false);
 
   useEffect(() => {
     const processPayment = async () => {
@@ -30,6 +31,9 @@ const Success = () => {
         if (pendingData) {
           const { name, email, planType: pt, routeTemplateSlug } = JSON.parse(pendingData);
           setPlanType(pt);
+          if (routeTemplateSlug === "regularizacion-2026") {
+            setIsRegularizacion(true);
+          }
 
           // Check if user exists with this email
           const { data: existingUser } = await supabase
@@ -160,12 +164,16 @@ const Success = () => {
         {/* Content */}
         <div className="space-y-4">
           <h1 className="text-3xl font-bold tracking-tight">
-            ¡Bienvenido a Albus {isPremium ? "Premium" : "Pro"}!
+            {isRegularizacion
+              ? "¡Acceso activado! Tu proceso de Regularización 2026 está listo."
+              : `¡Bienvenido a Albus ${isPremium ? "Premium" : "Pro"}!`}
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            {isPremium 
-              ? "Tu Plan Premium está activo. Tienes acceso completo a todas las funcionalidades."
-              : "Tu Plan Pro está activo. Ya puedes comenzar tu trámite."}
+            {isRegularizacion
+              ? "Tu acceso está activo hasta julio 2026. Ya puedes comenzar tu trámite."
+              : isPremium 
+                ? "Tu Plan Premium está activo. Tienes acceso completo a todas las funcionalidades."
+                : "Tu Plan Pro está activo. Ya puedes comenzar tu trámite."}
           </p>
         </div>
 
