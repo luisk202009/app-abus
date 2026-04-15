@@ -164,12 +164,16 @@ const Success = () => {
         {/* Content */}
         <div className="space-y-4">
           <h1 className="text-3xl font-bold tracking-tight">
-            ¡Bienvenido a Albus {isPremium ? "Premium" : "Pro"}!
+            {isRegularizacion
+              ? "¡Acceso activado! Tu proceso de Regularización 2026 está listo."
+              : `¡Bienvenido a Albus ${isPremium ? "Premium" : "Pro"}!`}
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            {isPremium 
-              ? "Tu Plan Premium está activo. Tienes acceso completo a todas las funcionalidades."
-              : "Tu Plan Pro está activo. Ya puedes comenzar tu trámite."}
+            {isRegularizacion
+              ? "Tu acceso está activo hasta julio 2026. Ya puedes comenzar tu trámite."
+              : isPremium 
+                ? "Tu Plan Premium está activo. Tienes acceso completo a todas las funcionalidades."
+                : "Tu Plan Pro está activo. Ya puedes comenzar tu trámite."}
           </p>
         </div>
 
