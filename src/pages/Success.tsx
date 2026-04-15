@@ -31,6 +31,9 @@ const Success = () => {
         if (pendingData) {
           const { name, email, planType: pt, routeTemplateSlug } = JSON.parse(pendingData);
           setPlanType(pt);
+          if (routeTemplateSlug === "regularizacion-2026") {
+            setIsRegularizacion(true);
+          }
 
           // Check if user exists with this email
           const { data: existingUser } = await supabase
