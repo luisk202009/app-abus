@@ -1,42 +1,30 @@
 
 
-# Plan: Corregir sistema de documentos en Dashboard
+# Plan: Corregir error 401 en Paso 5 del AnalysisModal
 
-## Diagnóstico
+## Causa raíz
 
-Revisé el código y encontré lo siguiente:
+En `handleSubmit` (línea 151), hay tres operaciones que fallan para usuarios no autenticados:
 
-1. **La persistencia YA funciona**: `useDocumentVault.tsx` ya guarda registros en `user_documents` tras cada upload y los consulta al cargar. La tabla `user_documents` ya existe con RLS configurado correctamente.
+1. **Línea 175**: `.select("id")` en `onboarding_submissions` -- no hay política RLS de SELECT para usuarios anónimos
+2. **Línea 188**: `.update()` -- no hay política RLS de UPDATE para usuarios anónimos
+3. **Línea 196**: `.insert([...]).select("id").single()` -- el `.select()` encadenado después del insert también requiere SELECT, que el anónimo no tiene
 
-2. **El problema real de "pendiente"**: Tras subir un documento, `mockDocumentValidation.ts` tiene un 10-30% de probabilidad de marcarlo como `"error"` aleatoriamente. Esto hace que documentos válidos aparezcan como fallidos tras recargar.
+No hay llamada a `send-welcome-email` en este paso, así que ese punto no aplica.
 
-3. **Falta botón "Ver documento"**: No hay forma de abrir el archivo subido en nueva pestaña.
+## Corrección en `src/components/AnalysisModal.tsx`
 
-## Cambios a realizar
+Simplificar `handleSubmit` para que solo haga un INSERT sin intentar leer ni actualizar:
 
-### 1. `src/lib/mockDocumentValidation.ts` — Deshabilitar validación aleatoria
-- `validateDocument()` siempre retorna `{ status: "valid" }` sin delay
-- Agregar comentario `// TODO Sprint 8: reemplazar con validación real por OCR/IA`
-- Mantener la interfaz y `getStatusText()` intactos
+1. **Eliminar** la consulta previa de "check existing" (`.select("id").eq("email", ...).maybeSingle()`)
+2. **Eliminar** la rama de `.update()` para registros existentes
+3. **Cambiar** el insert para que NO encadene `.select()` -- solo `.insert([submissionData])`
+4. **Generar** el `leadId` del lado del cliente con `crypto.randomUUID()` y pasarlo como campo `id` en el insert, así no necesitamos leer el ID de vuelta
 
-### 2. `src/hooks/useDocumentVault.tsx` — Simplificar flujo post-upload
-- Cambiar el estado inicial del documento de `"analyzing"` a `"valid"` directamente
-- Eliminar la fase intermedia de "analyzing" + validación mock
-- Toast directo: "Documento subido y validado"
-
-### 3. `src/components/dashboard/DocumentStatusCard.tsx` — Agregar botón "Ver"
-- Añadir prop `fileUrl` al componente
-- Cuando hay un archivo subido, mostrar botón con icono `ExternalLink` que abre `fileUrl` en nueva pestaña
-- Ubicarlo junto a los botones existentes de Upload y Delete
-
-### 4. `src/components/dashboard/DocumentCategory.tsx` — Pasar `fileUrl`
-- Pasar `fileUrl={userDoc?.file_url}` al `DocumentStatusCard`
+Esto resulta en un flujo donde el Paso 5 solo ejecuta un INSERT puro, que sí está permitido por la política RLS `"Allow anonymous inserts for lead capture"`.
 
 ## Archivos modificados
-- `src/lib/mockDocumentValidation.ts`
-- `src/hooks/useDocumentVault.tsx`
-- `src/components/dashboard/DocumentStatusCard.tsx`
-- `src/components/dashboard/DocumentCategory.tsx`
+- `src/components/AnalysisModal.tsx` (solo la función `handleSubmit`, ~20 líneas)
 
-No se requieren migraciones de base de datos — la tabla y RLS ya existen.
+No se requieren migraciones ni cambios en Edge Functions.
 
