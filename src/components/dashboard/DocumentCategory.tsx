@@ -9,6 +9,7 @@ interface UserDocument {
   document_type: string;
   status: DocumentStatus;
   file_name: string | null;
+  file_url: string | null;
   validation_message: string | null;
 }
 
@@ -71,6 +72,7 @@ export const DocumentCategory = ({
                 document={doc}
                 status={(userDoc?.status as DocumentStatus) || "waiting"}
                 fileName={userDoc?.file_name}
+                fileUrl={userDoc?.file_url}
                 validationMessage={userDoc?.validation_message}
                 onUpload={(file) => onUpload(doc.type, file)}
                 onDelete={userDoc ? () => onDelete(userDoc.id) : undefined}
