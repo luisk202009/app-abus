@@ -1,52 +1,29 @@
 
 
-# Plan: Sección "Abogados" en el Dashboard del usuario
+## Plan: Añadir "Regularización" al menú de navegación con badge "Nuevo"
 
-## Resumen
-Agregar una nueva entrada de menú "Abogados" entre "Documentos" y "Recursos" en el Dashboard, que muestra el directorio de abogados verificados con filtros, modal de perfil y formulario de consulta. Acceso completo para usuarios `premium` o con ruta activa de Regularización 2026; bloqueado con overlay para `pro` y `free`.
+### Contexto
+El usuario quiere agregar un enlace destacado a "Regularización" en el Navbar principal (landing pública), con un distintivo visual que indique que es un servicio nuevo. Debe llevar a `/españa/regularizacion`.
 
-## Lógica de acceso
-- **Acceso completo** si: `subscriptionStatus === "premium"` **OR** existe `activeRoutes` con `template_id === TEMPLATE_IDS.regularizacion2026` (`"57b27d4a-190b-4ece-a1c3-de1859d58217"`).
-- **Bloqueado (con overlay)** en el resto de casos. El overlay muestra: *"Disponible para usuarios Premium y usuarios de Regularización 2026."* y un CTA de upgrade.
+### Archivo a modificar
 
-## Archivos a crear
+**`src/components/Navbar.tsx`**
 
-### 1. `src/components/dashboard/LawyersSection.tsx`
-Componente principal de la sección. Recibe props: `hasAccess: boolean`, `onUpgrade: () => void`.
-- Header con título "Directorio de Abogados Verificados".
-- Filtros: `Select` por especialidad (regularización, arraigos, recursos, nómada digital) y `Select` por ciudad (lista distinta dinámica).
-- Query a `lawyers` con `is_verified=true` y `is_active=true`, JOIN manual a `lawyer_services` para obtener precio mínimo activo por abogado.
-- Grid responsive (1/2/3 columnas) de `LawyerCard`.
-- Si `!hasAccess`: el grid se renderiza con `pointer-events-none blur-sm` y encima un overlay absoluto con candado, mensaje y botón "Upgrade a Premium".
-- Maneja apertura de `LawyerProfileModal` al hacer clic en una tarjeta.
+1. **Desktop nav** (sección `hidden md:flex items-center gap-8`): Agregar entre `DestinosDropdown` y `Recursos` un nuevo enlace:
+   - Texto: "Regularización"
+   - Link a `/españa/regularizacion` usando `<a href>` (consistente con los demás enlaces)
+   - Badge "Nuevo" al lado: pequeño pill con fondo `bg-primary text-primary-foreground` (negro/blanco según el tema fintech) o un acento dorado para reforzar el distintivo premium. Usaré el componente `Badge` de shadcn con clase personalizada, tamaño compacto (`text-[10px] px-1.5 py-0.5`), con un punto pulsante opcional (`animate-pulse`) para llamar la atención.
 
-### 2. `src/components/dashboard/LawyerCard.tsx`
-Tarjeta individual: avatar (`photo_url` o iniciales), nombre, ciudad, badges de especialidades, idiomas, precio base ("Desde X€"). Botón "Ver perfil".
+2. **Mobile menu** (sección `md:hidden py-6 border-t`): Replicar el mismo enlace + badge con estilo apropiado para móvil (font-size base, padding consistente con los demás items), cerrando el menú al hacer clic.
 
-### 3. `src/components/dashboard/LawyerProfileModal.tsx`
-Modal (Dialog) con:
-- Cabecera: avatar grande, nombre, colegio, número colegiado, ciudad, idiomas, badges de especialidades, bio.
-- Lista de servicios desde `lawyer_services` (descripción + precio EUR).
-- Sección "Enviar consulta":
-  - Antes de enviar, query a `lawyer_inquiries` filtrando por `user_id`, `lawyer_id`, `status != 'closed'`.
-  - **Si existe consulta activa**: mostrar tarjeta con badge de estado (pending/assigned/active) y mensaje "Ya tienes una consulta activa con este abogado." (oculta el formulario).
-  - **Si no existe**: textarea con validación mínima 50 caracteres + contador. Botón "Enviar solicitud" (deshabilitado hasta cumplir longitud).
-  - Al enviar: INSERT en `lawyer_inquiries` con `user_id=auth.uid()`, `lawyer_id`, `submission_id` (obtenido de `onboarding_submissions` por user_id), `message`, `status='pending'`. Toast de confirmación: *"Tu solicitud fue enviada. El equipo de Albus revisará tu caso y lo asignará en menos de 24 horas."*
+### Detalles visuales del badge
+- Estilo: pill redondeado, alto contraste con el aesthetic B&W minimalista de Albus.
+- Texto: "Nuevo" en mayúscula inicial, font-medium, tracking ligero.
+- Posición: inline al lado del texto del enlace, con `gap-2`.
+- Opcional: pequeño punto (•) animado con `animate-pulse` en color de acento para reforzar la novedad sin romper la estética minimalista.
 
-## Archivos a modificar
-
-### 4. `src/components/dashboard/DashboardSidebar.tsx`
-Insertar item `{ id: "lawyers", label: "Abogados", icon: <Scale className="w-5 h-5" /> }` entre "documents" y "resources". Importar `Scale` de lucide-react.
-
-### 5. `src/pages/Dashboard.tsx`
-- Importar `LawyersSection`.
-- Calcular `hasLawyersAccess`: `subscriptionStatus === "premium" || activeRoutes.some(r => r.template_id === TEMPLATE_IDS.regularizacion2026)`.
-- Añadir `case "lawyers"` en el switch de `renderContent` que renderice `<LawyersSection hasAccess={hasLawyersAccess} onUpgrade={() => handleCheckout()} />`.
-
-## Lo que NO cambia
-- Tablas, RLS y migraciones: las políticas existentes ya permiten todo lo necesario:
-  - `lawyers`: SELECT público para verificados+activos.
-  - `lawyer_services`: SELECT público para activos.
-  - `lawyer_inquiries`: usuarios pueden INSERT con `user_id=auth.uid()` y SELECT propios.
-- El Admin Panel y las rutas de checkout permanecen intactos.
+### Lo que NO cambia
+- `DestinosDropdown`, `Recursos`, `Precios` y los CTAs (`Entrar`, `Empezar Gratis`) permanecen intactos.
+- El Dashboard, Sidebar interno y rutas existentes no se tocan.
+- No se requiere migración, ni cambios en routing (la ruta `/españa/regularizacion` ya existe en `App.tsx`).
 
