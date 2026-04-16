@@ -130,6 +130,18 @@ const Admin = () => {
               <FolderOpen className="w-4 h-4" />
               Documentos
             </TabsTrigger>
+            <TabsTrigger value="lawyers" className="gap-2">
+              <Scale className="w-4 h-4" />
+              Abogados
+            </TabsTrigger>
+            <TabsTrigger value="service-types" className="gap-2">
+              <Briefcase className="w-4 h-4" />
+              Servicios
+            </TabsTrigger>
+            <TabsTrigger value="legal-leads" className="gap-2">
+              <Inbox className="w-4 h-4" />
+              Leads
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="analytics">
