@@ -167,6 +167,19 @@ const Admin = () => {
           <TabsContent value="documents">
             <AdminDocumentsTab />
           </TabsContent>
+
+          <TabsContent value="lawyers">
+            <AdminLawyersTab />
+          </TabsContent>
+
+          <TabsContent value="service-types">
+            <AdminServiceTypesTab />
+          </TabsContent>
+
+          <TabsContent value="legal-leads">
+            <AdminLegalLeadsTab />
+          </TabsContent>
+        </Tabs>
         </Tabs>
       </main>
     </div>
