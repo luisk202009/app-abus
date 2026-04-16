@@ -130,6 +130,17 @@ export const Navbar = ({ onOpenModal }: NavbarProps) => {
                   }} />
                 </div>
                 <a
+                  href="/españa/regularizacion"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2 text-left flex items-center gap-2"
+                >
+                  Regularización
+                  <span className="inline-flex items-center gap-1 rounded-full bg-foreground text-background text-[10px] font-medium px-1.5 py-0.5 tracking-wide">
+                    <span className="w-1 h-1 rounded-full bg-background animate-pulse" />
+                    Nuevo
+                  </span>
+                </a>
+                <a
                   href="/recursos"
                   className="text-base font-medium text-muted-foreground hover:text-foreground transition-colors py-2 text-left block"
                 >
