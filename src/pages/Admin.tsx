@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Users, Package, FileText, Map, Loader2, FolderOpen, BarChart3, BookOpen } from "lucide-react";
+import { ArrowLeft, Users, Package, FileText, Map, Loader2, FolderOpen, BarChart3, BookOpen, Scale, Briefcase, Inbox } from "lucide-react";
 import { AdminUsersTab } from "@/components/admin/AdminUsersTab";
 import { AdminPlansTab } from "@/components/admin/AdminPlansTab";
 import { AdminResourcesTab } from "@/components/admin/AdminResourcesTab";
@@ -13,6 +13,9 @@ import { AdminRoutesTab } from "@/components/admin/AdminRoutesTab";
 import { AdminDocumentsTab } from "@/components/admin/AdminDocumentsTab";
 import { AdminAnalyticsTab } from "@/components/admin/AdminAnalyticsTab";
 import { AdminSystemStatus } from "@/components/admin/AdminSystemStatus";
+import { AdminLawyersTab } from "@/components/admin/AdminLawyersTab";
+import { AdminServiceTypesTab } from "@/components/admin/AdminServiceTypesTab";
+import { AdminLegalLeadsTab } from "@/components/admin/AdminLegalLeadsTab";
 import albusLogo from "@/assets/albus-logo.png";
 
 
