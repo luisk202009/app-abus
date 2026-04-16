@@ -180,7 +180,6 @@ const Admin = () => {
             <AdminLegalLeadsTab />
           </TabsContent>
         </Tabs>
-        </Tabs>
       </main>
     </div>
   );
