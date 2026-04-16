@@ -28,7 +28,7 @@ const requirements = [
   {
     icon: Award,
     title: "Resultado",
-    description: "Permiso de trabajo en 15 días hábiles tras presentar la solicitud",
+    description: "Permiso de trabajo y residencia tras la aprobación de la solicitud",
   },
 ];
 

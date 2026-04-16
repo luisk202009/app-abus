@@ -23,7 +23,7 @@ export const HeroReg2026 = ({ onStart }: HeroReg2026Props) => {
             </h1>
             <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl">
               Entrada en España antes del 31/12/2025 + 5 meses de estancia = 
-              <span className="text-foreground font-medium"> Permiso de trabajo en 15 días</span>
+              <span className="text-foreground font-medium"> Permiso de trabajo y residencia</span>
             </p>
           </div>
 
