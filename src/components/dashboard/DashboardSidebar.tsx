@@ -1,4 +1,4 @@
-import { Home, FolderOpen, User, MessageCircle, LogIn, LogOut, Crown, BookOpen, Settings, Compass, Calculator, CalendarCheck, Shield, TrendingUp, Gift } from "lucide-react";
+import { Home, FolderOpen, User, MessageCircle, LogIn, LogOut, Crown, BookOpen, Settings, Compass, Calculator, CalendarCheck, Shield, TrendingUp, Gift, Scale } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ const navItems: NavItem[] = [
   { id: "roadmap", label: "Mi Ruta", icon: <Home className="w-5 h-5" /> },
   { id: "explorer", label: "Explorar Rutas", icon: <Compass className="w-5 h-5" /> },
   { id: "documents", label: "Documentos", icon: <FolderOpen className="w-5 h-5" /> },
+  { id: "lawyers", label: "Abogados", icon: <Scale className="w-5 h-5" /> },
   { id: "resources", label: "Recursos", icon: <BookOpen className="w-5 h-5" /> },
   { id: "simulator", label: "Simulador Fiscal", icon: <Calculator className="w-5 h-5" /> },
   { id: "appointment", label: "Gestión de Cita", icon: <CalendarCheck className="w-5 h-5" /> },

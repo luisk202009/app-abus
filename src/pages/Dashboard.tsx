@@ -26,6 +26,7 @@ import { InstallAppBanner } from "@/components/dashboard/InstallAppBanner";
 import { PullToRefresh } from "@/components/dashboard/PullToRefresh";
 import { ReferralDashboard } from "@/components/dashboard/ReferralDashboard";
 import { ReferralBanner } from "@/components/dashboard/ReferralBanner";
+import { LawyersSection } from "@/components/dashboard/LawyersSection";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -459,6 +460,18 @@ const Dashboard = () => {
             isCheckoutLoading={isCheckoutLoading}
           />
         );
+      case "lawyers": {
+        const REG_2026_TEMPLATE_ID = "57b27d4a-190b-4ece-a1c3-de1859d58217";
+        const hasLawyersAccess =
+          subscriptionStatus === "premium" ||
+          activeRoutes.some((r) => r.template_id === REG_2026_TEMPLATE_ID);
+        return (
+          <LawyersSection
+            hasAccess={hasLawyersAccess}
+            onUpgrade={() => handleCheckout()}
+          />
+        );
+      }
       case "resources":
         return (
           <ResourcesSection
