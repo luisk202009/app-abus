@@ -14,6 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      case_management: {
+        Row: {
+          appointment_date: string | null
+          appointment_lot: string | null
+          appointment_notes: string | null
+          created_at: string | null
+          id: string
+          inquiry_id: string | null
+          lawyer_notes: string | null
+          stage: string | null
+          tie_appointment_date: string | null
+          tie_status: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          appointment_date?: string | null
+          appointment_lot?: string | null
+          appointment_notes?: string | null
+          created_at?: string | null
+          id?: string
+          inquiry_id?: string | null
+          lawyer_notes?: string | null
+          stage?: string | null
+          tie_appointment_date?: string | null
+          tie_status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          appointment_date?: string | null
+          appointment_lot?: string | null
+          appointment_notes?: string | null
+          created_at?: string | null
+          id?: string
+          inquiry_id?: string | null
+          lawyer_notes?: string | null
+          stage?: string | null
+          tie_appointment_date?: string | null
+          tie_status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_management_inquiry_id_fkey"
+            columns: ["inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "lawyer_inquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_comments: {
         Row: {
           author_email: string
@@ -45,6 +98,159 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      lawyer_inquiries: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          created_at: string | null
+          id: string
+          lawyer_id: string | null
+          message: string | null
+          status: string | null
+          submission_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          created_at?: string | null
+          id?: string
+          lawyer_id?: string | null
+          message?: string | null
+          status?: string | null
+          submission_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          created_at?: string | null
+          id?: string
+          lawyer_id?: string | null
+          message?: string | null
+          status?: string | null
+          submission_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lawyer_inquiries_lawyer_id_fkey"
+            columns: ["lawyer_id"]
+            isOneToOne: false
+            referencedRelation: "lawyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lawyer_inquiries_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lawyer_services: {
+        Row: {
+          created_at: string | null
+          currency: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          lawyer_id: string | null
+          price: number | null
+          service_type_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          lawyer_id?: string | null
+          price?: number | null
+          service_type_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          lawyer_id?: string | null
+          price?: number | null
+          service_type_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lawyer_services_lawyer_id_fkey"
+            columns: ["lawyer_id"]
+            isOneToOne: false
+            referencedRelation: "lawyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lawyer_services_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lawyers: {
+        Row: {
+          bar_number: string | null
+          bio: string | null
+          city: string | null
+          college: string | null
+          created_at: string | null
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean | null
+          is_verified: boolean | null
+          languages: string[] | null
+          phone: string | null
+          photo_url: string | null
+          specialties: string[] | null
+          user_id: string | null
+        }
+        Insert: {
+          bar_number?: string | null
+          bio?: string | null
+          city?: string | null
+          college?: string | null
+          created_at?: string | null
+          email: string
+          full_name: string
+          id?: string
+          is_active?: boolean | null
+          is_verified?: boolean | null
+          languages?: string[] | null
+          phone?: string | null
+          photo_url?: string | null
+          specialties?: string[] | null
+          user_id?: string | null
+        }
+        Update: {
+          bar_number?: string | null
+          bio?: string | null
+          city?: string | null
+          college?: string | null
+          created_at?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean | null
+          is_verified?: boolean | null
+          languages?: string[] | null
+          phone?: string | null
+          photo_url?: string | null
+          specialties?: string[] | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       onboarding_submissions: {
         Row: {
@@ -385,6 +591,33 @@ export type Database = {
         }
         Relationships: []
       }
+      service_types: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          slug: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       step_attachments: {
         Row: {
           created_at: string
@@ -445,6 +678,41 @@ export type Database = {
             columns: ["step_id"]
             isOneToOne: false
             referencedRelation: "user_route_progress"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tie_checklist_items: {
+        Row: {
+          case_id: string | null
+          id: string
+          is_completed: boolean | null
+          item: string
+          order_index: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          case_id?: string | null
+          id?: string
+          is_completed?: boolean | null
+          item: string
+          order_index?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          case_id?: string | null
+          id?: string
+          is_completed?: boolean | null
+          item?: string
+          order_index?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tie_checklist_items_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "case_management"
             referencedColumns: ["id"]
           },
         ]
