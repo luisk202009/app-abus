@@ -65,7 +65,7 @@ export const EligibilityModalReg2026 = ({
     return {
       eligible: true,
       routeType: "regularizacion2026",
-      message: "Podrás trabajar legalmente en 15 días tras tu solicitud.",
+      message: "Podrás obtener tu permiso de trabajo y residencia legal en España.",
       subMessage: "Te guiaremos paso a paso en todo el proceso.",
     };
   };
