@@ -21,6 +21,7 @@ import ComingSoon from "./pages/ComingSoon";
 import Admin from "./pages/Admin";
 import AdminManual from "./pages/AdminManual";
 import PartnerDashboard from "./pages/PartnerDashboard";
+import LawyerPortal from "./pages/LawyerPortal";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 
@@ -55,6 +56,7 @@ const App = () => (
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/admin/manual" element={<AdminManual />} />
                 <Route path="/partner/dashboard" element={<PartnerDashboard />} />
+                <Route path="/portal-abogado" element={<LawyerPortal />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
