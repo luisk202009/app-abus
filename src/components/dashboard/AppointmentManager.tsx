@@ -17,6 +17,7 @@ import {
   Fingerprint, FileText, ExternalLink, Info, Save, Loader2, CalendarCheck
 } from "lucide-react";
 import { generateTasa790PDF } from "@/lib/generateTasa790";
+import { LegalCaseTracker } from "./LegalCaseTracker";
 
 interface AppointmentManagerProps {
   userId?: string;
@@ -136,6 +137,9 @@ export const AppointmentManager = ({ userId }: AppointmentManagerProps) => {
 
   return (
     <div className="space-y-6">
+      {/* Legal case tracker (only renders if user has an active lawyer inquiry) */}
+      <LegalCaseTracker userId={userId} />
+
       {/* Section A: Application Status Banner */}
       {applicationStatus === "aprobada" ? (
         <Card className="border-emerald-200 bg-emerald-50">
