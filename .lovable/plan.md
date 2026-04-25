@@ -1,150 +1,92 @@
 
-## Plan: Portal del Abogado en `/portal-abogado`
+## Plan: Vista de Seguimiento Jurídico en "Gestión de Cita"
 
 ### Resumen
-Nueva ruta protegida y completamente independiente del Dashboard del usuario. Solo accesible para usuarios cuyo `user_id` exista en la tabla `lawyers`. Incluye 3 secciones navegables por tabs: Mis Casos, Mis Servicios y Mi Perfil. Reutiliza patrones existentes del `PartnerDashboard` (header con logo, layout simple, redirect-on-unauthorized).
+Cuando el usuario tenga una `lawyer_inquiry` activa con un abogado asignado, mostrar una nueva sección de **Seguimiento Jurídico** en la parte superior de "Gestión de Cita". Esta vista refleja en tiempo real el progreso que el abogado registra desde el `/portal-abogado` (etapa, cita, TIE, checklist). La vista actual de gestión manual permanece debajo (los datos del abogado complementan, no reemplazan).
 
 ---
 
-### Estructura de archivos a crear
+### Archivos
 
+**Nuevo: `src/components/dashboard/LegalCaseTracker.tsx`**
+Componente que recibe `userId` y se autoinstancia. Si no hay inquiry activa → no renderiza nada (return null). Si existe → renderiza la vista completa.
+
+**Modificar: `src/components/dashboard/AppointmentManager.tsx`**
+Agregar `<LegalCaseTracker userId={userId} />` justo al inicio del `<div className="space-y-6">`. No se cambia nada más.
+
+---
+
+### Lógica de carga (`LegalCaseTracker`)
+
+1. Query 1: `lawyer_inquiries` filtrado por `user_id = userId` y `status IN ('assigned','active','pending')` (el cliente ya tiene la política RLS para verlo). Tomar la más reciente (`order by created_at desc limit 1`).
+2. Si no hay inquiry → `return null`.
+3. Query 2 (paralelo): 
+   - `lawyers` por `id = inquiry.lawyer_id` (verified+active es público).
+   - `case_management` por `inquiry_id = inquiry.id` (RLS "Users can view own case").
+4. Query 3 (si hay case): `tie_checklist_items` por `case_id` ordenado por `order_index`.
+
+---
+
+### Estructura visual
+
+**1. Card del abogado asignado** (parte superior)
+- Foto circular (o iniciales) + nombre + especialidades (badges).
+- Botón: `<a href="mailto:{email}">Contactar</a>` con ícono Mail.
+- Si `case.appointment_date` existe y está próxima → mostrar también un sub-texto sutil "Próxima cita: [fecha]".
+
+**2. Stepper horizontal** de las 4 etapas
+- `[Por presentar] → [En trámite] → [Requerimiento] → [Resuelto]`
+- Reutiliza el patrón visual del stepper TIE existente en `AppointmentManager.tsx` (círculos numerados, línea conectora).
+- Etapa activa: círculo `bg-foreground text-background`.
+- Etapas anteriores: checkmark verde + línea verde.
+- Caso especial: si `stage === 'requerimiento'`, el círculo se pinta en naranja (no verde) para indicar pausa/atención.
+
+**3. Banner de cita programada** (condicional: `appointment_date != null`)
+- Card destacada con fondo `bg-blue-50 border-blue-200`.
+- "📅 Tu cita está programada para [fecha en español, formato 'EEEE, d MMMM yyyy']"
+- Si `appointment_lot`: "Lote/Turno: [lot]"
+- Si `appointment_notes`: bloque de notas debajo.
+
+**4. Estado del TIE** (condicional: `tie_status != null && tie_status !== 'pending'`)
+- Badge con label legible:
+  - `pending` → "Pendiente" (gris)
+  - `appointment_scheduled` → "En proceso" (azul)
+  - `collected` → "Entregado" (verde)
+- Si `tie_appointment_date`: mostrar fecha de cita TIE.
+
+**5. Checklist de documentos** (solo lectura, condicional: hay items)
+- Card con lista de `tie_checklist_items`.
+- Cada ítem: ícono check verde (si `is_completed`) o círculo gris (si no).
+- Ítems completados: texto en verde con `line-through`.
+- Ítems pendientes: texto en `text-muted-foreground`.
+- Sin checkbox interactivo (solo el abogado los marca).
+
+**6. Banners de estado especial**
+- Si `stage === 'requerimiento'`: 
+  - Card naranja: `bg-orange-50 border-orange-200`.
+  - "⚠️ Tu expediente tiene un requerimiento pendiente. Tu abogado se pondrá en contacto contigo próximamente."
+- Si `stage === 'resuelto'`:
+  - Card verde: `bg-green-50 border-green-200`.
+  - "🎉 ¡Felicidades! Tu proceso ha sido resuelto favorablemente."
+  - Disparar `SuccessConfetti` (componente existente en `src/components/dashboard/SuccessConfetti.tsx`) una sola vez al montar si stage es resuelto.
+
+---
+
+### Mapeo de etapas y colores
 ```text
-src/
-├── pages/
-│   └── LawyerPortal.tsx                    (página principal con tabs + guard de acceso)
-├── hooks/
-│   └── useLawyerData.tsx                   (carga abogado actual + casos + servicios)
-└── components/
-    └── lawyer-portal/
-        ├── LawyerPortalHeader.tsx          (logo Albus + nombre abogado + logout)
-        ├── LawyerCasesList.tsx             (lista de inquiries con badges de etapa)
-        ├── LawyerCaseDetail.tsx            (vista detalle 2 columnas)
-        ├── CaseStageSelector.tsx           (stepper/dropdown de etapas)
-        ├── CaseAppointmentPanel.tsx        (columna derecha: cita + TIE + checklist)
-        ├── TieChecklistEditor.tsx          (checkbox list + agregar item)
-        ├── LawyerServicesTab.tsx           (lista + formulario servicios)
-        └── LawyerProfileTab.tsx            (formulario editable del perfil)
+por_presentar  → gris   (Por presentar)
+en_tramite     → azul   (En trámite)
+requerimiento  → naranja(Requerimiento)
+resuelto       → verde  (Resuelto)
 ```
 
-### Modificación
-- `src/App.tsx`: registrar nueva ruta `<Route path="/portal-abogado" element={<LawyerPortal />} />`.
-
----
-
-### Sección 1 — "Mis Casos"
-
-**Lista (`LawyerCasesList.tsx`)**
-- Query: `lawyer_inquiries` filtrado por `lawyer_id` del abogado actual, con LEFT JOIN a `case_management` (vía relación por `inquiry_id`) y a `onboarding_submissions` (vía `submission_id` o `user_id`) para obtener nombre/email del usuario.
-- Cada card: nombre, fecha (`created_at`), preview del `message` (truncado a 120 chars), badge de etapa.
-- Mapeo de etapas → colores (Tailwind, respetando paleta B&N + acentos sutiles):
-  - `por_presentar` → gris (`bg-muted text-muted-foreground`)
-  - `en_tramite` → azul (`bg-blue-100 text-blue-800`)
-  - `requerimiento` → naranja (`bg-orange-100 text-orange-800`)
-  - `resuelto` → verde (`bg-green-100 text-green-800`)
-- Click en card → setSelectedInquiryId → renderiza `LawyerCaseDetail`.
-
-**Detalle (`LawyerCaseDetail.tsx`) — Grid 2 columnas en desktop, stack en móvil**
-
-*Columna izquierda:*
-- Datos del usuario (nombre, email, mensaje original).
-- `CaseStageSelector`: dropdown con las 4 etapas. Al cambiar → UPDATE `case_management.stage` + `updated_at = now()` + `updated_by = auth.uid()`. Si no existe registro de `case_management` para ese inquiry, crearlo (INSERT) en el primer cambio.
-- Textarea `lawyer_notes` con autosave debounced (1s) o botón "Guardar notas".
-
-*Columna derecha (`CaseAppointmentPanel`):*
-- Visible siempre, pero **deshabilitada** con overlay sutil "Disponible cuando el caso esté En trámite" si `stage !== 'en_tramite'`.
-- Campos editables (todos en `case_management`):
-  - `appointment_date` → date picker (shadcn Calendar + Popover, con `pointer-events-auto`).
-  - `appointment_lot` → Input text.
-  - `appointment_notes` → Textarea.
-  - `tie_status` → Select: Pendiente / En proceso / Entregado (mapea a `pending`, `appointment_scheduled`, `card_ready` según validación de trigger existente — ver nota técnica).
-  - `tie_appointment_date` → date picker.
-- `TieChecklistEditor`: lista de `tie_checklist_items` filtrados por `case_id`. Cada ítem con checkbox (toggle `is_completed`). Input + botón "Agregar ítem" que inserta nueva fila con `order_index = max+1`.
-- Botón "Guardar cambios" → UPDATE `case_management` con todos los campos.
-
----
-
-### Sección 2 — "Mis Servicios"
-
-`LawyerServicesTab.tsx`
-- Lista de `lawyer_services` del abogado actual (cards con: tipo de servicio, descripción, precio + moneda, badge activo/inactivo).
-- Botón "Nuevo servicio" → abre Sheet con formulario:
-  - `service_type_id` → Select poblado desde `service_types` donde `is_active = true`.
-  - `description` → Textarea.
-  - `price` → Input number.
-  - `currency` → Select (EUR por defecto, USD/COP opcionales).
-  - `is_active` → Switch (true por defecto).
-- Cada servicio existente tiene botones "Editar" (abre mismo Sheet en modo edición) y "Activar/Desactivar" (toggle `is_active`).
-
----
-
-### Sección 3 — "Mi Perfil"
-
-`LawyerProfileTab.tsx`
-- Formulario con campos editables: `bio`, `phone`, `city`, `specialties` (checkboxes con SPECIALTIES const), `languages` (checkboxes con LANGUAGES const), `photo_url` (subida a bucket `avatars`, mismo patrón que perfil de usuario).
-- Campos solo lectura (deshabilitados, con tooltip "Solo el admin puede modificar"): `bar_number`, `college`, `is_verified` (badge).
-- Botón "Guardar cambios" → UPDATE `lawyers` WHERE `user_id = auth.uid()`.
-
----
-
-### Hook `useLawyerData.tsx`
-
-Centraliza:
-- `lawyer`: registro completo del abogado actual (`SELECT * FROM lawyers WHERE user_id = auth.uid()`).
-- `isLawyer`: boolean (lawyer existe).
-- `isLoading`.
-- `inquiries`: lista de casos con datos de usuario + case_management.
-- `services`: lista de lawyer_services del abogado.
-- Funciones: `refreshInquiries`, `refreshServices`, `updateLawyerProfile`, `updateCaseStage`, `updateCaseManagement`, `createService`, `updateService`, `toggleServiceActive`, `addChecklistItem`, `toggleChecklistItem`.
-
----
-
-### Guard de acceso (en `LawyerPortal.tsx`)
-
-```text
-if (authLoading || lawyerLoading) → spinner
-if (!user) → navigate("/")
-if (!isLawyer) → navigate("/")  // no es abogado
-```
-
----
-
-### Notas técnicas
-
-**RLS**: Las políticas existentes ya cubren todo lo necesario:
-- `lawyers`: "Lawyers can update own profile" permite UPDATE donde `user_id = auth.uid()`.
-- `lawyer_inquiries`: "Lawyers can view assigned inquiries" permite SELECT por lawyer_id propio.
-- `case_management`: "Lawyers can manage assigned cases" permite ALL.
-- `lawyer_services`: "Lawyers can manage own services" permite ALL.
-- `tie_checklist_items`: "Lawyers can manage checklist" permite ALL.
-- `onboarding_submissions`: ⚠️ las RLS actuales NO permiten al abogado leer datos de usuarios. Para mostrar nombre/email del cliente en la lista de casos, haremos el JOIN desde el lado del cliente: primero leer `lawyer_inquiries` (que devuelve `user_id`), luego una segunda query a `onboarding_submissions` filtrando por esos `user_id`. **Esto requerirá añadir una política RLS** que permita a abogados leer submissions de usuarios que tienen un inquiry asignado a ellos. Migración necesaria:
-
-```sql
-CREATE POLICY "Lawyers can view assigned client submissions"
-ON onboarding_submissions FOR SELECT TO authenticated
-USING (user_id IN (
-  SELECT li.user_id FROM lawyer_inquiries li
-  JOIN lawyers l ON l.id = li.lawyer_id
-  WHERE l.user_id = auth.uid()
-));
-```
-
-**Validación de etapas**: El esquema actual de `case_management.stage` no tiene trigger de validación. Las 4 etapas usadas serán strings: `por_presentar`, `en_tramite`, `requerimiento`, `resuelto`. Si más adelante se quiere endurecer, añadir trigger.
-
-**Validación de `tie_status`**: El trigger `validate_tie_status` solo acepta: `pending`, `appointment_scheduled`, `fingerprints_done`, `card_ready`, `collected`. Mapearemos la UI:
-- "Pendiente" → `pending`
-- "En proceso" → `appointment_scheduled`
-- "Entregado" → `collected`
-
-**Logout**: Reutiliza `signOut()` del hook `useAuth` y redirige a `/`.
-
-**Foto de perfil**: Sube a bucket `avatars` (público) en path `lawyers/{user_id}.jpg`, guarda URL pública en `lawyers.photo_url`.
-
-**Date picker**: shadcn Calendar dentro de Popover con `className="p-3 pointer-events-auto"`.
-
----
+### Permisos (RLS ya cubiertos, no hay migración)
+- `lawyer_inquiries`: política "Users can view own inquiries" ✅
+- `case_management`: política "Users can view own case" ✅
+- `tie_checklist_items`: política "Users can view own checklist" ✅
+- `lawyers`: política pública para verified+active ✅
 
 ### Lo que NO cambia
-- Dashboard del usuario, sidebar interno, secciones existentes.
-- Admin panel y `AdminLawyersTab` (gestión de `is_verified`, `bar_number`, `college`).
-- La sección de Abogados en el Dashboard del usuario (creada anteriormente).
-- Tablas existentes: solo se añade una política RLS a `onboarding_submissions`.
+- La vista actual de gestión manual del TIE (steps, cita de huellas autogestionada, checklist de documentos genéricos, generador Tasa 790) permanece intacta debajo del nuevo bloque.
+- Tablas, RLS, migraciones: ninguna modificación necesaria.
+- Portal del abogado, sección "Abogados" del dashboard, navbar: sin cambios.
