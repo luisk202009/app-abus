@@ -112,10 +112,10 @@ describe("PendingPaymentAlert", () => {
 
     await screen.findByText(/Pago pendiente/i);
 
-    // El segundo botón es el de cerrar (icono X) — buscamos por su clase distintiva
-    const buttons = screen.getAllByRole("button");
-    const closeBtn = buttons[buttons.length - 1];
-    fireEvent.click(closeBtn);
+    // Botón X de cerrar: contiene el icono lucide-x dentro del banner amber
+    const xIcon = document.querySelector(".bg-amber-50 .lucide-x");
+    expect(xIcon).not.toBeNull();
+    fireEvent.click(xIcon!.closest("button")!);
 
     await waitFor(() => {
       expect(mockSupa.update).toHaveBeenCalledWith(
