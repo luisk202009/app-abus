@@ -22,6 +22,8 @@ interface AuthModalProps {
   leadId?: string;
   onSuccess?: () => void;
   defaultMode?: "signup" | "login";
+  /** Si true, no muestra el bloqueador de email no confirmado tras signup. */
+  allowUnconfirmed?: boolean;
 }
 
 export const AuthModal = ({
@@ -31,6 +33,7 @@ export const AuthModal = ({
   leadId,
   onSuccess,
   defaultMode = "signup",
+  allowUnconfirmed = false,
 }: AuthModalProps) => {
   const { signUp, signIn } = useAuth();
   const { toast } = useToast();
