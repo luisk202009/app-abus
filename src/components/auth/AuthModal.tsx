@@ -139,6 +139,13 @@ export const AuthModal = ({
           
           // Handle email not confirmed error
           if (errorMessage.includes("email not confirmed")) {
+            if (allowUnconfirmed) {
+              // En el flujo de pago, ignoramos la confirmación pendiente
+              onSuccess?.();
+              onClose();
+              setIsLoading(false);
+              return;
+            }
             setShowEmailNotConfirmed(true);
             setIsLoading(false);
             return;
