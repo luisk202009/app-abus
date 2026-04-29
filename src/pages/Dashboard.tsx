@@ -27,6 +27,7 @@ import { PullToRefresh } from "@/components/dashboard/PullToRefresh";
 import { ReferralDashboard } from "@/components/dashboard/ReferralDashboard";
 import { ReferralBanner } from "@/components/dashboard/ReferralBanner";
 import { LawyersSection } from "@/components/dashboard/LawyersSection";
+import { PendingPaymentAlert } from "@/components/dashboard/PendingPaymentAlert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
