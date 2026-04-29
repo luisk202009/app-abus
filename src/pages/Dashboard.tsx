@@ -647,6 +647,9 @@ const Dashboard = () => {
       <main className={`flex-1 p-4 sm:p-8 transition-all ${isEmailUnconfirmed ? "blur-sm pointer-events-none select-none" : ""}`}>
         <PullToRefresh onRefresh={handleRefresh}>
         <div className="max-w-4xl mx-auto space-y-6">
+          {/* Pago pendiente / fallido en Regularización */}
+          <PendingPaymentAlert />
+
           {/* Install App Banner */}
           <InstallAppBanner />
 
