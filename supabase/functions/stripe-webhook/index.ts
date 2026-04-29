@@ -54,8 +54,25 @@ serve(async (req) => {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.metadata?.supabase_user_id;
         const customerId = session.customer as string;
+        const pendingPaymentId = session.metadata?.pending_payment_id;
 
-        console.log("Checkout completed for user:", userId);
+        console.log("Checkout completed for user:", userId, "pending:", pendingPaymentId);
+
+        // Marcar pago pendiente como completado
+        if (pendingPaymentId) {
+          const { error: pendingError } = await supabaseAdmin
+            .from("pending_payments")
+            .update({ status: "completed" })
+            .eq("id", pendingPaymentId);
+          if (pendingError) {
+            console.error("Error updating pending payment:", pendingError);
+          }
+        } else if (session.id) {
+          await supabaseAdmin
+            .from("pending_payments")
+            .update({ status: "completed" })
+            .eq("stripe_session_id", session.id);
+        }
 
         if (userId) {
           // Update subscription status to 'pro'
