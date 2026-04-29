@@ -1,92 +1,112 @@
+## Plan: Robustecer flujo de pago en Regularización 2026
 
-## Plan: Vista de Seguimiento Jurídico en "Gestión de Cita"
+### Problema detectado
+En la imagen aparece el error `email rate limit exceeded`, devuelto por Supabase Auth al intentar registrar `hola@albus.com.co`. El flujo actual en `QualificationSuccess.tsx` hace:
 
-### Resumen
-Cuando el usuario tenga una `lawyer_inquiry` activa con un abogado asignado, mostrar una nueva sección de **Seguimiento Jurídico** en la parte superior de "Gestión de Cita". Esta vista refleja en tiempo real el progreso que el abogado registra desde el `/portal-abogado` (etapa, cita, TIE, checklist). La vista actual de gestión manual permanece debajo (los datos del abogado complementan, no reemplazan).
+1. Usuario elige plan → se abre `AuthModal` para registrarse.
+2. `signUp()` envía email de confirmación (consume cuota de envío).
+3. `onSuccess` de `AuthModal` dispara `initiateCheckout()`, pero a veces aún no hay `session.access_token` (porque la cuenta requiere confirmación), o la edge function `create-one-time-payment` rechaza por falta de `Bearer`.
+4. Si Stripe falla o el modal se cierra, el usuario queda sin cuenta, sin pago y sin pista de qué hacer.
 
----
-
-### Archivos
-
-**Nuevo: `src/components/dashboard/LegalCaseTracker.tsx`**
-Componente que recibe `userId` y se autoinstancia. Si no hay inquiry activa → no renderiza nada (return null). Si existe → renderiza la vista completa.
-
-**Modificar: `src/components/dashboard/AppointmentManager.tsx`**
-Agregar `<LegalCaseTracker userId={userId} />` justo al inicio del `<div className="space-y-6">`. No se cambia nada más.
+Hay dos fuentes de fallo: (a) registro (rate-limit, email duplicado, confirmación pendiente), (b) checkout (token caducado, error Stripe, cierre de pestaña). El plan los separa y añade un mecanismo de "pago pendiente + reintento" en el Dashboard.
 
 ---
 
-### Lógica de carga (`LegalCaseTracker`)
+### Cambios
 
-1. Query 1: `lawyer_inquiries` filtrado por `user_id = userId` y `status IN ('assigned','active','pending')` (el cliente ya tiene la política RLS para verlo). Tomar la más reciente (`order by created_at desc limit 1`).
-2. Si no hay inquiry → `return null`.
-3. Query 2 (paralelo): 
-   - `lawyers` por `id = inquiry.lawyer_id` (verified+active es público).
-   - `case_management` por `inquiry_id = inquiry.id` (RLS "Users can view own case").
-4. Query 3 (si hay case): `tie_checklist_items` por `case_id` ordenado por `order_index`.
+#### 1. Edge function `create-one-time-payment` — desactivar requisito de confirmación de email
+- Hoy llama `supabaseAuth.auth.getUser(token)`. Si el token es válido pero el email no está confirmado, **igual debe permitir checkout** (los datos del cliente Stripe ya están). No bloquear por `email_confirmed_at`.
+- Añadir registro de pago pendiente en una nueva tabla `pending_payments` (ver punto 4) **antes** de crear la sesión de Stripe, con `status: 'pending'` y `stripe_session_id` tras crearla. Si la creación de sesión de Stripe falla, marcar `status: 'failed'` con el mensaje de error.
+- Devolver siempre `pending_payment_id` junto a `url` para que el frontend pueda referenciarlo.
 
----
-
-### Estructura visual
-
-**1. Card del abogado asignado** (parte superior)
-- Foto circular (o iniciales) + nombre + especialidades (badges).
-- Botón: `<a href="mailto:{email}">Contactar</a>` con ícono Mail.
-- Si `case.appointment_date` existe y está próxima → mostrar también un sub-texto sutil "Próxima cita: [fecha]".
-
-**2. Stepper horizontal** de las 4 etapas
-- `[Por presentar] → [En trámite] → [Requerimiento] → [Resuelto]`
-- Reutiliza el patrón visual del stepper TIE existente en `AppointmentManager.tsx` (círculos numerados, línea conectora).
-- Etapa activa: círculo `bg-foreground text-background`.
-- Etapas anteriores: checkmark verde + línea verde.
-- Caso especial: si `stage === 'requerimiento'`, el círculo se pinta en naranja (no verde) para indicar pausa/atención.
-
-**3. Banner de cita programada** (condicional: `appointment_date != null`)
-- Card destacada con fondo `bg-blue-50 border-blue-200`.
-- "📅 Tu cita está programada para [fecha en español, formato 'EEEE, d MMMM yyyy']"
-- Si `appointment_lot`: "Lote/Turno: [lot]"
-- Si `appointment_notes`: bloque de notas debajo.
-
-**4. Estado del TIE** (condicional: `tie_status != null && tie_status !== 'pending'`)
-- Badge con label legible:
-  - `pending` → "Pendiente" (gris)
-  - `appointment_scheduled` → "En proceso" (azul)
-  - `collected` → "Entregado" (verde)
-- Si `tie_appointment_date`: mostrar fecha de cita TIE.
-
-**5. Checklist de documentos** (solo lectura, condicional: hay items)
-- Card con lista de `tie_checklist_items`.
-- Cada ítem: ícono check verde (si `is_completed`) o círculo gris (si no).
-- Ítems completados: texto en verde con `line-through`.
-- Ítems pendientes: texto en `text-muted-foreground`.
-- Sin checkbox interactivo (solo el abogado los marca).
-
-**6. Banners de estado especial**
-- Si `stage === 'requerimiento'`: 
-  - Card naranja: `bg-orange-50 border-orange-200`.
-  - "⚠️ Tu expediente tiene un requerimiento pendiente. Tu abogado se pondrá en contacto contigo próximamente."
-- Si `stage === 'resuelto'`:
-  - Card verde: `bg-green-50 border-green-200`.
-  - "🎉 ¡Felicidades! Tu proceso ha sido resuelto favorablemente."
-  - Disparar `SuccessConfetti` (componente existente en `src/components/dashboard/SuccessConfetti.tsx`) una sola vez al montar si stage es resuelto.
-
----
-
-### Mapeo de etapas y colores
+#### 2. Tabla nueva `pending_payments` (migración SQL)
+Campos:
 ```text
-por_presentar  → gris   (Por presentar)
-en_tramite     → azul   (En trámite)
-requerimiento  → naranja(Requerimiento)
-resuelto       → verde  (Resuelto)
+id                uuid PK
+user_id           uuid FK auth.users (nullable para guests, no aplica aquí)
+email             text
+plan_type         text   ('pro' | 'premium')
+route_template    text   ('regularizacion-2026')
+price_id          text
+amount_cents      integer
+stripe_session_id text   nullable
+status            text   ('pending' | 'completed' | 'failed' | 'cancelled')
+error_message     text   nullable
+created_at, updated_at
+```
+- RLS: usuarios sólo leen/actualizan sus propios registros (`user_id = auth.uid()`). Service role bypasea (edge functions).
+- Función trigger para `updated_at`.
+- El webhook de Stripe (`stripe-webhook`) marca `status='completed'` al recibir `checkout.session.completed`.
+
+#### 3. `QualificationSuccess.tsx` — nuevo flujo "cuenta primero, pago después"
+Reordenar `handleSelectPlan`:
+
+```text
+Si el usuario YA está autenticado:
+  → llamar initiateCheckout(plan) directamente (igual que hoy)
+Si NO está autenticado:
+  → abrir AuthModal en modo 'signup'
+  → al completar signUp con éxito (incluso sin confirmación de email):
+      1. Esperar a que useAuth sincronice la sesión.
+      2. Llamar initiateCheckout(plan).
+      3. Si Stripe responde con url → window.open(url, "_blank") y además navegar a /dashboard?pending_payment={id} en la pestaña actual.
+      4. Si Stripe falla → navegar a /dashboard?pending_payment={id}&payment_error=1 mostrando el toast de error pero CON la cuenta ya creada.
 ```
 
-### Permisos (RLS ya cubiertos, no hay migración)
-- `lawyer_inquiries`: política "Users can view own inquiries" ✅
-- `case_management`: política "Users can view own case" ✅
-- `tie_checklist_items`: política "Users can view own checklist" ✅
-- `lawyers`: política pública para verified+active ✅
+Reemplazar `onSuccess` del AuthModal: en vez de cerrar y depender de `getSession()` polling, usar el evento `onAuthStateChange` de `useAuth` para esperar `session !== null` con un timeout de 5s antes de invocar checkout.
+
+#### 4. `AuthModal.tsx` — manejar errores específicos de signup sin bloquear el flujo
+- Si `signUp()` devuelve `email rate limit exceeded` → mostrar toast claro "Has hecho demasiados intentos. Espera unos minutos o usa un email distinto" y mantener el modal abierto.
+- Si devuelve `User already registered` (ya implementado): switch a login automático (mantener).
+- Si el signup tiene éxito pero la confirmación está pendiente: NO mostrar el bloqueador `showEmailNotConfirmed` cuando el flujo viene del checkout (añadir prop `allowUnconfirmed?: boolean`). El registro es válido para crear el customer en Stripe; la confirmación de email puede completarse después desde el Dashboard.
+
+#### 5. `Dashboard.tsx` — banner "Pago pendiente"
+- Al cargar Dashboard, leer query params `pending_payment` y `payment_error`.
+- Consultar `pending_payments` por id para confirmar que pertenece al usuario y obtener `plan_type`/`price_id`.
+- Si `status='pending'` o `status='failed'`, renderizar un nuevo componente `PendingPaymentAlert` (arriba del contenido principal, sticky):
+  - Icono de advertencia + texto: "Tu pago está pendiente. Completa el checkout para activar tu plan Regularización {plan}."
+  - Botón **"Reintentar pago"** → llama a `create-one-time-payment` reusando el `pending_payment_id` (la edge function actualiza la fila existente con un nuevo `stripe_session_id` en vez de crear otra) y abre `url` en pestaña nueva.
+  - Botón secundario **"Cancelar"** → marca `status='cancelled'` y oculta el banner.
+- El banner persiste tras refrescar (la fuente de verdad es la fila `pending_payments` con status pendiente/failed para el usuario autenticado), no depende del query param.
+
+#### 6. `stripe-webhook` (existente) — marcar `pending_payments` como completado
+Al procesar `checkout.session.completed`, además de la lógica actual:
+```text
+UPDATE pending_payments
+SET status='completed', updated_at=now()
+WHERE stripe_session_id = session.id;
+```
+
+---
+
+### Manejo de errores (resumen)
+
+| Punto de fallo | Comportamiento nuevo |
+|---|---|
+| `signUp` devuelve rate-limit | Toast informativo, modal abierto, sin pérdida de datos |
+| `signUp` devuelve email duplicado | Switch automático a login (ya existe) |
+| `signUp` éxito pero email no confirmado | Continúa al checkout; confirmación se gestiona luego |
+| `create-one-time-payment` falla | Fila `pending_payments` marcada `failed`, redirect a `/dashboard?pending_payment={id}&payment_error=1` con banner |
+| Usuario cierra Stripe Checkout | Stripe redirige a `cancel_url=/explorar`; el banner sigue activo en Dashboard |
+| Stripe completa | Webhook marca `completed`, banner desaparece automáticamente |
+
+---
+
+### Archivos a tocar
+
+**Nuevos**
+- `supabase/migrations/{timestamp}_pending_payments.sql`
+- `src/components/dashboard/PendingPaymentAlert.tsx`
+
+**Modificados**
+- `src/components/eligibility/QualificationSuccess.tsx` (reordenar flujo, integrar `pending_payment_id`)
+- `src/components/auth/AuthModal.tsx` (prop `allowUnconfirmed`, manejo de `rate limit`)
+- `src/pages/Dashboard.tsx` (leer query, renderizar `PendingPaymentAlert`)
+- `supabase/functions/create-one-time-payment/index.ts` (no exigir email confirmado, crear/actualizar `pending_payments`, aceptar `pending_payment_id` opcional para reintentos)
+- `supabase/functions/stripe-webhook/index.ts` (marcar `pending_payments.completed`)
 
 ### Lo que NO cambia
-- La vista actual de gestión manual del TIE (steps, cita de huellas autogestionada, checklist de documentos genéricos, generador Tasa 790) permanece intacta debajo del nuevo bloque.
-- Tablas, RLS, migraciones: ninguna modificación necesaria.
-- Portal del abogado, sección "Abogados" del dashboard, navbar: sin cambios.
+- Diseño visual del modal de pricing y AuthModal.
+- Precios, productos Stripe, ni edge function `create-checkout` (suscripciones del flujo no-Reg2026).
+- Lógica de roles, RLS de otras tablas.
+- Confirmación de email sigue funcionando normalmente; sólo deja de bloquear el checkout inicial.
