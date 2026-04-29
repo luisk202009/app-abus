@@ -73,7 +73,7 @@ export const AuthModal = ({
         // Check for duplicate email error
         if (error) {
           const errorMessage = error.message?.toLowerCase() || "";
-          
+
           if (
             errorMessage.includes("already registered") ||
             errorMessage.includes("already exists") ||
@@ -83,17 +83,32 @@ export const AuthModal = ({
               title: "Ya tienes una cuenta",
               description: "Redirigiéndote al inicio de sesión...",
             });
-            
-            // Switch to login mode after a short delay
+
             setTimeout(() => {
               setMode("login");
               setPassword("");
             }, 1500);
-            
+
             setIsLoading(false);
             return;
           }
-          
+
+          // Manejar rate limit de emails de Supabase
+          if (
+            errorMessage.includes("rate limit") ||
+            errorMessage.includes("over_email_send_rate_limit") ||
+            errorMessage.includes("429")
+          ) {
+            toast({
+              title: "Demasiados intentos",
+              description:
+                "Has hecho demasiados registros desde esta cuenta. Espera unos minutos o usa un email distinto.",
+              variant: "destructive",
+            });
+            setIsLoading(false);
+            return;
+          }
+
           throw error;
         }
 
