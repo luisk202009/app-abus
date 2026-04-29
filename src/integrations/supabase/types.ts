@@ -368,6 +368,51 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_payments: {
+        Row: {
+          amount_cents: number | null
+          created_at: string
+          email: string
+          error_message: string | null
+          id: string
+          plan_type: string
+          price_id: string
+          route_template: string | null
+          status: string
+          stripe_session_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          created_at?: string
+          email: string
+          error_message?: string | null
+          id?: string
+          plan_type: string
+          price_id: string
+          route_template?: string | null
+          status?: string
+          stripe_session_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number | null
+          created_at?: string
+          email?: string
+          error_message?: string | null
+          id?: string
+          plan_type?: string
+          price_id?: string
+          route_template?: string | null
+          status?: string
+          stripe_session_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       plans: {
         Row: {
           created_at: string

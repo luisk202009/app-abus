@@ -27,6 +27,7 @@ import { PullToRefresh } from "@/components/dashboard/PullToRefresh";
 import { ReferralDashboard } from "@/components/dashboard/ReferralDashboard";
 import { ReferralBanner } from "@/components/dashboard/ReferralBanner";
 import { LawyersSection } from "@/components/dashboard/LawyersSection";
+import { PendingPaymentAlert } from "@/components/dashboard/PendingPaymentAlert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -647,6 +648,9 @@ const Dashboard = () => {
       <main className={`flex-1 p-4 sm:p-8 transition-all ${isEmailUnconfirmed ? "blur-sm pointer-events-none select-none" : ""}`}>
         <PullToRefresh onRefresh={handleRefresh}>
         <div className="max-w-4xl mx-auto space-y-6">
+          {/* Pago pendiente / fallido en Regularización */}
+          <PendingPaymentAlert />
+
           {/* Install App Banner */}
           <InstallAppBanner />
 
