@@ -1,112 +1,86 @@
-## Plan: Robustecer flujo de pago en Regularización 2026
+# Plan: Pruebas E2E del flujo de Regularización
 
-### Problema detectado
-En la imagen aparece el error `email rate limit exceeded`, devuelto por Supabase Auth al intentar registrar `hola@albus.com.co`. El flujo actual en `QualificationSuccess.tsx` hace:
+## Objetivo
 
-1. Usuario elige plan → se abre `AuthModal` para registrarse.
-2. `signUp()` envía email de confirmación (consume cuota de envío).
-3. `onSuccess` de `AuthModal` dispara `initiateCheckout()`, pero a veces aún no hay `session.access_token` (porque la cuenta requiere confirmación), o la edge function `create-one-time-payment` rechaza por falta de `Bearer`.
-4. Si Stripe falla o el modal se cierra, el usuario queda sin cuenta, sin pago y sin pista de qué hacer.
+Crear una suite de pruebas automatizadas que valide de extremo a extremo el flujo de pago de la página de Regularización: registro de cuenta → creación de sesión Stripe → webhook → banner de pago pendiente en el Dashboard, incluyendo los caminos de error (rate limit de email y reintento de pago).
 
-Hay dos fuentes de fallo: (a) registro (rate-limit, email duplicado, confirmación pendiente), (b) checkout (token caducado, error Stripe, cierre de pestaña). El plan los separa y añade un mecanismo de "pago pendiente + reintento" en el Dashboard.
+## Enfoque
 
----
+El proyecto ya tiene Vitest (`src/test/setup.ts`, `vitest.config.ts`). Stripe Checkout y Supabase Auth no se pueden ejecutar de verdad en CI sin credenciales y sin un navegador, por lo que la suite combinará dos niveles:
 
-### Cambios
+1. **Tests de integración frontend (Vitest + Testing Library)** con `@supabase/supabase-js` y `stripe` mockeados. Validan toda la lógica de UI/transición de estado.
+2. **Tests Deno de las edge functions** (`create-one-time-payment` y `stripe-webhook`) usando `Deno.test` con Stripe y Supabase mockeados, ejecutables vía `supabase--test_edge_functions`.
 
-#### 1. Edge function `create-one-time-payment` — desactivar requisito de confirmación de email
-- Hoy llama `supabaseAuth.auth.getUser(token)`. Si el token es válido pero el email no está confirmado, **igual debe permitir checkout** (los datos del cliente Stripe ya están). No bloquear por `email_confirmed_at`.
-- Añadir registro de pago pendiente en una nueva tabla `pending_payments` (ver punto 4) **antes** de crear la sesión de Stripe, con `status: 'pending'` y `stripe_session_id` tras crearla. Si la creación de sesión de Stripe falla, marcar `status: 'failed'` con el mensaje de error.
-- Devolver siempre `pending_payment_id` junto a `url` para que el frontend pueda referenciarlo.
+No se introduce Playwright/Cypress (no está configurado en el proyecto y añadiría dependencias pesadas). Si más adelante se desea un E2E real con navegador, se puede añadir como segunda fase.
 
-#### 2. Tabla nueva `pending_payments` (migración SQL)
-Campos:
+## Archivos a crear
+
+### Tests de frontend (Vitest)
+
+- `src/test/utils/mockSupabase.ts` — helper que construye un mock del cliente Supabase con `auth.signUp`, `auth.signInWithPassword`, `auth.getUser`, `functions.invoke`, `from().select/insert/update`, y un canal Realtime simulado. Permite forzar respuestas (rate limit 429, éxito, error de red).
+- `src/test/utils/renderWithProviders.tsx` — envuelve componentes con `QueryClientProvider`, `BrowserRouter` y `Toaster`.
+- `src/components/auth/__tests__/AuthModal.test.tsx`:
+  - Caso A: signup exitoso con `allowUnconfirmed=true` → resuelve y entrega user.
+  - Caso B: Supabase devuelve `email rate limit exceeded` (429) → muestra toast específico y NO bloquea el flujo si `allowUnconfirmed=true`.
+  - Caso C: email duplicado → cambia automáticamente a modo login.
+- `src/components/eligibility/__tests__/QualificationSuccess.test.tsx`:
+  - Flujo feliz: usuario completa AuthModal → se invoca `create-one-time-payment` → recibe URL → se abre Stripe (verificar `window.open`).
+  - Flujo con fallo de checkout: la función devuelve error → redirige a `/dashboard?pending_payment=...`.
+  - Flujo cancelado: simula vuelta desde Stripe con `?canceled=true` → redirige a Dashboard con parámetro de pendiente.
+- `src/components/dashboard/__tests__/PendingPaymentAlert.test.tsx`:
+  - Renderiza banner cuando existe registro `pending` para el usuario.
+  - Botón "Reintentar pago" invoca `create-one-time-payment` con el `pending_payment_id` correcto y abre nueva sesión Stripe.
+  - Botón "Cancelar" actualiza el registro a `cancelled` y oculta el banner.
+  - Suscripción Realtime: al recibir UPDATE con `status=completed` el banner desaparece.
+
+### Tests de edge functions (Deno)
+
+- `supabase/functions/create-one-time-payment/index.test.ts`:
+  - Crea sesión Stripe correctamente para usuario autenticado (mock de `stripe.checkout.sessions.create`).
+  - Inserta registro en `pending_payments` con status `pending` y guarda `stripe_session_id`.
+  - Si recibe `pending_payment_id`, actualiza ese registro en lugar de crear uno nuevo (reintento).
+  - Permite checkout aunque el email no esté confirmado (no exige `email_confirmed_at`).
+  - Devuelve 401 si falta el header Authorization.
+- `supabase/functions/stripe-webhook/index.test.ts`:
+  - Evento `checkout.session.completed` con `stripe_session_id` conocido → marca `pending_payments.status='completed'`.
+  - Evento con firma inválida → 400 sin tocar BD.
+  - Evento `checkout.session.expired` → marca `status='failed'` con `error_message`.
+
+Todos los tests Deno usan `import "https://deno.land/std@0.224.0/dotenv/load.ts"` y consumen los response bodies (regla del proyecto). Stripe se mockea sustituyendo el constructor por uno que devuelve objetos predefinidos; Supabase se mockea con un cliente factory que registra llamadas.
+
+## Casos clave cubiertos
+
 ```text
-id                uuid PK
-user_id           uuid FK auth.users (nullable para guests, no aplica aquí)
-email             text
-plan_type         text   ('pro' | 'premium')
-route_template    text   ('regularizacion-2026')
-price_id          text
-amount_cents      integer
-stripe_session_id text   nullable
-status            text   ('pending' | 'completed' | 'failed' | 'cancelled')
-error_message     text   nullable
-created_at, updated_at
-```
-- RLS: usuarios sólo leen/actualizan sus propios registros (`user_id = auth.uid()`). Service role bypasea (edge functions).
-- Función trigger para `updated_at`.
-- El webhook de Stripe (`stripe-webhook`) marca `status='completed'` al recibir `checkout.session.completed`.
-
-#### 3. `QualificationSuccess.tsx` — nuevo flujo "cuenta primero, pago después"
-Reordenar `handleSelectPlan`:
-
-```text
-Si el usuario YA está autenticado:
-  → llamar initiateCheckout(plan) directamente (igual que hoy)
-Si NO está autenticado:
-  → abrir AuthModal en modo 'signup'
-  → al completar signUp con éxito (incluso sin confirmación de email):
-      1. Esperar a que useAuth sincronice la sesión.
-      2. Llamar initiateCheckout(plan).
-      3. Si Stripe responde con url → window.open(url, "_blank") y además navegar a /dashboard?pending_payment={id} en la pestaña actual.
-      4. Si Stripe falla → navegar a /dashboard?pending_payment={id}&payment_error=1 mostrando el toast de error pero CON la cuenta ya creada.
-```
-
-Reemplazar `onSuccess` del AuthModal: en vez de cerrar y depender de `getSession()` polling, usar el evento `onAuthStateChange` de `useAuth` para esperar `session !== null` con un timeout de 5s antes de invocar checkout.
-
-#### 4. `AuthModal.tsx` — manejar errores específicos de signup sin bloquear el flujo
-- Si `signUp()` devuelve `email rate limit exceeded` → mostrar toast claro "Has hecho demasiados intentos. Espera unos minutos o usa un email distinto" y mantener el modal abierto.
-- Si devuelve `User already registered` (ya implementado): switch a login automático (mantener).
-- Si el signup tiene éxito pero la confirmación está pendiente: NO mostrar el bloqueador `showEmailNotConfirmed` cuando el flujo viene del checkout (añadir prop `allowUnconfirmed?: boolean`). El registro es válido para crear el customer en Stripe; la confirmación de email puede completarse después desde el Dashboard.
-
-#### 5. `Dashboard.tsx` — banner "Pago pendiente"
-- Al cargar Dashboard, leer query params `pending_payment` y `payment_error`.
-- Consultar `pending_payments` por id para confirmar que pertenece al usuario y obtener `plan_type`/`price_id`.
-- Si `status='pending'` o `status='failed'`, renderizar un nuevo componente `PendingPaymentAlert` (arriba del contenido principal, sticky):
-  - Icono de advertencia + texto: "Tu pago está pendiente. Completa el checkout para activar tu plan Regularización {plan}."
-  - Botón **"Reintentar pago"** → llama a `create-one-time-payment` reusando el `pending_payment_id` (la edge function actualiza la fila existente con un nuevo `stripe_session_id` en vez de crear otra) y abre `url` en pestaña nueva.
-  - Botón secundario **"Cancelar"** → marca `status='cancelled'` y oculta el banner.
-- El banner persiste tras refrescar (la fuente de verdad es la fila `pending_payments` con status pendiente/failed para el usuario autenticado), no depende del query param.
-
-#### 6. `stripe-webhook` (existente) — marcar `pending_payments` como completado
-Al procesar `checkout.session.completed`, además de la lógica actual:
-```text
-UPDATE pending_payments
-SET status='completed', updated_at=now()
-WHERE stripe_session_id = session.id;
+Escenario                          Frontend  EdgeFn
+---------------------------------  --------  ------
+Signup OK + checkout OK + webhook    ✓        ✓
+Rate limit (429) en signup           ✓        —
+Email duplicado → login              ✓        —
+Checkout falla → redirige a Dash     ✓        ✓
+Banner aparece tras redirección      ✓        —
+Reintento desde banner               ✓        ✓
+Cancelar pago desde banner           ✓        —
+Realtime: webhook → banner oculto    ✓        ✓
+Webhook firma inválida               —        ✓
 ```
 
----
+## Detalles técnicos
 
-### Manejo de errores (resumen)
+- **Mock de `window.open`**: en `setup.ts` extender con `vi.spyOn(window, 'open')` reseteado en cada test.
+- **Mock de Realtime**: `mockSupabase.channel()` devuelve un objeto con `on().subscribe()` que expone `triggerEvent(payload)` para simular UPDATE.
+- **Aislamiento**: cada test crea un `QueryClient` nuevo y limpia mocks con `afterEach(vi.clearAllMocks)`.
+- **Variables de entorno para Deno**: aprovechar `.env` ya poblado con `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`. Las claves Stripe y service role se mockean (no se invoca Stripe real).
+- **Ejecución**: `bunx vitest run` para frontend; `supabase--test_edge_functions` para Deno.
 
-| Punto de fallo | Comportamiento nuevo |
-|---|---|
-| `signUp` devuelve rate-limit | Toast informativo, modal abierto, sin pérdida de datos |
-| `signUp` devuelve email duplicado | Switch automático a login (ya existe) |
-| `signUp` éxito pero email no confirmado | Continúa al checkout; confirmación se gestiona luego |
-| `create-one-time-payment` falla | Fila `pending_payments` marcada `failed`, redirect a `/dashboard?pending_payment={id}&payment_error=1` con banner |
-| Usuario cierra Stripe Checkout | Stripe redirige a `cancel_url=/explorar`; el banner sigue activo en Dashboard |
-| Stripe completa | Webhook marca `completed`, banner desaparece automáticamente |
+## Fuera de alcance
 
----
+- No se prueba la UI real de Stripe Checkout (es un dominio externo).
+- No se ejecuta navegador real; si se requiere, segunda fase con Playwright.
+- No se modifica código de producción salvo, si fuera necesario, exportar tipos auxiliares para los tests.
 
-### Archivos a tocar
+## Entregables
 
-**Nuevos**
-- `supabase/migrations/{timestamp}_pending_payments.sql`
-- `src/components/dashboard/PendingPaymentAlert.tsx`
-
-**Modificados**
-- `src/components/eligibility/QualificationSuccess.tsx` (reordenar flujo, integrar `pending_payment_id`)
-- `src/components/auth/AuthModal.tsx` (prop `allowUnconfirmed`, manejo de `rate limit`)
-- `src/pages/Dashboard.tsx` (leer query, renderizar `PendingPaymentAlert`)
-- `supabase/functions/create-one-time-payment/index.ts` (no exigir email confirmado, crear/actualizar `pending_payments`, aceptar `pending_payment_id` opcional para reintentos)
-- `supabase/functions/stripe-webhook/index.ts` (marcar `pending_payments.completed`)
-
-### Lo que NO cambia
-- Diseño visual del modal de pricing y AuthModal.
-- Precios, productos Stripe, ni edge function `create-checkout` (suscripciones del flujo no-Reg2026).
-- Lógica de roles, RLS de otras tablas.
-- Confirmación de email sigue funcionando normalmente; sólo deja de bloquear el checkout inicial.
+1. 3 archivos de test de frontend + 2 helpers.
+2. 2 archivos de test Deno para edge functions.
+3. Comprobación de que `bunx vitest run` y `supabase--test_edge_functions` pasan en verde.
+4. Resumen final con cobertura por escenario.
