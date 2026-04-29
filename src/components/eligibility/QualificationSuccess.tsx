@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CheckCircle, Shield, Sparkles, Loader2 } from "lucide-react";
 import { PricingCard } from "./PricingCard";
 import { AuthModal } from "@/components/auth/AuthModal";
@@ -90,12 +91,15 @@ const ROUTE_SOURCE_MAP: Record<RouteType, string> = {
 export const QualificationSuccess = ({ routeType, onClose }: QualificationSuccessProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const isReg2026 = routeType === "regularizacion2026";
   const plans = isReg2026 ? PLANS_REG2026 : PLANS_SUBSCRIPTION;
-  
+
   const [selectedPlan, setSelectedPlan] = useState<typeof plans[number] | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  // Bandera: cuando volvamos de signup, esperamos a que useAuth tenga user para disparar checkout
+  const [pendingCheckoutAfterAuth, setPendingCheckoutAfterAuth] = useState(false);
 
   const handleSelectPlan = (planId: "pro" | "premium") => {
     const plan = plans.find((p) => p.id === planId);
@@ -108,6 +112,15 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
       setShowAuthModal(true);
     }
   };
+
+  // Cuando el usuario se autentica tras el modal, dispara el checkout automáticamente
+  useEffect(() => {
+    if (pendingCheckoutAfterAuth && user && selectedPlan) {
+      setPendingCheckoutAfterAuth(false);
+      initiateCheckout(selectedPlan);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCheckoutAfterAuth, user]);
 
   const initiateCheckout = async (plan: typeof plans[number]) => {
     setIsCheckoutLoading(true);
@@ -128,7 +141,6 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
         return;
       }
 
-      // Choose endpoint based on route type
       const endpoint = isReg2026 ? "create-one-time-payment" : "create-checkout";
 
       const response = await fetch(
@@ -157,12 +169,29 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
 
       const data = await response.json();
 
-      if (data.error) {
-        throw new Error(data.error);
+      if (!response.ok || data.error) {
+        // Si tenemos pending_payment_id devuelto, llevar al dashboard con alerta
+        if (isReg2026 && data.pending_payment_id) {
+          toast({
+            title: "No pudimos iniciar el pago",
+            description:
+              "Tu cuenta está creada. Te llevamos al panel para reintentar el pago.",
+            variant: "destructive",
+          });
+          navigate(`/dashboard?pending_payment=${data.pending_payment_id}&payment_error=1`);
+          onClose();
+          return;
+        }
+        throw new Error(data.error || "Error desconocido");
       }
 
       if (data.url) {
         window.open(data.url, "_blank");
+        // Para Reg2026: además llevar al dashboard con alerta de pago pendiente
+        if (isReg2026 && data.pending_payment_id) {
+          navigate(`/dashboard?pending_payment=${data.pending_payment_id}`);
+          onClose();
+        }
       }
     } catch (error: any) {
       console.error("Checkout error:", error);
@@ -171,6 +200,11 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
         description: error.message || "No se pudo iniciar el checkout.",
         variant: "destructive",
       });
+      // Llevar al dashboard si la cuenta ya existe
+      if (isReg2026 && user) {
+        navigate(`/dashboard?payment_error=1`);
+        onClose();
+      }
     } finally {
       setIsCheckoutLoading(false);
     }
@@ -178,9 +212,8 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
 
   const handleAuthSuccess = () => {
     setShowAuthModal(false);
-    if (selectedPlan) {
-      initiateCheckout(selectedPlan);
-    }
+    // Esperar a que useAuth refleje el usuario antes de iniciar checkout
+    setPendingCheckoutAfterAuth(true);
   };
 
   return (
@@ -191,7 +224,7 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
           <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto">
             <CheckCircle className="w-8 h-8 text-primary-foreground" />
           </div>
-          
+
           <div className="space-y-2">
             <h2 className="text-2xl font-bold">¡Perfil Validado!</h2>
             <p className="text-muted-foreground">
@@ -211,7 +244,7 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
           ))}
         </div>
 
-        {isCheckoutLoading && (
+        {(isCheckoutLoading || pendingCheckoutAfterAuth) && (
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span>Iniciando checkout...</span>
@@ -237,8 +270,10 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
         onClose={() => {
           setShowAuthModal(false);
           setSelectedPlan(null);
+          setPendingCheckoutAfterAuth(false);
         }}
         onSuccess={handleAuthSuccess}
+        allowUnconfirmed
       />
     </>
   );
