@@ -186,12 +186,14 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
       }
 
       if (data.url) {
-        window.open(data.url, "_blank");
-        // Para Reg2026: además llevar al dashboard con alerta de pago pendiente
+        // Para Reg2026: primero llevamos al Dashboard con el banner de pago
+        // pendiente y luego abrimos Stripe en una nueva pestaña. Si el popup
+        // se bloquea, el banner permite reintentar el pago.
         if (isReg2026 && data.pending_payment_id) {
           navigate(`/dashboard?pending_payment=${data.pending_payment_id}`);
           onClose();
         }
+        window.open(data.url, "_blank");
       }
     } catch (error: any) {
       console.error("Checkout error:", error);
