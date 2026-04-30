@@ -206,3 +206,9 @@ export const STRIPE_PRICES = {
     },
   },
 } as const;
+
+// ID del template de Regularización Extraordinaria 2026.
+// Esta ruta NO consume el slot Free de "1 ruta de por vida" porque
+// es un producto de pago independiente.
+export const REG2026_TEMPLATE_ID = "57b27d4a-190b-4ece-a1c3-de1859d58217";
+

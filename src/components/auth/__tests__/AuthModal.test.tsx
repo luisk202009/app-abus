@@ -53,7 +53,11 @@ describe("AuthModal — flujo de pago Regularización", () => {
     fillSignupForm();
 
     await waitFor(() => {
-      expect(signUpFn).toHaveBeenCalledWith("nuevo@test.com", "Password1!");
+      expect(signUpFn).toHaveBeenCalledWith(
+        "nuevo@test.com",
+        "Password1!",
+        { autoLogin: true }
+      );
       expect(onSuccess).toHaveBeenCalled();
       expect(onClose).toHaveBeenCalled();
     });

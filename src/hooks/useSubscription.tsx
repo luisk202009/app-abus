@@ -6,11 +6,20 @@ import { useAdminMode } from "@/contexts/AdminModeContext";
 
 export type SubscriptionStatus = "free" | "pro" | "digital" | "premium";
 
+interface CheckoutOptions {
+  /** "pro" o "premium" — selecciona el priceId correspondiente. Default: "pro". */
+  planType?: "pro" | "premium";
+  /** Permite forzar un priceId específico (anula planType). */
+  priceId?: string;
+  /** Código de referido a aplicar. */
+  referralCode?: string;
+}
+
 interface UseSubscriptionReturn {
   subscriptionStatus: SubscriptionStatus;
   isLoading: boolean;
   isPremium: boolean;
-  handleCheckout: () => Promise<void>;
+  handleCheckout: (options?: CheckoutOptions) => Promise<void>;
   isCheckoutLoading: boolean;
   maxRoutes: number;
 }
@@ -60,7 +69,7 @@ export const useSubscription = (): UseSubscriptionReturn => {
     fetchSubscriptionStatus();
   }, [user]);
 
-  const handleCheckout = async (referralCode?: string) => {
+  const handleCheckout = async (options?: CheckoutOptions) => {
     if (!user) {
       toast({
         variant: "destructive",
@@ -73,8 +82,17 @@ export const useSubscription = (): UseSubscriptionReturn => {
     setIsCheckoutLoading(true);
 
     try {
+      const { STRIPE_PRICES } = await import("@/lib/documentConfig");
+      const planType = options?.planType ?? "pro";
+      const priceId =
+        options?.priceId ??
+        (planType === "premium"
+          ? STRIPE_PRICES.premium.priceId
+          : STRIPE_PRICES.pro.priceId);
+      const referralCode = options?.referralCode;
+
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       const response = await fetch(
         "https://uidwcgxbybjpbteowrnh.supabase.co/functions/v1/create-checkout",
         {
@@ -85,6 +103,7 @@ export const useSubscription = (): UseSubscriptionReturn => {
           },
           body: JSON.stringify({
             returnUrl: window.location.origin,
+            priceId,
             ...(referralCode ? { referralCode } : {}),
           }),
         }

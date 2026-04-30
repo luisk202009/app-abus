@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Compass, ArrowRight, Calculator, CalendarCheck, Shield, TrendingUp, Bell, Mail, RefreshCw } from "lucide-react";
 import type { RouteType } from "@/lib/documentConfig";
+import { REG2026_TEMPLATE_ID } from "@/lib/documentConfig";
 
 interface UserData {
   name: string;
@@ -180,10 +181,10 @@ const Dashboard = () => {
 
     // Template IDs
     const TEMPLATE_IDS = {
-      regularizacion2026: "57b27d4a-190b-4ece-a1c3-de1859d58217",
+      regularizacion2026: REG2026_TEMPLATE_ID,
       arraigoSocial: "f451f205-2dae-4eaf-9103-d895c626d57c",
     };
-    
+
     let templateToStart: string | null = null;
 
     if (source === "reg2026") {
@@ -196,20 +197,26 @@ const Dashboard = () => {
       // Clear localStorage
       localStorage.removeItem("onboarding_source");
 
-      // Premium routes require a paid plan
-      if (!isPremium) {
-        // User is free - show upgrade modal instead of starting route
-        setShowSlotExhaustedModal(true);
-        return;
-      }
-      
-      if (!canAddRoute) {
-        if (slotExhausted) {
+      const isReg2026 = templateToStart === REG2026_TEMPLATE_ID;
+
+      // Reg2026 es producto de pago independiente: no aplica slot Free ni
+      // bloqueo por suscripción. Se inicia siempre que el usuario llegue aquí.
+      if (!isReg2026) {
+        // Premium routes require a paid plan
+        if (!isPremium) {
+          // User is free - show upgrade modal instead of starting route
           setShowSlotExhaustedModal(true);
-        } else {
-          setShowLimitModal(true);
+          return;
         }
-        return;
+
+        if (!canAddRoute) {
+          if (slotExhausted) {
+            setShowSlotExhaustedModal(true);
+          } else {
+            setShowLimitModal(true);
+          }
+          return;
+        }
       }
 
       const template = templates.find(t => t.id === templateToStart);
@@ -318,8 +325,10 @@ const Dashboard = () => {
         return;
       }
 
-      // Check which modal to show based on subscription type
-      if (!canAddRoute) {
+      const isReg2026 = templateId === REG2026_TEMPLATE_ID;
+
+      // Reg2026 ignora el límite Free; cualquier otra ruta lo aplica.
+      if (!isReg2026 && !canAddRoute) {
         if (slotExhausted) {
           setShowSlotExhaustedModal(true);
         } else {
@@ -760,7 +769,7 @@ const Dashboard = () => {
       <SlotExhaustedModal
         isOpen={showSlotExhaustedModal}
         onClose={() => setShowSlotExhaustedModal(false)}
-        onUpgrade={() => handleCheckout()}
+        onUpgrade={(planType) => handleCheckout({ planType })}
         isUpgrading={isCheckoutLoading}
       />
 
