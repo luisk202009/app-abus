@@ -176,7 +176,10 @@ export const useRoutes = (): UseRoutesReturn => {
         return false;
       }
 
-      if (!canAddRoute) {
+      // Reg2026 nunca se bloquea por slot Free (es producto de pago aparte).
+      const isReg2026 = templateId === REG2026_TEMPLATE_ID;
+
+      if (!isReg2026 && !canAddRoute) {
         return false; // Let the UI handle showing the limit modal
       }
 
