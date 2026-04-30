@@ -194,14 +194,14 @@ const Explorar = () => {
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         currentLimit={maxRoutes}
-        onUpgrade={handleCheckout}
+        onUpgrade={() => handleCheckout()}
         isUpgrading={isCheckoutLoading}
       />
 
       <SlotExhaustedModal
         isOpen={showSlotExhaustedModal}
         onClose={() => setShowSlotExhaustedModal(false)}
-        onUpgrade={handleCheckout}
+        onUpgrade={(planType) => handleCheckout({ planType })}
         isUpgrading={isCheckoutLoading}
       />
 
