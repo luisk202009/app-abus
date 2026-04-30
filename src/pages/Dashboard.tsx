@@ -769,7 +769,7 @@ const Dashboard = () => {
       <SlotExhaustedModal
         isOpen={showSlotExhaustedModal}
         onClose={() => setShowSlotExhaustedModal(false)}
-        onUpgrade={() => handleCheckout()}
+        onUpgrade={(planType) => handleCheckout({ planType })}
         isUpgrading={isCheckoutLoading}
       />
 
