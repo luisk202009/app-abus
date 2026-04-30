@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useSubscription } from "./useSubscription";
 import { useToast } from "@/hooks/use-toast";
+import { REG2026_TEMPLATE_ID } from "@/lib/documentConfig";
 
 export interface RouteTemplate {
   id: string;
@@ -56,25 +57,32 @@ export const useRoutes = (): UseRoutesReturn => {
   const [isStartingRoute, setIsStartingRoute] = useState(false);
   const [totalRoutesCreated, setTotalRoutesCreated] = useState(0);
 
+  // Reg2026 es un producto de pago aparte: no consume el slot Free.
+  // Sólo contamos rutas activas que NO sean Reg2026 al evaluar el límite.
+  const nonReg2026ActiveCount = useMemo(
+    () => activeRoutes.filter((r) => r.template_id !== REG2026_TEMPLATE_ID).length,
+    [activeRoutes]
+  );
+
   // Calculate canAddRoute based on subscription type
   const canAddRoute = useMemo(() => {
     if (!user) return false;
-    
+
     if (isPremium) {
-      // Pro/Premium: limit is based on active routes
+      // Pro/Premium: limit is based on active routes (Reg2026 incluido)
       return activeRoutes.length < maxRoutes;
     } else {
-      // Free: limit is based on lifetime routes created (use max of counter and actual routes)
-      const effectiveCount = Math.max(totalRoutesCreated, activeRoutes.length);
+      // Free: limit is based on lifetime routes created (excluyendo Reg2026)
+      const effectiveCount = Math.max(totalRoutesCreated, nonReg2026ActiveCount);
       return effectiveCount < 1;
     }
-  }, [user, isPremium, activeRoutes.length, maxRoutes, totalRoutesCreated]);
+  }, [user, isPremium, activeRoutes.length, maxRoutes, totalRoutesCreated, nonReg2026ActiveCount]);
 
-  // Slot exhausted = Free user who has already created 1+ route
+  // Slot exhausted = Free user que ya creó 1+ ruta NO Reg2026
   const slotExhausted = useMemo(() => {
-    const effectiveCount = Math.max(totalRoutesCreated, activeRoutes.length);
+    const effectiveCount = Math.max(totalRoutesCreated, nonReg2026ActiveCount);
     return !isPremium && effectiveCount >= 1;
-  }, [isPremium, totalRoutesCreated, activeRoutes.length]);
+  }, [isPremium, totalRoutesCreated, nonReg2026ActiveCount]);
 
   // Fetch templates and active routes
   useEffect(() => {
