@@ -1,86 +1,122 @@
-# Plan: Pruebas E2E del flujo de Regularización
 
-## Objetivo
+## Diagnóstico
 
-Crear una suite de pruebas automatizadas que valide de extremo a extremo el flujo de pago de la página de Regularización: registro de cuenta → creación de sesión Stripe → webhook → banner de pago pendiente en el Dashboard, incluyendo los caminos de error (rate limit de email y reintento de pago).
+Tras validar el perfil en la Calculadora de Regularización, el flujo actual hace:
 
-## Enfoque
+1. Usuario elige Plan (Pro/Premium) → abre `AuthModal` con `allowUnconfirmed`.
+2. `signUp` ejecuta `supabase.auth.signUp(...)`. Supabase **no devuelve sesión activa** hasta confirmar el email.
+3. `QualificationSuccess` espera con `pendingCheckoutAfterAuth` a que `useAuth.user` exista para llamar a `create-one-time-payment`. Como no hay sesión, nunca se dispara el checkout y el usuario queda atrapado en "Tu cuenta está creada, revisa tu email".
+4. Si el usuario confirma el email y entra al Dashboard, `Dashboard.tsx` autoejecuta `handleStartRoute` para Reg2026 y, al ser Free, dispara `SlotExhaustedModal` (que ofrece sólo "Mejorar a Pro €9,99/mes" como suscripción mensual genérica, no los planes one-time de Reg2026).
+5. El bloqueo de 1 ruta gratis se aplica a **todas** las rutas, incluyendo Reg2026, cuando debería excluirse (Reg2026 es un producto de pago aparte; las demás rutas sí cuentan en el límite Free).
 
-El proyecto ya tiene Vitest (`src/test/setup.ts`, `vitest.config.ts`). Stripe Checkout y Supabase Auth no se pueden ejecutar de verdad en CI sin credenciales y sin un navegador, por lo que la suite combinará dos niveles:
+## Cambios
 
-1. **Tests de integración frontend (Vitest + Testing Library)** con `@supabase/supabase-js` y `stripe` mockeados. Validan toda la lógica de UI/transición de estado.
-2. **Tests Deno de las edge functions** (`create-one-time-payment` y `stripe-webhook`) usando `Deno.test` con Stripe y Supabase mockeados, ejecutables vía `supabase--test_edge_functions`.
+### 1. Sesión inmediata tras signup en flujo Reg2026
 
-No se introduce Playwright/Cypress (no está configurado en el proyecto y añadiría dependencias pesadas). Si más adelante se desea un E2E real con navegador, se puede añadir como segunda fase.
+Habilitar **autoconfirm de sesión** sin esperar verificación de email para el flujo de pago:
 
-## Archivos a crear
+- En `useAuth.signUp`: tras llamar a `supabase.auth.signUp`, si no hay `session` devuelta, hacer `supabase.auth.signInWithPassword(email, password)` automáticamente. Esto crea sesión local aunque el email no esté confirmado (Supabase lo permite por defecto salvo que "Confirm email" esté forzado; si bloquea, capturar `email_not_confirmed` y devolver el `error` original sin afectar otros flujos).
+- Alternativa robusta: añadir parámetro `signUp(email, password, { autoLogin?: boolean })`. Cuando `autoLogin = true` (lo usaremos sólo desde `QualificationSuccess`), forzamos el `signInWithPassword` posterior.
+- En `AuthModal`, propagar `allowUnconfirmed` al llamar `signUp(email, password, { autoLogin: allowUnconfirmed })`.
 
-### Tests de frontend (Vitest)
+Resultado: tras pulsar "Crear cuenta" desde QualificationSuccess, `useAuth.user` y `session` quedan poblados de inmediato, `pendingCheckoutAfterAuth` dispara `initiateCheckout`, y el usuario va directo a Stripe sin pasar por el correo.
 
-- `src/test/utils/mockSupabase.ts` — helper que construye un mock del cliente Supabase con `auth.signUp`, `auth.signInWithPassword`, `auth.getUser`, `functions.invoke`, `from().select/insert/update`, y un canal Realtime simulado. Permite forzar respuestas (rate limit 429, éxito, error de red).
-- `src/test/utils/renderWithProviders.tsx` — envuelve componentes con `QueryClientProvider`, `BrowserRouter` y `Toaster`.
-- `src/components/auth/__tests__/AuthModal.test.tsx`:
-  - Caso A: signup exitoso con `allowUnconfirmed=true` → resuelve y entrega user.
-  - Caso B: Supabase devuelve `email rate limit exceeded` (429) → muestra toast específico y NO bloquea el flujo si `allowUnconfirmed=true`.
-  - Caso C: email duplicado → cambia automáticamente a modo login.
-- `src/components/eligibility/__tests__/QualificationSuccess.test.tsx`:
-  - Flujo feliz: usuario completa AuthModal → se invoca `create-one-time-payment` → recibe URL → se abre Stripe (verificar `window.open`).
-  - Flujo con fallo de checkout: la función devuelve error → redirige a `/dashboard?pending_payment=...`.
-  - Flujo cancelado: simula vuelta desde Stripe con `?canceled=true` → redirige a Dashboard con parámetro de pendiente.
-- `src/components/dashboard/__tests__/PendingPaymentAlert.test.tsx`:
-  - Renderiza banner cuando existe registro `pending` para el usuario.
-  - Botón "Reintentar pago" invoca `create-one-time-payment` con el `pending_payment_id` correcto y abre nueva sesión Stripe.
-  - Botón "Cancelar" actualiza el registro a `cancelled` y oculta el banner.
-  - Suscripción Realtime: al recibir UPDATE con `status=completed` el banner desaparece.
+### 2. QualificationSuccess: navegar al Dashboard antes de Stripe
 
-### Tests de edge functions (Deno)
+Hoy `initiateCheckout` abre Stripe en `_blank` y deja la página de la calculadora abierta. Cambiar a:
 
-- `supabase/functions/create-one-time-payment/index.test.ts`:
-  - Crea sesión Stripe correctamente para usuario autenticado (mock de `stripe.checkout.sessions.create`).
-  - Inserta registro en `pending_payments` con status `pending` y guarda `stripe_session_id`.
-  - Si recibe `pending_payment_id`, actualiza ese registro en lugar de crear uno nuevo (reintento).
-  - Permite checkout aunque el email no esté confirmado (no exige `email_confirmed_at`).
-  - Devuelve 401 si falta el header Authorization.
-- `supabase/functions/stripe-webhook/index.test.ts`:
-  - Evento `checkout.session.completed` con `stripe_session_id` conocido → marca `pending_payments.status='completed'`.
-  - Evento con firma inválida → 400 sin tocar BD.
-  - Evento `checkout.session.expired` → marca `status='failed'` con `error_message`.
+- Tras recibir `data.url`, primero `navigate('/dashboard?pending_payment=...')` y luego `window.open(data.url, '_blank')`. Si el popup se bloquea, el banner de pago pendiente del Dashboard ya permite reintentar.
+- Esto cumple "después del pago lleva al dashboard, si el pago no se procesa correctamente igual lleva al dashboard pero genera un alert con el pendiente de pago" (ya implementado vía `PendingPaymentAlert`).
 
-Todos los tests Deno usan `import "https://deno.land/std@0.224.0/dotenv/load.ts"` y consumen los response bodies (regla del proyecto). Stripe se mockea sustituyendo el constructor por uno que devuelve objetos predefinidos; Supabase se mockea con un cliente factory que registra llamadas.
+### 3. Excluir Reg2026 del límite de 1 ruta Free
 
-## Casos clave cubiertos
+En `src/hooks/useRoutes.tsx`:
 
-```text
-Escenario                          Frontend  EdgeFn
----------------------------------  --------  ------
-Signup OK + checkout OK + webhook    ✓        ✓
-Rate limit (429) en signup           ✓        —
-Email duplicado → login              ✓        —
-Checkout falla → redirige a Dash     ✓        ✓
-Banner aparece tras redirección      ✓        —
-Reintento desde banner               ✓        ✓
-Cancelar pago desde banner           ✓        —
-Realtime: webhook → banner oculto    ✓        ✓
-Webhook firma inválida               —        ✓
+- Identificar Reg2026 por el `template_id` constante `57b27d4a-190b-4ece-a1c3-de1859d58217` (ya usado en `Dashboard.tsx`). Extraerlo a `src/lib/documentConfig.ts` como `REG2026_TEMPLATE_ID`.
+- Modificar el cálculo de `canAddRoute` para Free: contar sólo rutas activas cuyo `template_id !== REG2026_TEMPLATE_ID`. Reg2026 nunca consume el slot gratuito.
+- Modificar `slotExhausted`: misma exclusión.
+- En `startRoute`: si `templateId === REG2026_TEMPLATE_ID` y el usuario es Free, permitir crearla sin chequeos de slot. El backend trigger `increment_total_routes_created` se sigue ejecutando — para que no consuma el contador, añadir migración que excluya Reg2026 del increment (ver §5).
+
+En `Dashboard.tsx` (auto-start por `source=reg2026`):
+
+- Cuando `source === "reg2026"`, **no** mostrar `SlotExhaustedModal` aunque sea Free; permitir iniciar la ruta directamente. La monetización ya ocurrió (o quedó pendiente) en QualificationSuccess.
+- Mantener el bloqueo Free para `arraigos` y demás (sí consume el slot único).
+
+### 4. Reemplazar SlotExhaustedModal por selector Pro/Premium
+
+El modal actual sólo ofrece "Mejorar a Pro €9,99/mes". Cumplir requisito "debe mostrar los dos planes disponibles, pro y premium":
+
+- Refactorizar `src/components/dashboard/SlotExhaustedModal.tsx` a layout de 2 tarjetas (Plan Pro €9,99/mes y Plan Premium €19,99/mes), reutilizando `PricingCard` o un layout simple in-place.
+- Cada tarjeta llama a `handleCheckout(planId)` (suscripción). Hay que extender `useSubscription.handleCheckout` para aceptar `planType: 'pro' | 'premium'` y enviarlo al backend `create-checkout` (ya recibe `planType`/`priceId` o usar un `priceId` por plan).
+- Mantener botón "Entendido" para cerrar el modal sin pagar (permitiendo seguir como Free, con el slot ya consumido por la otra ruta).
+
+### 5. Migración: trigger no incrementa para Reg2026
+
+Crear migración SQL para modificar `increment_total_routes_created()`:
+
+```sql
+CREATE OR REPLACE FUNCTION public.increment_total_routes_created()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF NEW.user_id IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'Cannot increment routes for other users';
+  END IF;
+
+  -- Reg2026 es un producto de pago independiente: no consume el slot Free
+  IF NEW.template_id = '57b27d4a-190b-4ece-a1c3-de1859d58217'::uuid THEN
+    RETURN NEW;
+  END IF;
+
+  UPDATE onboarding_submissions
+  SET total_routes_created = total_routes_created + 1
+  WHERE user_id = NEW.user_id;
+  RETURN NEW;
+END;
+$$;
 ```
 
-## Detalles técnicos
+### 6. Tests
 
-- **Mock de `window.open`**: en `setup.ts` extender con `vi.spyOn(window, 'open')` reseteado en cada test.
-- **Mock de Realtime**: `mockSupabase.channel()` devuelve un objeto con `on().subscribe()` que expone `triggerEvent(payload)` para simular UPDATE.
-- **Aislamiento**: cada test crea un `QueryClient` nuevo y limpia mocks con `afterEach(vi.clearAllMocks)`.
-- **Variables de entorno para Deno**: aprovechar `.env` ya poblado con `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`. Las claves Stripe y service role se mockean (no se invoca Stripe real).
-- **Ejecución**: `bunx vitest run` para frontend; `supabase--test_edge_functions` para Deno.
+Actualizar tests existentes:
 
-## Fuera de alcance
+- `AuthModal.test.tsx`: cubrir nuevo `autoLogin` tras signup.
+- `QualificationSuccess.test.tsx`: validar que tras signup exitoso se invoca `create-one-time-payment` sin esperar confirmación de email.
+- Añadir test al `SlotExhaustedModal` para verificar que muestra ambos planes y que Reg2026 no abre el modal.
 
-- No se prueba la UI real de Stripe Checkout (es un dominio externo).
-- No se ejecuta navegador real; si se requiere, segunda fase con Playwright.
-- No se modifica código de producción salvo, si fuera necesario, exportar tipos auxiliares para los tests.
+## Diagrama del nuevo flujo Reg2026
 
-## Entregables
+```text
+Calculadora → "Perfil Validado"
+   │
+   ▼
+Elige Plan (Pro/Premium)
+   │
+   ▼
+AuthModal (signup, allowUnconfirmed)
+   │  signUp() + autoLogin → sesión inmediata
+   ▼
+initiateCheckout() → create-one-time-payment
+   │
+   ├── url OK → navigate(/dashboard?pending_payment=...) + window.open(stripe)
+   │       └── webhook completa → PendingPaymentAlert desaparece
+   │
+   └── error → navigate(/dashboard?pending_payment=...&payment_error=1)
+           └── PendingPaymentAlert ofrece "Reintentar pago"
+```
 
-1. 3 archivos de test de frontend + 2 helpers.
-2. 2 archivos de test Deno para edge functions.
-3. Comprobación de que `bunx vitest run` y `supabase--test_edge_functions` pasan en verde.
-4. Resumen final con cobertura por escenario.
+## Archivos a modificar
+
+- `src/hooks/useAuth.tsx` — añadir `autoLogin` a `signUp`.
+- `src/components/auth/AuthModal.tsx` — propagar `autoLogin = allowUnconfirmed`.
+- `src/components/eligibility/QualificationSuccess.tsx` — navegar al Dashboard antes de abrir Stripe.
+- `src/hooks/useRoutes.tsx` — excluir Reg2026 de `canAddRoute`/`slotExhausted`.
+- `src/pages/Dashboard.tsx` — auto-start Reg2026 sin bloquear con SlotExhaustedModal.
+- `src/lib/documentConfig.ts` — exportar `REG2026_TEMPLATE_ID`.
+- `src/components/dashboard/SlotExhaustedModal.tsx` — layout de dos planes (Pro y Premium).
+- `src/hooks/useSubscription.tsx` — `handleCheckout(planType)` con elección Pro/Premium.
+- Migración nueva: `increment_total_routes_created` excluye Reg2026.
+- Tests: `AuthModal.test.tsx`, `QualificationSuccess.test.tsx`, nuevo test para `SlotExhaustedModal`.
