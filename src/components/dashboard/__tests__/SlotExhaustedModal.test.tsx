@@ -14,8 +14,9 @@ describe("SlotExhaustedModal — selector Pro/Premium", () => {
       />
     );
 
-    expect(screen.getByText(/Plan Pro/i)).toBeInTheDocument();
-    expect(screen.getByText(/Plan Premium/i)).toBeInTheDocument();
+    // Cabeceras (h3) de cada plan
+    expect(screen.getByRole("heading", { name: /Plan Pro/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Plan Premium/i })).toBeInTheDocument();
     expect(screen.getByText(/€9,99\/mes/)).toBeInTheDocument();
     expect(screen.getByText(/€19,99\/mes/)).toBeInTheDocument();
   });
