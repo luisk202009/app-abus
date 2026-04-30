@@ -68,7 +68,9 @@ export const AuthModal = ({
 
     try {
       if (mode === "signup") {
-        const { error } = await signUp(email, password);
+        // En flujos de pago (allowUnconfirmed) intentamos iniciar sesión de
+        // inmediato para no depender de la confirmación por email.
+        const { error } = await signUp(email, password, { autoLogin: allowUnconfirmed });
         
         // Check for duplicate email error
         if (error) {
