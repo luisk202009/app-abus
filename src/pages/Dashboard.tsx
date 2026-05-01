@@ -88,6 +88,60 @@ const Dashboard = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [isReg2026CheckoutLoading, setIsReg2026CheckoutLoading] = useState(false);
+
+  // Inicia el pago único de Regularización Premium (€19,99 one-time).
+  // Se usa desde los CTAs que desbloquean features asociadas a Reg2026
+  // (p. ej. el Directorio de Abogados Premium).
+  const handleReg2026PremiumCheckout = async () => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    setIsReg2026CheckoutLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sesión expirada");
+
+      const response = await fetch(
+        `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/create-one-time-payment`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            priceId: STRIPE_PRICES.regularizacion2026.premium.priceId,
+            email: user.email,
+            name: user.user_metadata?.full_name || user.email,
+            routeTemplateSlug: "regularizacion-2026",
+            planType: "premium",
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || "Error al iniciar el pago");
+      if (data.url) {
+        window.open(data.url, "_blank");
+        toast({
+          title: "Checkout abierto",
+          description: "Hemos abierto Stripe en una nueva pestaña.",
+        });
+      }
+    } catch (error: any) {
+      console.error("Reg2026 Premium checkout error:", error);
+      toast({
+        title: "No se pudo iniciar el pago",
+        description: error?.message || "Inténtalo de nuevo en unos segundos.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReg2026CheckoutLoading(false);
+    }
+  };
+
   const [showSlotExhaustedModal, setShowSlotExhaustedModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [routeToDelete, setRouteToDelete] = useState<ActiveRoute | null>(null);
