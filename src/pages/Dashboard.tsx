@@ -78,6 +78,7 @@ const Dashboard = () => {
     maxRoutes,
     getActiveRouteProgress,
     slotExhausted,
+    hasReg2026Access,
   } = useRoutes();
 
   const [activeNavItem, setActiveNavItem] = useState("roadmap");
@@ -194,17 +195,20 @@ const Dashboard = () => {
     }
 
     if (templateToStart) {
-      // Clear localStorage
-      localStorage.removeItem("onboarding_source");
-
       const isReg2026 = templateToStart === REG2026_TEMPLATE_ID;
 
-      // Reg2026 es producto de pago independiente: no aplica slot Free ni
-      // bloqueo por suscripción. Se inicia siempre que el usuario llegue aquí.
+      // Reg2026 requiere pago completado: si no hay acceso, NO autoactivar
+      // (el banner de PendingPaymentAlert manejará el reintento de pago).
+      if (isReg2026 && !hasReg2026Access) {
+        return;
+      }
+
+      // Clear localStorage solo cuando vamos a activar de verdad
+      localStorage.removeItem("onboarding_source");
+
       if (!isReg2026) {
         // Premium routes require a paid plan
         if (!isPremium) {
-          // User is free - show upgrade modal instead of starting route
           setShowSlotExhaustedModal(true);
           return;
         }
@@ -224,7 +228,7 @@ const Dashboard = () => {
         handleStartRoute(template.id);
       }
     }
-  }, [user, routesLoading, templates, canAddRoute, userData.source, activeRoutes.length, isPremium, slotExhausted]);
+  }, [user, routesLoading, templates, canAddRoute, userData.source, activeRoutes.length, isPremium, slotExhausted, hasReg2026Access]);
 
   const fetchTasks = async (userId: string) => {
     try {
@@ -327,7 +331,13 @@ const Dashboard = () => {
 
       const isReg2026 = templateId === REG2026_TEMPLATE_ID;
 
-      // Reg2026 ignora el límite Free; cualquier otra ruta lo aplica.
+      // Reg2026 requiere pago: si no lo tiene, mostrar modal de planes Reg2026
+      if (isReg2026 && !hasReg2026Access) {
+        setShowSlotExhaustedModal(true);
+        return;
+      }
+
+      // Cualquier otra ruta aplica el límite gratis
       if (!isReg2026 && !canAddRoute) {
         if (slotExhausted) {
           setShowSlotExhaustedModal(true);
@@ -339,13 +349,11 @@ const Dashboard = () => {
 
       const success = await startRoute(templateId);
       if (success) {
-        // Trigger confetti celebration
         setShowConfetti(true);
-        // Switch to roadmap view to see the new route
         setActiveNavItem("roadmap");
       }
     },
-    [user, canAddRoute, slotExhausted, startRoute]
+    [user, canAddRoute, slotExhausted, startRoute, hasReg2026Access]
   );
 
   const handleDeleteRouteClick = useCallback((route: ActiveRoute) => {
@@ -593,7 +601,14 @@ const Dashboard = () => {
   };
 
   const { isSupported: pushSupported, requestPermission } = usePushNotifications(user?.id);
-  const isEmailUnconfirmed = user && !user.email_confirmed_at;
+  // Si el usuario viene del flujo de Reg2026 con pago pendiente, no bloqueamos
+  // por email no confirmado; el banner PendingPaymentAlert ya guía el reintento.
+  const hasRegContext =
+    typeof window !== "undefined" &&
+    (new URLSearchParams(window.location.search).has("pending_payment") ||
+      new URLSearchParams(window.location.search).has("payment_error") ||
+      localStorage.getItem("onboarding_source") === "reg2026");
+  const isEmailUnconfirmed = user && !user.email_confirmed_at && !hasRegContext;
   const [resendingEmail, setResendingEmail] = useState(false);
 
   const handleResendVerification = async () => {

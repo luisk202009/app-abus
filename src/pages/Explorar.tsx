@@ -18,7 +18,7 @@ const Explorar = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isPremium, maxRoutes, handleCheckout, isCheckoutLoading } = useSubscription();
-  const { templates, activeRoutes, isLoading, startRoute, isStartingRoute, canAddRoute, slotExhausted } = useRoutes();
+  const { templates, activeRoutes, isLoading, startRoute, isStartingRoute, canAddRoute, slotExhausted, hasReg2026Access } = useRoutes();
 
   const [selectedTemplate, setSelectedTemplate] = useState<RouteTemplate | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
@@ -75,6 +75,8 @@ const Explorar = () => {
 
   const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
 
+  const REG2026_TEMPLATE_ID = "57b27d4a-190b-4ece-a1c3-de1859d58217";
+
   const handleStartRoute = async (templateId: string) => {
     if (!user) {
       setPendingTemplateId(templateId);
@@ -82,7 +84,16 @@ const Explorar = () => {
       return;
     }
 
-    if (!canAddRoute) {
+    const isReg2026 = templateId === REG2026_TEMPLATE_ID;
+
+    // Reg2026 requiere pago: si no hay acceso, mostrar modal de planes
+    if (isReg2026 && !hasReg2026Access) {
+      setSelectedTemplate(null);
+      setShowSlotExhaustedModal(true);
+      return;
+    }
+
+    if (!isReg2026 && !canAddRoute) {
       setSelectedTemplate(null);
       if (slotExhausted) {
         setShowSlotExhaustedModal(true);

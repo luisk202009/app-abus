@@ -44,6 +44,8 @@ interface UseRoutesReturn {
   getActiveRouteProgress: (routeId: string) => { completed: number; total: number };
   totalRoutesCreated: number;
   slotExhausted: boolean;
+  /** True si el usuario tiene un pago Reg2026 completado (acceso a la ruta de pago). */
+  hasReg2026Access: boolean;
 }
 
 export const useRoutes = (): UseRoutesReturn => {
@@ -56,6 +58,7 @@ export const useRoutes = (): UseRoutesReturn => {
   const [isLoading, setIsLoading] = useState(true);
   const [isStartingRoute, setIsStartingRoute] = useState(false);
   const [totalRoutesCreated, setTotalRoutesCreated] = useState(0);
+  const [hasReg2026Access, setHasReg2026Access] = useState(false);
 
   // Reg2026 es un producto de pago aparte: no consume el slot Free.
   // Sólo contamos rutas activas que NO sean Reg2026 al evaluar el límite.
@@ -104,11 +107,25 @@ export const useRoutes = (): UseRoutesReturn => {
           // Fetch total_routes_created from onboarding_submissions
           const { data: submissionData } = await supabase
             .from("onboarding_submissions")
-            .select("total_routes_created")
+            .select("total_routes_created, subscription_status")
             .eq("user_id", user.id)
             .maybeSingle();
           
           setTotalRoutesCreated(submissionData?.total_routes_created || 0);
+
+          // Verificar acceso pagado a Reg2026 (pago único completado o suscripción pro/premium)
+          const { data: paid } = await supabase
+            .from("pending_payments")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("status", "completed")
+            .eq("route_template", "regularizacion-2026")
+            .limit(1)
+            .maybeSingle();
+          const sub = submissionData?.subscription_status;
+          setHasReg2026Access(
+            !!paid || sub === "pro" || sub === "premium" || sub === "digital"
+          );
 
           const { data: routesData, error: routesError } = await supabase
             .from("user_active_routes")
@@ -176,8 +193,18 @@ export const useRoutes = (): UseRoutesReturn => {
         return false;
       }
 
-      // Reg2026 nunca se bloquea por slot Free (es producto de pago aparte).
+      // Reg2026 nunca se bloquea por slot Free (es producto de pago aparte),
+      // PERO requiere acceso pagado para activarse.
       const isReg2026 = templateId === REG2026_TEMPLATE_ID;
+
+      if (isReg2026 && !hasReg2026Access) {
+        toast({
+          variant: "destructive",
+          title: "Acceso requerido",
+          description: "La Regularización 2026 requiere un pago para activarse.",
+        });
+        return false;
+      }
 
       if (!isReg2026 && !canAddRoute) {
         return false; // Let the UI handle showing the limit modal
@@ -255,8 +282,10 @@ export const useRoutes = (): UseRoutesReturn => {
         };
 
         setActiveRoutes((prev) => [newActiveRoute, ...prev]);
-        // Update local counter (trigger already updated DB)
-        setTotalRoutesCreated((prev) => prev + 1);
+        // Update local counter (trigger already updated DB) — Reg2026 no consume slot
+        if (!isReg2026) {
+          setTotalRoutesCreated((prev) => prev + 1);
+        }
 
         toast({
           title: "¡Ruta activada!",
@@ -276,7 +305,7 @@ export const useRoutes = (): UseRoutesReturn => {
         setIsStartingRoute(false);
       }
     },
-    [user, canAddRoute, activeRoutes, templates, toast]
+    [user, canAddRoute, activeRoutes, templates, toast, hasReg2026Access]
   );
 
   // Delete a route
@@ -392,5 +421,6 @@ export const useRoutes = (): UseRoutesReturn => {
     getActiveRouteProgress,
     totalRoutesCreated,
     slotExhausted,
+    hasReg2026Access,
   };
 };

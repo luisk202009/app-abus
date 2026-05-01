@@ -98,7 +98,9 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
   const [selectedPlan, setSelectedPlan] = useState<typeof plans[number] | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
-  // Bandera: cuando volvamos de signup, esperamos a que useAuth tenga user para disparar checkout
+  // Datos capturados en el AuthModal cuando el usuario aún no estaba autenticado
+  const [authedEmail, setAuthedEmail] = useState<string | null>(null);
+  // Bandera: cuando volvamos del AuthModal, disparamos checkout aunque no haya sesión confirmada
   const [pendingCheckoutAfterAuth, setPendingCheckoutAfterAuth] = useState(false);
 
   const handleSelectPlan = (planId: "pro" | "premium") => {
@@ -107,31 +109,37 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
     setSelectedPlan(plan);
 
     if (user) {
-      initiateCheckout(plan);
+      initiateCheckout(plan, { email: user.email!, name: user.user_metadata?.full_name || user.email! });
     } else {
       setShowAuthModal(true);
     }
   };
 
-  // Cuando el usuario se autentica tras el modal, dispara el checkout automáticamente
+  // Tras cerrar el AuthModal con éxito, dispara checkout aunque no exista sesión
+  // (signup con confirmación obligatoria no devuelve sesión).
   useEffect(() => {
-    if (pendingCheckoutAfterAuth && user && selectedPlan) {
+    if (pendingCheckoutAfterAuth && selectedPlan && authedEmail) {
       setPendingCheckoutAfterAuth(false);
-      initiateCheckout(selectedPlan);
+      initiateCheckout(selectedPlan, { email: authedEmail, name: authedEmail.split("@")[0] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingCheckoutAfterAuth, user]);
+  }, [pendingCheckoutAfterAuth, selectedPlan, authedEmail]);
 
-  const initiateCheckout = async (plan: typeof plans[number]) => {
+  const initiateCheckout = async (
+    plan: typeof plans[number],
+    contact: { email: string; name: string }
+  ) => {
     setIsCheckoutLoading(true);
 
     const source = ROUTE_SOURCE_MAP[routeType];
     localStorage.setItem("onboarding_source", source);
 
     try {
+      // Para Reg2026 NO exigimos sesión: la edge function localiza al usuario por email.
+      // Para suscripción (no Reg2026) sí necesitamos token autenticado.
       const { data: { session } } = await supabase.auth.getSession();
 
-      if (!session?.access_token) {
+      if (!isReg2026 && !session?.access_token) {
         toast({
           title: "Sesión expirada",
           description: "Por favor inicia sesión de nuevo.",
@@ -142,21 +150,24 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
       }
 
       const endpoint = isReg2026 ? "create-one-time-payment" : "create-checkout";
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
 
       const response = await fetch(
         `https://uidwcgxbybjpbteowrnh.supabase.co/functions/v1/${endpoint}`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
+          headers,
           body: JSON.stringify(
             isReg2026
               ? {
                   priceId: plan.priceId,
-                  email: user!.email,
-                  name: user!.user_metadata?.full_name || user!.email,
+                  email: contact.email,
+                  name: contact.name,
                   routeTemplateSlug: "regularizacion-2026",
                   planType: plan.id,
                 }
@@ -170,7 +181,6 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
       const data = await response.json();
 
       if (!response.ok || data.error) {
-        // Si tenemos pending_payment_id devuelto, llevar al dashboard con alerta
         if (isReg2026 && data.pending_payment_id) {
           toast({
             title: "No pudimos iniciar el pago",
@@ -186,9 +196,6 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
       }
 
       if (data.url) {
-        // Para Reg2026: primero llevamos al Dashboard con el banner de pago
-        // pendiente y luego abrimos Stripe en una nueva pestaña. Si el popup
-        // se bloquea, el banner permite reintentar el pago.
         if (isReg2026 && data.pending_payment_id) {
           navigate(`/dashboard?pending_payment=${data.pending_payment_id}`);
           onClose();
@@ -202,8 +209,7 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
         description: error.message || "No se pudo iniciar el checkout.",
         variant: "destructive",
       });
-      // Llevar al dashboard si la cuenta ya existe
-      if (isReg2026 && user) {
+      if (isReg2026) {
         navigate(`/dashboard?payment_error=1`);
         onClose();
       }
@@ -212,9 +218,9 @@ export const QualificationSuccess = ({ routeType, onClose }: QualificationSucces
     }
   };
 
-  const handleAuthSuccess = () => {
+  const handleAuthSuccess = (email?: string) => {
     setShowAuthModal(false);
-    // Esperar a que useAuth refleje el usuario antes de iniciar checkout
+    if (email) setAuthedEmail(email);
     setPendingCheckoutAfterAuth(true);
   };
 
