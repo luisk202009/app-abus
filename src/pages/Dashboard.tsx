@@ -540,7 +540,8 @@ const Dashboard = () => {
         return (
           <LawyersSection
             hasAccess={hasLawyersAccess}
-            onUpgrade={() => handleCheckout()}
+            onUpgrade={handleReg2026PremiumCheckout}
+            isUpgradeLoading={isReg2026CheckoutLoading}
           />
         );
       }
