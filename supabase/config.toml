@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.create-one-time-payment]
 verify_jwt = false
+
+[functions.claim-onboarding-row]
+verify_jwt = false
