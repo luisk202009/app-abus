@@ -41,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Compass, ArrowRight, Calculator, CalendarCheck, Shield, TrendingUp, Bell, Mail, RefreshCw } from "lucide-react";
 import type { RouteType } from "@/lib/documentConfig";
-import { REG2026_TEMPLATE_ID } from "@/lib/documentConfig";
+import { REG2026_TEMPLATE_ID, STRIPE_PRICES } from "@/lib/documentConfig";
 
 interface UserData {
   name: string;
