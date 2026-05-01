@@ -18,7 +18,7 @@ const Explorar = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isPremium, maxRoutes, handleCheckout, isCheckoutLoading } = useSubscription();
-  const { templates, activeRoutes, isLoading, startRoute, isStartingRoute, canAddRoute, slotExhausted } = useRoutes();
+  const { templates, activeRoutes, isLoading, startRoute, isStartingRoute, canAddRoute, slotExhausted, hasReg2026Access } = useRoutes();
 
   const [selectedTemplate, setSelectedTemplate] = useState<RouteTemplate | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
