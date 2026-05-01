@@ -20,14 +20,33 @@ const LawyerPortal = () => {
     if (!authLoading && !user) navigate("/");
   }, [authLoading, user, navigate]);
 
-  useEffect(() => {
-    if (!authLoading && !isLoading && user && !isLawyer) navigate("/");
-  }, [authLoading, isLoading, user, isLawyer, navigate]);
-
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-7 h-7 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (user && !isLawyer) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-muted mx-auto flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <h1 className="text-xl font-semibold">Cuenta sin perfil de abogado</h1>
+          <p className="text-sm text-muted-foreground">
+            Tu cuenta no está registrada como abogado verificado en Albus. Si crees que es un error, contacta al administrador en{" "}
+            <a href="mailto:l@albus.com.co" className="underline">l@albus.com.co</a>.
+          </p>
+          <button
+            onClick={() => navigate("/")}
+            className="text-sm underline text-muted-foreground hover:text-foreground"
+          >
+            Volver al inicio
+          </button>
+        </div>
       </div>
     );
   }
