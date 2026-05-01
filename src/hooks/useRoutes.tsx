@@ -395,5 +395,6 @@ export const useRoutes = (): UseRoutesReturn => {
     getActiveRouteProgress,
     totalRoutesCreated,
     slotExhausted,
+    hasReg2026Access,
   };
 };
