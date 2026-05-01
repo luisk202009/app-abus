@@ -107,11 +107,25 @@ export const useRoutes = (): UseRoutesReturn => {
           // Fetch total_routes_created from onboarding_submissions
           const { data: submissionData } = await supabase
             .from("onboarding_submissions")
-            .select("total_routes_created")
+            .select("total_routes_created, subscription_status")
             .eq("user_id", user.id)
             .maybeSingle();
           
           setTotalRoutesCreated(submissionData?.total_routes_created || 0);
+
+          // Verificar acceso pagado a Reg2026 (pago único completado o suscripción pro/premium)
+          const { data: paid } = await supabase
+            .from("pending_payments")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("status", "completed")
+            .eq("route_template", "regularizacion-2026")
+            .limit(1)
+            .maybeSingle();
+          const sub = submissionData?.subscription_status;
+          setHasReg2026Access(
+            !!paid || sub === "pro" || sub === "premium" || sub === "digital"
+          );
 
           const { data: routesData, error: routesError } = await supabase
             .from("user_active_routes")
