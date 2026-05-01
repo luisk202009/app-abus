@@ -601,7 +601,14 @@ const Dashboard = () => {
   };
 
   const { isSupported: pushSupported, requestPermission } = usePushNotifications(user?.id);
-  const isEmailUnconfirmed = user && !user.email_confirmed_at;
+  // Si el usuario viene del flujo de Reg2026 con pago pendiente, no bloqueamos
+  // por email no confirmado; el banner PendingPaymentAlert ya guía el reintento.
+  const hasRegContext =
+    typeof window !== "undefined" &&
+    (new URLSearchParams(window.location.search).has("pending_payment") ||
+      new URLSearchParams(window.location.search).has("payment_error") ||
+      localStorage.getItem("onboarding_source") === "reg2026");
+  const isEmailUnconfirmed = user && !user.email_confirmed_at && !hasRegContext;
   const [resendingEmail, setResendingEmail] = useState(false);
 
   const handleResendVerification = async () => {
