@@ -149,7 +149,15 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
       nationality: editData.nationality.trim(),
     };
 
-    // Try UPDATE first
+    // Paso 1: intentar reclamar fila huérfana por email vía edge function
+    // (bypassa RLS de forma segura y evita choques con el constraint UNIQUE de email)
+    try {
+      await supabase.functions.invoke("claim-onboarding-row");
+    } catch (claimErr) {
+      console.warn("claim-onboarding-row failed (continuamos):", claimErr);
+    }
+
+    // Paso 2: UPDATE por user_id (ahora la fila debería existir si había lead previo)
     const { data: updated, error: updateError } = await supabase
       .from("onboarding_submissions")
       .update(payload)
@@ -163,31 +171,17 @@ export const ProfileSection = ({ isPremium, subscriptionStatus, onProfileUpdate 
       return;
     }
 
-    // If no row with user_id existed, try to claim existing lead row by email
+    // Paso 3: si no había fila previa de ningún tipo, INSERT
     if (!updated || updated.length === 0) {
-      const { data: claimed, error: claimError } = await supabase
+      const { error: insertError } = await supabase
         .from("onboarding_submissions")
-        .update({ ...payload, user_id: user.id })
-        .eq("email", user.email || "")
-        .is("user_id", null)
-        .select("id");
+        .insert({ ...payload, user_id: user.id, email: user.email || "" });
 
-      if (claimError) {
-        console.error("Profile claim error:", claimError.message, claimError.code, claimError.details);
-      }
-
-      // If no lead row to claim either, INSERT a new one
-      if (!claimed || claimed.length === 0) {
-        const { error: insertError } = await supabase
-          .from("onboarding_submissions")
-          .insert({ ...payload, user_id: user.id, email: user.email || "" });
-
-        if (insertError) {
-          console.error("Profile insert error:", insertError.message, insertError.code, insertError.details);
-          toast({ variant: "destructive", title: "Error", description: insertError.message || "No se pudo crear el perfil." });
-          setIsSaving(false);
-          return;
-        }
+      if (insertError) {
+        console.error("Profile insert error:", insertError.message, insertError.code, insertError.details);
+        toast({ variant: "destructive", title: "Error", description: insertError.message || "No se pudo crear el perfil." });
+        setIsSaving(false);
+        return;
       }
     }
 

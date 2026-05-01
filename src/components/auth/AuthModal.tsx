@@ -126,6 +126,14 @@ export const AuthModal = ({
           }
         }
 
+        // Red de seguridad: reclamar fila huérfana por email
+        // (cubre casos donde leadId no está disponible o no coincide)
+        try {
+          await supabase.functions.invoke("claim-onboarding-row");
+        } catch (claimErr) {
+          console.warn("claim-onboarding-row tras signup falló (no crítico):", claimErr);
+        }
+
         toast({
           title: "¡Cuenta creada!",
           description: allowUnconfirmed
