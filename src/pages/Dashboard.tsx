@@ -331,7 +331,13 @@ const Dashboard = () => {
 
       const isReg2026 = templateId === REG2026_TEMPLATE_ID;
 
-      // Reg2026 ignora el límite Free; cualquier otra ruta lo aplica.
+      // Reg2026 requiere pago: si no lo tiene, mostrar modal de planes Reg2026
+      if (isReg2026 && !hasReg2026Access) {
+        setShowSlotExhaustedModal(true);
+        return;
+      }
+
+      // Cualquier otra ruta aplica el límite gratis
       if (!isReg2026 && !canAddRoute) {
         if (slotExhausted) {
           setShowSlotExhaustedModal(true);
@@ -343,13 +349,11 @@ const Dashboard = () => {
 
       const success = await startRoute(templateId);
       if (success) {
-        // Trigger confetti celebration
         setShowConfetti(true);
-        // Switch to roadmap view to see the new route
         setActiveNavItem("roadmap");
       }
     },
-    [user, canAddRoute, slotExhausted, startRoute]
+    [user, canAddRoute, slotExhausted, startRoute, hasReg2026Access]
   );
 
   const handleDeleteRouteClick = useCallback((route: ActiveRoute) => {
