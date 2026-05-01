@@ -1,56 +1,73 @@
-# Fix: Error "duplicate key" al guardar perfil tras crear cuenta
+# Acceso y gestión completa de abogados
 
-## Diagnóstico
+## Objetivo
 
-El error `duplicate key value violates unique constraint "onboarding_submissions_email_key"` ocurre en `ProfileSection.handleSave()` en este escenario:
+Permitir que un admin (1) cree un abogado, (2) le envíe una invitación por email para que defina su contraseña, (3) su cuenta de auth quede automáticamente vinculada con la fila de `lawyers`, y (4) el admin pueda **editar** todos los datos del abogado, no solo verificar/activar.
 
-1. El usuario llena el calculador de elegibilidad → se crea fila en `onboarding_submissions` con su email pero `user_id = NULL` (lead).
-2. Crea cuenta vía `AuthModal`. El código intenta reclamar la fila usando `leadId` desde localStorage, pero **si `leadId` no está presente** (caso típico cuando el usuario regresa más tarde, limpia storage, o entra desde otro flujo), la fila queda con `user_id = NULL`.
-3. En el Dashboard → Perfil → Guardar:
-   - `UPDATE ... WHERE user_id = X` → 0 filas (no hay fila con su user_id)
-   - Reclamo `UPDATE ... WHERE email = X AND user_id IS NULL` → debería funcionar **PERO** el problema es que el bloque solo hace claim si la condición `IS NULL` se cumple, y si no encuentra, intenta `INSERT` con el mismo email → choca con constraint UNIQUE sobre email.
+---
 
-Verificado en BD: existe `email='ventas@albus.com.co'` con `user_id=NULL` desde el 29-abr. La RLS probablemente impide que el usuario actualice esa fila huérfana porque las políticas filtran por `user_id = auth.uid()`, no por email.
+## 1. Edge Function `invite-lawyer` (nueva)
 
-## Solución
+Ruta: `supabase/functions/invite-lawyer/index.ts`. `verify_jwt = true` y validación con `is_admin()` antes de actuar.
 
-### 1. Backend: Edge function `claim-onboarding-row`
+Hace tres cosas con `SERVICE_ROLE`:
 
-Crear una pequeña edge function que use `SERVICE_ROLE` para reclamar la fila huérfana de `onboarding_submissions` por email del usuario autenticado. Esto bypassa RLS de forma segura porque:
-- Verifica `supabase.auth.getUser(token)` para confirmar identidad.
-- Solo asigna `user_id` a filas con `user_id IS NULL` cuyo email coincida con el del JWT.
-- No expone datos: solo devuelve `{ claimed: true/false, id }`.
+1. Verifica que el llamador sea admin (`has_role(auth.uid(), 'admin')`).
+2. Llama a `supabase.auth.admin.inviteUserByEmail(email, { redirectTo: '<origin>/portal-abogado' })`. Esto crea el usuario en `auth.users` y envía un email con magic link para definir contraseña.
+3. Hace `UPDATE lawyers SET user_id = <nuevo auth user id> WHERE id = <lawyer_id>` para dejar la fila enlazada de inmediato.
 
-### 2. Frontend: `ProfileSection.handleSave()`
+Si el email ya existe en auth, hace fallback: busca el `auth.users.id` por email y solo actualiza `lawyers.user_id`, devolviendo un mensaje "Usuario ya existía, vinculado correctamente".
 
-Reemplazar el bloque de reclamo manual por una llamada a la edge function antes del UPDATE/INSERT:
+## 2. Edge Function `update-lawyer` (nueva)
 
-```text
-1. Invocar claim-onboarding-row → asigna user_id si hay fila huérfana con mismo email
-2. UPDATE ... WHERE user_id = auth.uid()  (ahora encuentra la fila)
-3. Si aún 0 filas → INSERT (caso: usuario nuevo sin lead previo)
-```
+Ruta: `supabase/functions/update-lawyer/index.ts`. Verifica admin, valida payload con Zod (campos opcionales: `full_name`, `email`, `phone`, `bar_number`, `college`, `city`, `bio`, `specialties[]`, `languages[]`, `photo_url`) y hace `UPDATE lawyers` con SERVICE_ROLE. Esto evita depender del cliente y centraliza la auditoría.
 
-Esto elimina la rama defectuosa que intentaba INSERT con email duplicado.
+> Alternativa más simple si prefieres: usar directamente `supabase.from('lawyers').update(...)` desde el frontend — la policy `Admin can manage lawyers` ya lo permite. **Recomiendo esta vía** y reservar la edge function solo para `invite-lawyer`. Decidiremos en build.
 
-### 3. AuthModal: usar la misma edge function
+## 3. Frontend `AdminLawyersTab.tsx`
 
-Tras un signup exitoso, llamar también a `claim-onboarding-row` (además del claim por `leadId` que ya existe), como red de seguridad cuando `leadId` no está disponible. Así el perfil queda consistente desde el primer login y no requiere visitar la sección Perfil para arreglarse.
+Cambios:
 
-### 4. Dashboard / hooks que dependen del perfil
+- **Botón "Editar"** en cada fila junto a los toggles de verificación/activación. Abre el mismo `Sheet` reutilizable, prellenado con los datos del abogado.
+- **Estado**: `editingLawyer: Lawyer | null` para diferenciar entre crear vs editar.
+- **handleSave** unificado: si `editingLawyer` existe, hace `UPDATE`; si no, hace `INSERT` (lógica actual).
+- **Botón "Enviar invitación"** en cada fila (icono `Mail`):
+  - Visible solo si `lawyer.user_id IS NULL` (no vinculado aún).
+  - Si `user_id` ya existe, muestra un badge verde "Acceso activo".
+  - Llama a `supabase.functions.invoke('invite-lawyer', { body: { lawyer_id, email } })`.
+  - Toast de éxito: "Invitación enviada a {email}. Revisarán su correo para definir contraseña."
+- **Columna "Acceso"** nueva en la tabla con estados: "Sin acceso" (gris) / "Invitado" (ámbar) / "Activo" (verde según `user_id` no nulo).
 
-No requieren cambios: `useSubscription`, `useRoutes`, `Dashboard` ya leen por `user_id` y obtendrán datos correctamente una vez la fila quede reclamada.
+## 4. Indicador visual en el portal del abogado
 
-## Archivos a modificar
+En `LawyerPortal.tsx` actualmente, si el usuario auth no tiene fila en `lawyers`, lo redirige silenciosamente a `/`. Añadir un mensaje claro: "Tu cuenta no está registrada como abogado. Contacta al administrador." antes de redirigir.
 
-- **Crear**: `supabase/functions/claim-onboarding-row/index.ts` — edge function con SERVICE_ROLE.
-- **Editar**: `supabase/config.toml` — registrar función con `verify_jwt = true`.
-- **Editar**: `src/components/dashboard/ProfileSection.tsx` — invocar claim antes de UPDATE/INSERT, eliminar la rama de claim manual.
-- **Editar**: `src/components/auth/AuthModal.tsx` — invocar claim tras signup como fallback cuando no hay `leadId`.
-- **Crear**: `supabase/functions/claim-onboarding-row/index.test.ts` — verificar claim correcto y rechazo cuando email no coincide.
+## 5. Documentación al admin (UI)
 
-## Resultado esperado
+En la parte superior de `AdminLawyersTab` añadir un pequeño bloque informativo (icono `Info` + texto):
 
-- Usuario `ventas@albus.com.co` (y cualquier caso similar) podrá guardar su perfil sin errores.
-- La fila huérfana existente queda reclamada automáticamente al entrar al Dashboard o al guardar perfil.
-- No se rompe el flujo Reg2026 ni el conteo de slots Free.
+> "Para dar acceso a un abogado: 1) Crea su perfil con email. 2) Pulsa 'Enviar invitación'. 3) El abogado recibirá un email para definir contraseña y entrará en /portal-abogado."
+
+---
+
+## Archivos afectados
+
+- **Nuevos**:
+  - `supabase/functions/invite-lawyer/index.ts`
+  - `supabase/config.toml` (registro de la función con `verify_jwt = true`)
+- **Modificados**:
+  - `src/components/admin/AdminLawyersTab.tsx` — edición + invitación + columna acceso + bloque info
+  - `src/pages/LawyerPortal.tsx` — mensaje claro cuando no hay perfil de abogado
+
+## Verificación
+
+1. Crear un abogado de prueba desde admin → fila aparece "Sin acceso".
+2. Pulsar "Enviar invitación" → toast confirma envío, fila pasa a "Invitado".
+3. Abrir email, definir contraseña → redirige a `/portal-abogado` y entra al panel.
+4. Editar el abogado desde admin → cambios reflejados en `lawyers`.
+5. Verificar que `lawyers.user_id` quedó poblado correctamente.
+
+## Notas técnicas
+
+- Las invitaciones de Supabase requieren tener el dominio de redirección `albus.com.co` permitido en **Authentication → URL Configuration** del dashboard. Si la invitación falla con "redirect_to not allowed", hay que añadir `https://albus.com.co/portal-abogado` y `https://app-abus.lovable.app/portal-abogado` a la lista.
+- La política RLS `Lawyers can update own profile` ya permite que el abogado, una vez con `user_id` vinculado, edite su propio perfil desde el portal.
