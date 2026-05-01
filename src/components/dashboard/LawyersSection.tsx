@@ -15,6 +15,7 @@ import { Lock, Loader2, Scale } from "lucide-react";
 interface LawyersSectionProps {
   hasAccess: boolean;
   onUpgrade: () => void;
+  isUpgradeLoading?: boolean;
 }
 
 const SPECIALTY_OPTIONS = [
@@ -25,7 +26,7 @@ const SPECIALTY_OPTIONS = [
   { value: "nómada digital", label: "Nómada Digital" },
 ];
 
-export const LawyersSection = ({ hasAccess, onUpgrade }: LawyersSectionProps) => {
+export const LawyersSection = ({ hasAccess, onUpgrade, isUpgradeLoading = false }: LawyersSectionProps) => {
   const [lawyers, setLawyers] = useState<LawyerCardData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [specialty, setSpecialty] = useState("all");
