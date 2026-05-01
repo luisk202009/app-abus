@@ -58,6 +58,7 @@ export const useRoutes = (): UseRoutesReturn => {
   const [isLoading, setIsLoading] = useState(true);
   const [isStartingRoute, setIsStartingRoute] = useState(false);
   const [totalRoutesCreated, setTotalRoutesCreated] = useState(0);
+  const [hasReg2026Access, setHasReg2026Access] = useState(false);
 
   // Reg2026 es un producto de pago aparte: no consume el slot Free.
   // Sólo contamos rutas activas que NO sean Reg2026 al evaluar el límite.
