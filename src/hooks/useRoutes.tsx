@@ -305,7 +305,7 @@ export const useRoutes = (): UseRoutesReturn => {
         setIsStartingRoute(false);
       }
     },
-    [user, canAddRoute, activeRoutes, templates, toast]
+    [user, canAddRoute, activeRoutes, templates, toast, hasReg2026Access]
   );
 
   // Delete a route
