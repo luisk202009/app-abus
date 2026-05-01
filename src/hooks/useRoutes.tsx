@@ -44,6 +44,8 @@ interface UseRoutesReturn {
   getActiveRouteProgress: (routeId: string) => { completed: number; total: number };
   totalRoutesCreated: number;
   slotExhausted: boolean;
+  /** True si el usuario tiene un pago Reg2026 completado (acceso a la ruta de pago). */
+  hasReg2026Access: boolean;
 }
 
 export const useRoutes = (): UseRoutesReturn => {
