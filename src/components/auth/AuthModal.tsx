@@ -127,11 +127,13 @@ export const AuthModal = ({
         }
 
         toast({
-          title: "¡Registro completado con éxito!",
-          description: "Tus datos han sido guardados. Revisa tu email para confirmar tu cuenta.",
+          title: "¡Cuenta creada!",
+          description: allowUnconfirmed
+            ? "Continuamos con el pago. Podrás confirmar tu email después."
+            : "Tus datos han sido guardados. Revisa tu email para confirmar tu cuenta.",
         });
 
-        onSuccess?.();
+        onSuccess?.(email.trim().toLowerCase());
         onClose();
       } else {
         const { error } = await signIn(email, password);
@@ -143,7 +145,7 @@ export const AuthModal = ({
           if (errorMessage.includes("email not confirmed")) {
             if (allowUnconfirmed) {
               // En el flujo de pago, ignoramos la confirmación pendiente
-              onSuccess?.();
+              onSuccess?.(email.trim().toLowerCase());
               onClose();
               setIsLoading(false);
               return;
@@ -161,7 +163,7 @@ export const AuthModal = ({
           description: "Has iniciado sesión correctamente.",
         });
 
-        onSuccess?.();
+        onSuccess?.(email.trim().toLowerCase());
         onClose();
       }
     } catch (error: any) {
