@@ -20,7 +20,7 @@ interface AuthModalProps {
   onClose: () => void;
   defaultEmail?: string;
   leadId?: string;
-  onSuccess?: () => void;
+  onSuccess?: (email?: string) => void;
   defaultMode?: "signup" | "login";
   /** Si true, no muestra el bloqueador de email no confirmado tras signup. */
   allowUnconfirmed?: boolean;
