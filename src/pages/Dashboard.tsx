@@ -78,6 +78,7 @@ const Dashboard = () => {
     maxRoutes,
     getActiveRouteProgress,
     slotExhausted,
+    hasReg2026Access,
   } = useRoutes();
 
   const [activeNavItem, setActiveNavItem] = useState("roadmap");
