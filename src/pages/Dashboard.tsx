@@ -195,17 +195,20 @@ const Dashboard = () => {
     }
 
     if (templateToStart) {
-      // Clear localStorage
-      localStorage.removeItem("onboarding_source");
-
       const isReg2026 = templateToStart === REG2026_TEMPLATE_ID;
 
-      // Reg2026 es producto de pago independiente: no aplica slot Free ni
-      // bloqueo por suscripción. Se inicia siempre que el usuario llegue aquí.
+      // Reg2026 requiere pago completado: si no hay acceso, NO autoactivar
+      // (el banner de PendingPaymentAlert manejará el reintento de pago).
+      if (isReg2026 && !hasReg2026Access) {
+        return;
+      }
+
+      // Clear localStorage solo cuando vamos a activar de verdad
+      localStorage.removeItem("onboarding_source");
+
       if (!isReg2026) {
         // Premium routes require a paid plan
         if (!isPremium) {
-          // User is free - show upgrade modal instead of starting route
           setShowSlotExhaustedModal(true);
           return;
         }
@@ -225,7 +228,7 @@ const Dashboard = () => {
         handleStartRoute(template.id);
       }
     }
-  }, [user, routesLoading, templates, canAddRoute, userData.source, activeRoutes.length, isPremium, slotExhausted]);
+  }, [user, routesLoading, templates, canAddRoute, userData.source, activeRoutes.length, isPremium, slotExhausted, hasReg2026Access]);
 
   const fetchTasks = async (userId: string) => {
     try {
