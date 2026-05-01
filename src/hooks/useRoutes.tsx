@@ -282,8 +282,10 @@ export const useRoutes = (): UseRoutesReturn => {
         };
 
         setActiveRoutes((prev) => [newActiveRoute, ...prev]);
-        // Update local counter (trigger already updated DB)
-        setTotalRoutesCreated((prev) => prev + 1);
+        // Update local counter (trigger already updated DB) — Reg2026 no consume slot
+        if (!isReg2026) {
+          setTotalRoutesCreated((prev) => prev + 1);
+        }
 
         toast({
           title: "¡Ruta activada!",
