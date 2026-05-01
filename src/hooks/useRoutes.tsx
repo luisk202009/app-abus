@@ -193,8 +193,18 @@ export const useRoutes = (): UseRoutesReturn => {
         return false;
       }
 
-      // Reg2026 nunca se bloquea por slot Free (es producto de pago aparte).
+      // Reg2026 nunca se bloquea por slot Free (es producto de pago aparte),
+      // PERO requiere acceso pagado para activarse.
       const isReg2026 = templateId === REG2026_TEMPLATE_ID;
+
+      if (isReg2026 && !hasReg2026Access) {
+        toast({
+          variant: "destructive",
+          title: "Acceso requerido",
+          description: "La Regularización 2026 requiere un pago para activarse.",
+        });
+        return false;
+      }
 
       if (!isReg2026 && !canAddRoute) {
         return false; // Let the UI handle showing the limit modal
