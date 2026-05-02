@@ -134,7 +134,10 @@ export const AdminLawyersTab = () => {
   const handleInvite = async (l: Lawyer) => {
     setInvitingId(l.id);
     try {
-      const redirectTo = `${window.location.origin}/portal-abogado`;
+      // Forzar HTTPS para evitar el bloqueo "Este sitio no admite conexión segura"
+      // cuando el navegador abre el callback con #access_token.
+      const httpsOrigin = window.location.origin.replace(/^http:/, "https:");
+      const redirectTo = `${httpsOrigin}/portal-abogado`;
       const { data, error } = await supabase.functions.invoke("invite-lawyer", {
         body: { lawyer_id: l.id, email: l.email, redirect_to: redirectTo },
       });
@@ -142,7 +145,7 @@ export const AdminLawyersTab = () => {
       if ((data as any)?.error) throw new Error((data as any).error);
       toast({
         title: "Invitación enviada",
-        description: `${l.email} recibirá un correo para definir su contraseña.`,
+        description: (data as any)?.message || `${l.email} recibirá un correo de acceso.`,
       });
       fetchLawyers();
     } catch (e: any) {

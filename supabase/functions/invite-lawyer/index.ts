@@ -12,6 +12,20 @@ const json = (status: number, body: unknown) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+// Fuerza HTTPS en cualquier URL de redirección (Supabase rechaza http en producción
+// y los navegadores bloquean el acceso al callback con #access_token sobre http).
+const ensureHttps = (url: string | undefined): string | undefined => {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return url;
+    u.protocol = "https:";
+    return u.toString();
+  } catch {
+    return url;
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -59,7 +73,9 @@ Deno.serve(async (req) => {
       return json(400, { error: "lawyer_id y email son obligatorios" });
     }
 
-    // 3. Verificar que la fila lawyer existe y coincide email
+    const safeRedirect = ensureHttps(redirect_to) ?? "https://albus.com.co/portal-abogado";
+
+    // 3. Verificar que la fila lawyer existe
     const { data: lawyerRow, error: lawyerErr } = await admin
       .from("lawyers")
       .select("id, email, user_id")
@@ -71,11 +87,12 @@ Deno.serve(async (req) => {
 
     // 4. Intentar invitar
     let authUserId: string | null = null;
-    let mode: "invited" | "linked_existing" = "invited";
+    let mode: "invited" | "linked_existing_relogin_sent" | "linked_existing_no_email" = "invited";
+    let userMessage = "Invitación enviada por email";
 
     const { data: invited, error: inviteErr } =
       await admin.auth.admin.inviteUserByEmail(email, {
-        redirectTo: redirect_to,
+        redirectTo: safeRedirect,
       });
 
     if (inviteErr) {
@@ -87,7 +104,8 @@ Deno.serve(async (req) => {
       if (!isDuplicate) {
         return json(500, { error: `Error al invitar: ${inviteErr.message}` });
       }
-      // Fallback: el usuario ya existe, lo buscamos
+
+      // Fallback: el usuario ya existe → buscarlo y enviar magic link
       const { data: list, error: listErr } =
         await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
       if (listErr) {
@@ -100,7 +118,19 @@ Deno.serve(async (req) => {
         return json(500, { error: "Usuario duplicado pero no localizable" });
       }
       authUserId = existing.id;
-      mode = "linked_existing";
+
+      // Generar y enviar magic link al correo del abogado para que pueda entrar
+      const { error: magicErr } = await admin.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: safeRedirect, shouldCreateUser: false },
+      });
+      if (magicErr) {
+        mode = "linked_existing_no_email";
+        userMessage = `Cuenta vinculada, pero no se pudo enviar el correo de acceso: ${magicErr.message}`;
+      } else {
+        mode = "linked_existing_relogin_sent";
+        userMessage = "El abogado ya tenía cuenta. Le hemos enviado un enlace de acceso por email.";
+      }
     } else {
       authUserId = invited.user?.id ?? null;
     }
@@ -122,10 +152,7 @@ Deno.serve(async (req) => {
       success: true,
       mode,
       user_id: authUserId,
-      message:
-        mode === "invited"
-          ? "Invitación enviada por email"
-          : "Usuario ya existía, vinculado correctamente",
+      message: userMessage,
     });
   } catch (e) {
     return json(500, { error: (e as Error).message });

@@ -1,73 +1,72 @@
-# Acceso y gestión completa de abogados
+# Plan: Invitación de abogados con marca Albus y entrega fiable
 
-## Objetivo
+## Diagnóstico de los 3 problemas
 
-Permitir que un admin (1) cree un abogado, (2) le envíe una invitación por email para que defina su contraseña, (3) su cuenta de auth quede automáticamente vinculada con la fila de `lawyers`, y (4) el admin pueda **editar** todos los datos del abogado, no solo verificar/activar.
+### Problema 1 — Usuario ya registrado: no llega correo
+En `invite-lawyer/index.ts`, cuando `inviteUserByEmail` devuelve "already registered", el código sólo busca el `user_id` existente y vincula `lawyers.user_id`, **pero nunca envía un correo**. Por eso el abogado no recibe nada y, como aún no ha iniciado sesión en su cuenta previa con ese email, al entrar a `/portal-abogado` cae en "Cuenta sin perfil de abogado" (la sesión activa puede ser otra o ninguna).
 
----
+### Problema 2 — Email viene de "Supabase Auth" y no de Albus
+Actualmente el proyecto **no tiene dominio de email configurado** en Lovable Cloud. Los correos de auth los manda Supabase con su plantilla genérica (`noreply@mail.app.supabase.io`, asunto "You have been invited"). Para enviar desde `noreply@albus.com.co` con marca Albus hay que:
+1. Configurar el dominio de email `albus.com.co` (delegación NS a Lovable).
+2. Scaffoldear las plantillas de auth-email (incluida `invite`) con estilos Albus en español.
+3. Desplegar `auth-email-hook`.
 
-## 1. Edge Function `invite-lawyer` (nueva)
-
-Ruta: `supabase/functions/invite-lawyer/index.ts`. `verify_jwt = true` y validación con `is_admin()` antes de actuar.
-
-Hace tres cosas con `SERVICE_ROLE`:
-
-1. Verifica que el llamador sea admin (`has_role(auth.uid(), 'admin')`).
-2. Llama a `supabase.auth.admin.inviteUserByEmail(email, { redirectTo: '<origin>/portal-abogado' })`. Esto crea el usuario en `auth.users` y envía un email con magic link para definir contraseña.
-3. Hace `UPDATE lawyers SET user_id = <nuevo auth user id> WHERE id = <lawyer_id>` para dejar la fila enlazada de inmediato.
-
-Si el email ya existe en auth, hace fallback: busca el `auth.users.id` por email y solo actualiza `lawyers.user_id`, devolviendo un mensaje "Usuario ya existía, vinculado correctamente".
-
-## 2. Edge Function `update-lawyer` (nueva)
-
-Ruta: `supabase/functions/update-lawyer/index.ts`. Verifica admin, valida payload con Zod (campos opcionales: `full_name`, `email`, `phone`, `bar_number`, `college`, `city`, `bio`, `specialties[]`, `languages[]`, `photo_url`) y hace `UPDATE lawyers` con SERVICE_ROLE. Esto evita depender del cliente y centraliza la auditoría.
-
-> Alternativa más simple si prefieres: usar directamente `supabase.from('lawyers').update(...)` desde el frontend — la policy `Admin can manage lawyers` ya lo permite. **Recomiendo esta vía** y reservar la edge function solo para `invite-lawyer`. Decidiremos en build.
-
-## 3. Frontend `AdminLawyersTab.tsx`
-
-Cambios:
-
-- **Botón "Editar"** en cada fila junto a los toggles de verificación/activación. Abre el mismo `Sheet` reutilizable, prellenado con los datos del abogado.
-- **Estado**: `editingLawyer: Lawyer | null` para diferenciar entre crear vs editar.
-- **handleSave** unificado: si `editingLawyer` existe, hace `UPDATE`; si no, hace `INSERT` (lógica actual).
-- **Botón "Enviar invitación"** en cada fila (icono `Mail`):
-  - Visible solo si `lawyer.user_id IS NULL` (no vinculado aún).
-  - Si `user_id` ya existe, muestra un badge verde "Acceso activo".
-  - Llama a `supabase.functions.invoke('invite-lawyer', { body: { lawyer_id, email } })`.
-  - Toast de éxito: "Invitación enviada a {email}. Revisarán su correo para definir contraseña."
-- **Columna "Acceso"** nueva en la tabla con estados: "Sin acceso" (gris) / "Invitado" (ámbar) / "Activo" (verde según `user_id` no nulo).
-
-## 4. Indicador visual en el portal del abogado
-
-En `LawyerPortal.tsx` actualmente, si el usuario auth no tiene fila en `lawyers`, lo redirige silenciosamente a `/`. Añadir un mensaje claro: "Tu cuenta no está registrada como abogado. Contacta al administrador." antes de redirigir.
-
-## 5. Documentación al admin (UI)
-
-En la parte superior de `AdminLawyersTab` añadir un pequeño bloque informativo (icono `Info` + texto):
-
-> "Para dar acceso a un abogado: 1) Crea su perfil con email. 2) Pulsa 'Enviar invitación'. 3) El abogado recibirá un email para definir contraseña y entrará en /portal-abogado."
+### Problema 3 — "Este sitio no admite una conexión segura" tras aceptar invitación
+La captura muestra que el enlace abre `http://albus.com.co/dashboard#access_token=...` (HTTP, no HTTPS). El navegador lo bloquea en incógnito. Causa: el `redirectTo` que envía `invite-lawyer` es `${window.location.origin}/portal-abogado`, pero la URL "Site URL" configurada en Supabase Auth es `http://albus.com.co` y el correo de Supabase usa esa Site URL como base para construir el link de confirmación. Además, el redirect actual lleva a `/dashboard` y no a `/portal-abogado`, lo que indica que `redirect_to` no está autorizado en la lista de Redirect URLs y Supabase recae en la Site URL por defecto.
 
 ---
 
-## Archivos afectados
+## Cambios propuestos
 
-- **Nuevos**:
-  - `supabase/functions/invite-lawyer/index.ts`
-  - `supabase/config.toml` (registro de la función con `verify_jwt = true`)
-- **Modificados**:
-  - `src/components/admin/AdminLawyersTab.tsx` — edición + invitación + columna acceso + bloque info
-  - `src/pages/LawyerPortal.tsx` — mensaje claro cuando no hay perfil de abogado
+### 1. Edge function `invite-lawyer` — reenvío garantizado
+Cuando el email ya esté registrado:
+- Vincular `lawyers.user_id` (ya lo hace).
+- Llamar a `admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo } })` para generar un nuevo magic link y enviarlo al abogado mediante el sistema de email transaccional Albus (asunto: "Acceso a tu portal de abogado en Albus").
+- Devolver `mode: "linked_existing_relogin_sent"` con mensaje claro.
 
-## Verificación
+Para invitaciones nuevas, seguir usando `inviteUserByEmail`, pero con `redirectTo = https://albus.com.co/portal-abogado` (ya con HTTPS forzado).
 
-1. Crear un abogado de prueba desde admin → fila aparece "Sin acceso".
-2. Pulsar "Enviar invitación" → toast confirma envío, fila pasa a "Invitado".
-3. Abrir email, definir contraseña → redirige a `/portal-abogado` y entra al panel.
-4. Editar el abogado desde admin → cambios reflejados en `lawyers`.
-5. Verificar que `lawyers.user_id` quedó poblado correctamente.
+### 2. Forzar HTTPS y ruta correcta en el cliente admin
+En `AdminLawyersTab.handleInvite`, construir:
+```
+const origin = window.location.origin.replace(/^http:/, 'https:');
+const redirectTo = `${origin}/portal-abogado`;
+```
+Esto evita que el preview/dev en HTTP filtre un link sin TLS.
 
-## Notas técnicas
+### 3. Configurar dominio de email Albus + plantillas con marca
 
-- Las invitaciones de Supabase requieren tener el dominio de redirección `albus.com.co` permitido en **Authentication → URL Configuration** del dashboard. Si la invitación falla con "redirect_to not allowed", hay que añadir `https://albus.com.co/portal-abogado` y `https://app-abus.lovable.app/portal-abogado` a la lista.
-- La política RLS `Lawyers can update own profile` ya permite que el abogado, una vez con `user_id` vinculado, edite su propio perfil desde el portal.
+**Paso 3a (requiere acción del usuario):** Configurar el subdominio de envío (por defecto `notify.albus.com.co`) mediante el diálogo de setup de email. El sender final será `noreply@notify.albus.com.co` (o `noreply@albus.com.co` si se elige el apex; recomendado un subdominio para no alterar MX existentes).
+
+**Paso 3b (automático):** Scaffold de plantillas de auth-email (signup, recovery, magiclink, **invite**, email-change, reauthentication) con estilos Albus:
+- Fondo blanco, tipografía Inter, acentos negro/dorado.
+- Logo Albus en cabecera.
+- Copy 100% en español. Para `invite`: "Has sido invitado al Portal de Abogados de Albus", botón "Definir mi contraseña y entrar".
+- Footer Albus 2026.
+
+**Paso 3c:** Desplegar `auth-email-hook`. Desde ese momento Supabase enrutará todos los correos de auth (incluida la invitación de abogados) por las plantillas Albus.
+
+### 4. Configuración manual en Supabase (instrucciones para el usuario)
+Para que el redirect funcione:
+- En Supabase → Authentication → URL Configuration:
+  - **Site URL**: `https://albus.com.co`
+  - **Redirect URLs** (añadir si faltan): `https://albus.com.co/portal-abogado`, `https://www.albus.com.co/portal-abogado`, `https://albus.com.co/dashboard`, además de las URLs de preview de Lovable.
+
+---
+
+## Detalles técnicos
+
+**Archivos a modificar:**
+- `supabase/functions/invite-lawyer/index.ts` — reenvío magic link cuando usuario existe + asegurar `redirectTo` HTTPS.
+- `src/components/admin/AdminLawyersTab.tsx` — forzar `https://` en `redirectTo`.
+- `supabase/functions/_shared/email-templates/*.tsx` (creados por scaffold) — estilos Albus.
+- `supabase/functions/auth-email-hook/index.ts` (creado por scaffold) — sin modificación funcional.
+- `supabase/config.toml` — entradas auto-añadidas por scaffold.
+
+**Pasos de ejecución (en build mode):**
+1. Mostrar diálogo de configuración de dominio de email (espera acción del usuario).
+2. Tras configurar el dominio: scaffold de plantillas + aplicar marca Albus + desplegar `auth-email-hook`.
+3. Editar `invite-lawyer` y `AdminLawyersTab`.
+4. Indicar al usuario las URLs a añadir en Supabase Auth.
+
+**Nota importante:** El paso 1 (configurar dominio de email) **requiere que tú añadas registros NS en tu proveedor DNS de albus.com.co**. Sin eso, los correos seguirán saliendo desde `mail.app.supabase.io`. La verificación DNS puede tardar hasta 72h, pero el resto del flujo (plantillas, código) queda listo de inmediato y se activa automáticamente al verificarse el dominio.
