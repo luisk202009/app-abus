@@ -1,93 +1,50 @@
-
 ## Objetivo
 
-Unificar todos los envíos de correo bajo Resend con el remitente verificado `noreply@albus.com.co` y plantillas con marca Albus (blanco/negro minimalista). Esto cubre:
+En la pantalla "Tu Bóveda de Documentos" (`src/components/dashboard/DocumentsSection.tsx`):
 
-1. Correos de autenticación de Supabase (confirmación de registro, magic link, reset de contraseña, **invitación de abogado**, cambio de email).
-2. Correos transaccionales (bienvenida Pro, futuros: confirmación de pago, recordatorios, etc.).
+1. Eliminar por completo la card "Generar Tasa 790-012".
+2. Arreglar el bug por el cual, tras subir un documento, sigue apareciendo "Pendiente", el contador muestra "0 subidos" y no existe forma de visualizar el archivo.
 
-## Estado actual
+## Diagnóstico del bug
 
-- `RESEND_API_KEY` ya está como secret en Supabase ✅
-- `send-welcome-email` ya usa Resend pero con `onboarding@resend.dev` (no el dominio verificado) y HTML inline.
-- `invite-lawyer` usa `auth.admin.inviteUserByEmail` y `signInWithOtp` → estos correos los envía Supabase Auth con su plantilla por defecto (el problema reportado anteriormente: "supabase auth" en el asunto, sin marca Albus).
-- No existe infraestructura compartida de plantillas ni un sender genérico.
+`DocumentsSection` declara los documentos con `status: "pending"` hardcoded en `getDocumentsByVisaType` y **nunca consulta la base de datos**. Su `handleFileChange` solo sube el archivo a Supabase Storage, pero:
 
-## Arquitectura propuesta
+- No inserta/actualiza ningún registro en la tabla `user_documents`.
+- No guarda la `file_url` ni el `file_name` en estado.
+- No refresca la lista, así que el badge sigue "Pendiente" y el conteo "0 subidos" nunca cambia.
+- No hay botón "Ver" porque no existe `file_url` en memoria.
 
-### A. Helper compartido `_shared/resend.ts`
+Ya existe `useDocumentVault` (usado por `DocumentVault.tsx`) que hace exactamente lo correcto: lee `user_documents`, sube a storage, hace upsert del registro y refresca. Vamos a apoyarnos en su misma lógica.
 
-Crear un módulo único que:
-- Centralice `RESEND_API_KEY` y el `from: "Albus <noreply@albus.com.co>"`.
-- Exponga `sendEmail({ to, subject, html, replyTo? })`.
-- Maneje errores y logging consistente.
+## Cambios
 
-### B. Plantillas compartidas `_shared/email-templates/`
+### 1. `src/components/dashboard/DocumentsSection.tsx`
 
-Plantillas HTML (string templates con interpolación, no React Email para mantener simplicidad y evitar build steps en edge functions) con layout común Albus:
-- `layout.ts` — wrapper base con header (logo Albus), footer (disclaimer legal + © 2026 Albus LLC, marca blanco/negro).
-- `welcome-pro.ts` — bienvenida Pro (reemplaza HTML inline actual).
-- `lawyer-invitation.ts` — invitación a abogado con CTA "Aceptar invitación".
-- `magic-link.ts` — enlace de acceso para abogados con cuenta existente.
-- `auth-confirmation.ts` — confirmación de registro de cliente.
-- `password-reset.ts` — restablecimiento de contraseña.
+- **Eliminar** todo el bloque de la card "Generar Tasa 790-012" (líneas ~288-340), el handler `handleGenerateTasa790`, el state `isGeneratingPDF` y el import de `generateTasa790PDF`, `Sparkles`, `Download`, `Loader2` que dejen de usarse (mantener `Loader2` si se sigue usando para el upload). También quitar el documento "Formulario Tasa 790" del array por defecto en `getDocumentsByVisaType` (caso default).
+- **Refactor de carga/lectura**:
+  - Al montar, hacer `useEffect` que consulte `user_documents` para `user.id` filtrando por los `document_type` del listado y guarde un `Map<docId, { id, file_url, file_name, status }>` en estado.
+  - Combinar ese mapa con `documents` derivados para renderizar el `status` real (`uploaded` si hay registro, `pending` si no) y los contadores reales.
+  - En `handleFileChange`, tras `storage.upload` exitoso:
+    - Obtener `getPublicUrl`.
+    - Hacer upsert en `user_documents` (buscar por `user_id` + `document_type`; si existe `update`, si no `insert`) con `category: 'identidad'` (o categoría neutra ya que esta sección no tiene categorías), `status: 'valid'`, `file_url`, `file_name`, y `route_type` derivado del `visaType` (mapear: `digital_nomad` → guardamos como string libre; si la columna exige enum, usar la ruta activa actual o un valor genérico como `regularizacion2026` por compatibilidad — confirmar columna; si es free-text se guarda el `visaType`).
+    - Actualizar el estado local con el nuevo registro.
+  - Mostrar:
+    - Badge "Subido" en verde cuando hay archivo.
+    - Botón **"Ver"** (icono `ExternalLink`) que abre `file_url` en nueva pestaña, igual que en `DocumentStatusCard`.
+    - Botón **"Eliminar"** (icono `Trash2`) opcional que borra el storage + registro y refresca.
+- Mantener el modal Premium y el resto del layout intactos.
 
-Estilo: fondo blanco, tipografía sans-serif (Inter/Arial fallback), botón negro `#000000` con texto blanco, radius 8px, según memoria de marca.
+### 2. Verificación de tipos
 
-### C. Hook de Auth para interceptar correos de Supabase
+- Revisar `RouteType` en `src/lib/documentConfig.ts` (actualmente `"regularizacion2026" | "arraigos"`). Como esta sección usa `visaType` libre (`digital_nomad`, `student`...), guardaremos en `user_documents.route_type` el valor `visaType` directamente y, si TypeScript se queja por enum, casteamos a `any` o usamos la ruta activa del usuario. Confirmar esquema real con un `select` antes de implementar para escoger la opción correcta.
 
-Para que los correos de auth (incluyendo invitaciones) salgan por Resend con plantillas Albus:
+### 3. Sin cambios en
 
-1. Crear edge function `auth-email-hook` (verify_jwt = false, validada por header secret de Supabase Auth Hooks).
-2. Registrarla en Supabase como **"Send Email Hook"** (Auth → Hooks).
-3. La función recibe el evento (`signup`, `recovery`, `invite`, `magiclink`, `email_change`), genera el HTML branded usando las plantillas y lo envía vía Resend.
-4. Generar un secret `SEND_EMAIL_HOOK_SECRET` para validar que las llamadas vienen de Supabase.
-
-Esto reemplaza completamente las plantillas por defecto de Supabase Auth → todos los correos auth (incluida la invitación de abogado vía `inviteUserByEmail`) saldrán desde `noreply@albus.com.co` con marca Albus.
-
-### D. Refactor de funciones existentes
-
-- **`send-welcome-email`**: usar `_shared/resend.ts` + `welcome-pro.ts`. Cambiar `from` a `noreply@albus.com.co`. Corregir el bug actual del `<a href="<a href=...">` anidado.
-- **`invite-lawyer`**: sin cambios funcionales — el correo ya saldrá branded automáticamente vía el hook. Solo confirmar que `redirectTo` apunta a `/aceptar-invitacion`.
-
-### E. Configuración manual requerida
-
-1. **Resend Dashboard**: confirmar que `albus.com.co` está verificado (DNS: SPF, DKIM, DMARC).
-2. **Supabase Dashboard → Auth → Hooks**:
-   - Habilitar "Send Email Hook" → apuntar a la URL de `auth-email-hook`.
-   - Generar y guardar el secret `SEND_EMAIL_HOOK_SECRET` (lo registramos también como secret en Supabase Functions).
-3. **Supabase Dashboard → Auth → Email Templates**: dejar las plantillas por defecto (no se usarán cuando el hook esté activo, pero sirven de fallback).
-
-## Archivos a crear / modificar
-
-**Nuevos:**
-- `supabase/functions/_shared/resend.ts`
-- `supabase/functions/_shared/email-templates/layout.ts`
-- `supabase/functions/_shared/email-templates/welcome-pro.ts`
-- `supabase/functions/_shared/email-templates/lawyer-invitation.ts`
-- `supabase/functions/_shared/email-templates/magic-link.ts`
-- `supabase/functions/_shared/email-templates/auth-confirmation.ts`
-- `supabase/functions/_shared/email-templates/password-reset.ts`
-- `supabase/functions/auth-email-hook/index.ts`
-
-**Modificar:**
-- `supabase/functions/send-welcome-email/index.ts` (usar helper + dominio propio + corregir HTML)
-- `supabase/config.toml` (registrar `auth-email-hook` con `verify_jwt = false`)
-
-**Secrets a añadir:**
-- `SEND_EMAIL_HOOK_SECRET` (lo solicitaré al usuario tras aprobar el plan, generándolo desde el panel de Supabase Auth → Hooks).
-
-## Acciones manuales del usuario tras implementación
-
-1. Verificar dominio `albus.com.co` en Resend (si aún no está).
-2. En Supabase Auth → Hooks → "Send Email Hook":
-   - Pegar URL: `https://uidwcgxbybjpbteowrnh.supabase.co/functions/v1/auth-email-hook`
-   - Copiar el secret generado y pasármelo para añadirlo como `SEND_EMAIL_HOOK_SECRET`.
-3. Probar enviando una invitación de abogado y un registro nuevo para confirmar marca Albus en bandeja.
+- `DocumentVault.tsx`, `useDocumentVault.tsx`, `DocumentStatusCard.tsx`, `DocumentCategory.tsx`: ya funcionan bien.
+- Generador `generateTasa790.ts`: se conserva por si se usa en otra parte (no se borra el archivo, solo se desconecta de esta UI).
 
 ## Resultado esperado
 
-- Todos los correos (auth + transaccionales) salen desde `noreply@albus.com.co`.
-- Asunto y contenido con marca Albus en español, tipografía y colores consistentes.
-- Invitaciones de abogado, magic links y confirmaciones llegan branded sin "supabase" en el remitente.
-- Código DRY: una sola función `sendEmail()` y una sola plantilla base reutilizable.
+- La card dorada/PRO de "Generar Tasa 790-012" desaparece de la vista de Documentos.
+- Al subir un documento: aparece badge verde "Subido", el contador "X subidos" se incrementa, y aparece un botón para abrir el archivo en otra pestaña.
+- Al recargar la página, el estado se mantiene porque ahora se persiste y se relee de `user_documents`.
