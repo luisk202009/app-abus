@@ -73,7 +73,19 @@ Deno.serve(async (req) => {
       return json(400, { error: "lawyer_id y email son obligatorios" });
     }
 
-    const safeRedirect = ensureHttps(redirect_to) ?? "https://albus.com.co/portal-abogado";
+    // Siempre dirigir el enlace de invitación a /aceptar-invitacion para que
+    // el abogado pueda definir contraseña antes de entrar al portal.
+    const baseRedirect = ensureHttps(redirect_to) ?? "https://albus.com.co";
+    let safeRedirect = "https://albus.com.co/aceptar-invitacion";
+    try {
+      const u = new URL(baseRedirect);
+      u.pathname = "/aceptar-invitacion";
+      u.search = "";
+      u.hash = "";
+      safeRedirect = u.toString();
+    } catch {
+      // mantener el default
+    }
 
     // 3. Verificar que la fila lawyer existe
     const { data: lawyerRow, error: lawyerErr } = await admin

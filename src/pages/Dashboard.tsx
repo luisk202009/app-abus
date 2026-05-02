@@ -154,6 +154,25 @@ const Dashboard = () => {
     visaTitle: "Consulta Inicial Personalizada",
   });
 
+  // Si el usuario autenticado es un abogado vinculado, redirigir al portal.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("lawyers")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!cancelled && data) {
+        navigate("/portal-abogado", { replace: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, navigate]);
+
   useEffect(() => {
     // Get data from location state (passed from onboarding)
     const state = location.state as {
