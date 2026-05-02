@@ -24,6 +24,7 @@ import PartnerDashboard from "./pages/PartnerDashboard";
 import LawyerPortal from "./pages/LawyerPortal";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
+import AcceptInvitation from "./pages/AcceptInvitation";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ const App = () => (
                 <Route path="/regularizacion" element={<Navigate to="/españa/arraigos" replace />} />
                 <Route path="/success" element={<Success />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/aceptar-invitacion" element={<AcceptInvitation />} />
                 <Route path="/terminos" element={<Terms />} />
                 <Route path="/privacidad" element={<Privacy />} />
                 <Route path="/destinos/:countryId" element={<ComingSoon />} />

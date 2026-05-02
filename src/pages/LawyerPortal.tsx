@@ -17,7 +17,13 @@ const LawyerPortal = () => {
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryWithDetails | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !user) navigate("/");
+    // Solo redirigir cuando estemos seguros de que no hay sesión.
+    // Esperamos a que termine la hidratación de auth.
+    if (!authLoading && !user) {
+      // Pequeño retardo para evitar rebote en hidratación tardía
+      const t = setTimeout(() => navigate("/"), 250);
+      return () => clearTimeout(t);
+    }
   }, [authLoading, user, navigate]);
 
   if (authLoading || isLoading) {
