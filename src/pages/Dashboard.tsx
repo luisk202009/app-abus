@@ -173,6 +173,8 @@ const Dashboard = () => {
     };
   }, [authLoading, user, navigate]);
 
+  useEffect(() => {
+    // Get data from location state (passed from onboarding)
     const state = location.state as {
       name?: string;
       email?: string;
