@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   FileText,
   Upload,
@@ -10,14 +10,13 @@ import {
   CreditCard,
   CheckCircle,
   Clock,
-  Sparkles,
-  Download,
   Loader2,
+  ExternalLink,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumModal } from "./PremiumModal";
 import { Button } from "@/components/ui/button";
-import { generateTasa790PDF } from "@/lib/generateTasa790";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -29,7 +28,12 @@ interface Document {
   description: string;
   icon: React.ElementType;
   required: boolean;
-  status: "pending" | "uploaded";
+}
+
+interface UploadedDoc {
+  id: string;
+  file_name: string | null;
+  file_path: string | null; // ruta interna en storage (para signed URL)
 }
 
 interface DocumentsSectionProps {
@@ -48,7 +52,6 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
       description: "Vigente por al menos 1 año",
       icon: FileText,
       required: true,
-      status: "pending",
     },
     {
       id: "criminal_record",
@@ -56,7 +59,6 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
       description: "Apostillados del país de origen",
       icon: Shield,
       required: true,
-      status: "pending",
     },
     {
       id: "health_insurance",
@@ -64,7 +66,6 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
       description: "Cobertura mínima en España",
       icon: Stethoscope,
       required: true,
-      status: "pending",
     },
     {
       id: "financial_proof",
@@ -72,7 +73,6 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
       description: "Extractos bancarios recientes",
       icon: CreditCard,
       required: true,
-      status: "pending",
     },
   ];
 
@@ -85,7 +85,6 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
         description: "Con empresa extranjera",
         icon: Briefcase,
         required: true,
-        status: "pending",
       },
       {
         id: "accommodation",
@@ -93,7 +92,6 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
         description: "Contrato o reserva en España",
         icon: Home,
         required: false,
-        status: "pending",
       },
     ];
   }
@@ -107,7 +105,6 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
         description: "De universidad española",
         icon: GraduationCap,
         required: true,
-        status: "pending",
       },
       {
         id: "accommodation",
@@ -115,12 +112,11 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
         description: "Contrato o reserva",
         icon: Home,
         required: false,
-        status: "pending",
       },
     ];
   }
 
-  // Default consultation documents
+  // Default consultation documents (sin Tasa 790)
   return [
     ...baseDocuments,
     {
@@ -129,23 +125,14 @@ const getDocumentsByVisaType = (visaType: string): Document[] => {
       description: "Tamaño carnet, fondo blanco",
       icon: FileText,
       required: true,
-      status: "pending",
-    },
-    {
-      id: "form",
-      name: "Formulario Tasa 790",
-      description: "Se generará automáticamente",
-      icon: FileText,
-      required: true,
-      status: "pending",
     },
   ];
 };
 
-const StatusBadge = ({ status }: { status: "pending" | "uploaded" }) => {
-  if (status === "uploaded") {
+const StatusBadge = ({ uploaded }: { uploaded: boolean }) => {
+  if (uploaded) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700">
+      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
         <CheckCircle className="w-3 h-3" />
         Subido
       </span>
@@ -166,7 +153,6 @@ export const DocumentsSection = ({
   isCheckoutLoading = false,
 }: DocumentsSectionProps) => {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const documents = getDocumentsByVisaType(visaType);
@@ -174,6 +160,39 @@ export const DocumentsSection = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  // Mapa: docId -> info del documento subido
+  const [uploadedMap, setUploadedMap] = useState<Record<string, UploadedDoc>>({});
+
+  // Carga los documentos persistidos del usuario
+  const fetchDocuments = useCallback(async () => {
+    if (!user) return;
+    const docTypes = documents.map((d) => d.id);
+    const { data, error } = await supabase
+      .from("user_documents")
+      .select("id, document_type, file_name, file_url")
+      .eq("user_id", user.id)
+      .in("document_type", docTypes);
+
+    if (error) {
+      console.error("Error fetching user documents:", error);
+      return;
+    }
+    const map: Record<string, UploadedDoc> = {};
+    (data ?? []).forEach((row) => {
+      // file_url contiene la ruta interna del storage (no URL pública porque el bucket es privado)
+      map[row.document_type] = {
+        id: row.id,
+        file_name: row.file_name,
+        file_path: row.file_url,
+      };
+    });
+    setUploadedMap(map);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, visaType]);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   const handleUploadClick = (docId: string) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -195,12 +214,61 @@ export const DocumentsSection = ({
       return;
     }
     setIsUploading(true);
+    const docId = uploadingDocId;
     try {
       const ext = file.name.split(".").pop();
-      const path = `${user.id}/${uploadingDocId}_${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("user-documents").upload(path, file);
-      if (error) throw error;
-      toast({ title: "Documento subido", description: `${file.name} subido correctamente.` });
+      const path = `${user.id}/${docId}_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("user-documents")
+        .upload(path, file);
+      if (uploadError) throw uploadError;
+
+      // Buscar registro existente para este document_type
+      const { data: existing } = await supabase
+        .from("user_documents")
+        .select("id, file_url")
+        .eq("user_id", user.id)
+        .eq("document_type", docId)
+        .maybeSingle();
+
+      const record = {
+        user_id: user.id,
+        category: "identidad" as const,
+        document_type: docId,
+        file_url: path, // guardamos la ruta interna del storage
+        file_name: file.name,
+        status: "valid" as const,
+        validation_message: null,
+        updated_at: new Date().toISOString(),
+      };
+
+      let newId = existing?.id;
+      if (existing) {
+        // Eliminar archivo anterior si cambió la ruta
+        if (existing.file_url && existing.file_url !== path) {
+          await supabase.storage.from("user-documents").remove([existing.file_url]);
+        }
+        const { error } = await supabase
+          .from("user_documents")
+          .update(record)
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { data: inserted, error } = await supabase
+          .from("user_documents")
+          .insert(record)
+          .select("id")
+          .single();
+        if (error) throw error;
+        newId = inserted.id;
+      }
+
+      setUploadedMap((prev) => ({
+        ...prev,
+        [docId]: { id: newId!, file_name: file.name, file_path: path },
+      }));
+
+      toast({ title: "Documento subido", description: `${file.name} guardado correctamente.` });
     } catch (err) {
       console.error("Upload error:", err);
       toast({ variant: "destructive", title: "Error al subir", description: "No se pudo subir el archivo. Intenta de nuevo." });
@@ -211,62 +279,44 @@ export const DocumentsSection = ({
     }
   };
 
-  const handleGenerateTasa790 = async () => {
-    if (!isPremium) {
-      setShowPremiumModal(true);
-      return;
-    }
-
-    if (!user) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Necesitas iniciar sesión para generar el documento.",
-      });
-      return;
-    }
-
-    setIsGeneratingPDF(true);
-
+  const handleViewDocument = async (docId: string) => {
+    const doc = uploadedMap[docId];
+    if (!doc?.file_path) return;
     try {
-      // Fetch user data from onboarding_submissions
-      const { data, error } = await supabase
-        .from("onboarding_submissions")
-        .select("full_name, nationality, current_location, email, professional_profile")
-        .eq("user_id", user.id)
-        .single();
-
-      if (error || !data) {
-        throw new Error("No se encontraron tus datos");
-      }
-
-      // Generate the PDF
-      generateTasa790PDF({
-        fullName: data.full_name || "",
-        nationality: data.nationality || "",
-        currentLocation: data.current_location || "",
-        email: data.email || user.email || "",
-        professionalProfile: data.professional_profile || "",
-      });
-
-      toast({
-        title: "¡Documento generado!",
-        description: "Tu formulario Tasa 790-012 se ha descargado.",
-      });
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo generar el documento. Intenta de nuevo.",
-      });
-    } finally {
-      setIsGeneratingPDF(false);
+      const { data, error } = await supabase.storage
+        .from("user-documents")
+        .createSignedUrl(doc.file_path, 60 * 10); // 10 minutos
+      if (error || !data?.signedUrl) throw error || new Error("No se pudo generar URL");
+      window.open(data.signedUrl, "_blank");
+    } catch (err) {
+      console.error("View error:", err);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo abrir el documento." });
     }
   };
 
-  const pendingCount = documents.filter((d) => d.status === "pending").length;
-  const uploadedCount = documents.filter((d) => d.status === "uploaded").length;
+  const handleDeleteDocument = async (docId: string) => {
+    const doc = uploadedMap[docId];
+    if (!doc || !user) return;
+    try {
+      if (doc.file_path) {
+        await supabase.storage.from("user-documents").remove([doc.file_path]);
+      }
+      const { error } = await supabase.from("user_documents").delete().eq("id", doc.id);
+      if (error) throw error;
+      setUploadedMap((prev) => {
+        const next = { ...prev };
+        delete next[docId];
+        return next;
+      });
+      toast({ title: "Documento eliminado" });
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el documento." });
+    }
+  };
+
+  const uploadedCount = Object.keys(uploadedMap).length;
+  const pendingCount = documents.length - uploadedCount;
 
   return (
     <div className="space-y-6 relative">
@@ -283,60 +333,6 @@ export const DocumentsSection = ({
         <p className="text-muted-foreground">
           Organiza todos los documentos necesarios para tu solicitud.
         </p>
-      </div>
-
-      {/* Generate Tasa 790 Card */}
-      <div
-        className={cn(
-          "bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-xl p-5 transition-all duration-200",
-          isPremium && "hover:border-primary/40 hover:shadow-md cursor-pointer"
-        )}
-        onClick={isPremium ? handleGenerateTasa790 : () => setShowPremiumModal(true)}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold">Generar Tasa 790-012</h3>
-                <span className="text-[10px] px-1.5 py-0.5 bg-primary text-primary-foreground rounded font-semibold uppercase tracking-wide">
-                  Pro
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Formulario pre-llenado con tus datos, listo para imprimir
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="default"
-            size="sm"
-            className="gap-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (isPremium) {
-                handleGenerateTasa790();
-              } else {
-                setShowPremiumModal(true);
-              }
-            }}
-            disabled={isGeneratingPDF}
-          >
-            {isGeneratingPDF ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generando...
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                Descargar PDF
-              </>
-            )}
-          </Button>
-        </div>
       </div>
 
       {/* Stats */}
@@ -357,61 +353,90 @@ export const DocumentsSection = ({
 
       {/* Documents Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {documents.map((doc) => (
-          <div
-            key={doc.id}
-            className={cn(
-              "group relative bg-background border border-border rounded-xl p-5 transition-all duration-200",
-              "hover:border-primary/30 hover:shadow-sm"
-            )}
-          >
-            <div className="flex items-start justify-between gap-4">
-              {/* Left: Icon and content */}
-              <div className="flex items-start gap-4 flex-1 min-w-0">
-                {/* Icon */}
-                <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
-                  <doc.icon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
+        {documents.map((doc) => {
+          const uploaded = uploadedMap[doc.id];
+          const isCurrentUploading = isUploading && uploadingDocId === doc.id;
+          return (
+            <div
+              key={doc.id}
+              className={cn(
+                "group relative bg-background border border-border rounded-xl p-5 transition-all duration-200",
+                "hover:border-primary/30 hover:shadow-sm"
+              )}
+            >
+              <div className="flex items-start justify-between gap-4">
+                {/* Left: Icon and content */}
+                <div className="flex items-start gap-4 flex-1 min-w-0">
+                  <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
+                    <doc.icon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
 
-                {/* Content */}
-                <div className="space-y-1.5 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-medium truncate">{doc.name}</h3>
-                    {doc.required && (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium uppercase tracking-wide">
-                        Req.
-                      </span>
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-medium truncate">{doc.name}</h3>
+                      {doc.required && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium uppercase tracking-wide">
+                          Req.
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {doc.description}
+                    </p>
+                    <StatusBadge uploaded={!!uploaded} />
+                    {uploaded?.file_name && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        📎 {uploaded.file_name}
+                      </p>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {doc.description}
-                  </p>
-                  <StatusBadge status={doc.status} />
+                </div>
+
+                {/* Right: Actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {uploaded && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleViewDocument(doc.id)}
+                        className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:bg-primary hover:border-primary hover:text-primary-foreground transition-all"
+                        title="Ver documento"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-all"
+                        title="Eliminar documento"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleUploadClick(doc.id)}
+                    disabled={isCurrentUploading}
+                    className={cn(
+                      "shrink-0 w-9 h-9 rounded-lg border border-border flex items-center justify-center transition-all duration-200",
+                      "hover:bg-primary hover:border-primary hover:text-primary-foreground",
+                      "text-muted-foreground",
+                      isCurrentUploading && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={isPremium ? (uploaded ? "Reemplazar documento" : "Subir documento") : "Función Pro"}
+                  >
+                    {isCurrentUploading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
               </div>
-
-              {/* Right: Upload button */}
-              <button
-                type="button"
-                onClick={handleUploadClick(doc.id)}
-                disabled={isUploading && uploadingDocId === doc.id}
-                className={cn(
-                  "shrink-0 w-10 h-10 rounded-lg border border-border flex items-center justify-center transition-all duration-200",
-                  "hover:bg-primary hover:border-primary hover:text-primary-foreground",
-                  "text-muted-foreground",
-                  isUploading && uploadingDocId === doc.id && "opacity-50 cursor-not-allowed"
-                )}
-                title={isPremium ? "Subir documento" : "Función Pro"}
-              >
-                {isUploading && uploadingDocId === doc.id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Upload className="w-4 h-4" />
-                )}
-              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Hidden file input */}
